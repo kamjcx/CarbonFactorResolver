@@ -17,29 +17,33 @@ from .graph import (
     candidate_rejection_reasons,
 )
 from .matching import calibrate_confidence, normalize_text
+from .material_registry import (
+    DEFAULT_MATERIAL_REGISTRY,
+    MaterialRuleSuggestionPort,
+    MaterialSemanticRegistryPort,
+)
 from .models import (
     Candidate,
     CandidateExclusion,
     CandidateOrigin,
     CandidateQualification,
-    FactorKind,
     GapType,
     LinkAttempt,
     LinkOutcome,
     LinkStrategy,
     MaterialCategory,
     MaterialClass,
-    MaterialIdentity,
     NormalizedActivity,
     ProvisionalOption,
-    QualificationDimension,
-    QualificationStatus,
+    QualificationPolicy,
     RecallObservation,
     RequestGap,
     RequestGapType,
     RequestResolutionPlan,
     ResolutionType,
+    RouterType,
     SourceRecord,
+    normalized_business_fingerprint,
 )
 from .ports import (
     FactorRepositoryPort,
@@ -50,10 +54,19 @@ from .ports import (
     ReferenceFlowRepositoryPort,
 )
 from .process_adjustment import resolve_process_variant
+from .qualification import (
+    material_identity as _material_identity,
+)
+from .qualification import (
+    qualify_record,
+)
+from .qualification import (
+    source_identity as _source_identity,
+)
 from .reference_flow_resolution import resolve_reference_flow
 from .resolution_planner import build_resolution_plan
 from .unit_resolution import resolve_unit_scale
-from .units import convert_factor, convert_mass, is_mass_unit, parse_factor_unit
+from .units import convert_factor, convert_mass, is_mass_unit
 
 
 def _text(value: str | None) -> str:
@@ -67,6 +80,21 @@ def _canonical_product_form(value: str | None) -> str | None:
         "fibre": "fiber",
         "钢纤维": "fiber",
     }.get(observed, observed or None)
+
+
+def _reference_flow_required_fields(unit: str) -> tuple[str, ...]:
+    observed = _text(unit)
+    if observed in {"piece", "pieces", "count", "unit", "个", "件"}:
+        return ("mass_per_piece", "dimensions+density")
+    if observed in {"m3", "m³", "cubic metre", "cubic meter"}:
+        return ("density",)
+    if observed in {"m2", "m²", "square metre", "square meter"}:
+        return ("thickness", "density")
+    if observed in {"bag", "袋"}:
+        return ("mass_per_bag",)
+    if observed in {"roll", "卷"}:
+        return ("mass_per_roll",)
+    return (f"mass_per_{observed or 'reference_unit'}",)
 
 
 def _tokens(value: str | None) -> set[str]:
@@ -189,171 +217,6 @@ def _evidence_coverage(
     return round(covered / sum(weights.values()), 6), tuple(gaps)
 
 
-def _material_identity(name: str, *, product_form: str | None = None, composition: str | None = None,
-                       production_process: str | None = None) -> MaterialIdentity:
-    """Small deterministic identity extractor; an LLM may enrich it later."""
-    text = _text(name)
-    is_steel = any(token in text for token in ("steel", "钢", "stainless", "不锈钢", "合金钢"))
-    is_fiber = any(token in text for token in ("fiber", "fibre", "纤维"))
-    is_aluminosilicate = any(token in text for token in ("aluminosilicate", "硅酸铝", "ceramic fiber", "陶瓷纤维"))
-    if is_steel:
-        family = "ferritic_stainless_steel" if any(token in text for token in ("446", "s44600", "耐热不锈钢")) else "steel_products"
-        grade = "AISI 446 / UNS S44600" if any(token in text for token in ("446", "s44600")) else None
-        coating = "copper" if any(token in text for token in ("copper plated", "copper plating", "镀铜")) else "none" if any(token in text for token in ("uncoated", "without copper", "未镀铜")) else None
-        if is_fiber and grade is None:
-            unresolved = () if coating is not None else (
-                "steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"
-            )
-        elif is_fiber and grade is not None and not production_process:
-            unresolved = ("manufacturing_route",)
-        else:
-            unresolved = ()
-        return MaterialIdentity(
-            canonical_name=text, head_material="steel", material_family=family,
-            category=MaterialCategory.METAL, product_form=product_form or ("fiber" if is_fiber else None),
-            grade=grade, composition=composition, surface_coating=coating,
-            manufacturing_route=tuple(x for x in (production_process,) if x),
-            application="high_temperature_refractory" if grade else None,
-            unresolved_attributes=unresolved, rationale="deterministic steel/material-form extraction", confidence=0.9,
-        )
-    if is_aluminosilicate:
-        return MaterialIdentity(
-            canonical_name=text, head_material="aluminosilicate", material_family="aluminosilicate_refractory",
-            category=MaterialCategory.MANUFACTURED_MINERAL, product_form=product_form or ("fiber" if is_fiber else None),
-            composition=composition, rationale="deterministic mineral identity extraction", confidence=0.9,
-        )
-    if any(token in text for token in ("alumina", "氧化铝", "fused alumina")):
-        return MaterialIdentity(canonical_name=text, head_material="alumina", material_family="alumina_products",
-                                category=MaterialCategory.MANUFACTURED_MINERAL, product_form=product_form,
-                                composition=composition, confidence=0.8)
-    return MaterialIdentity(canonical_name=text, product_form=product_form, composition=composition,
-                            rationale="deterministic identity extraction", confidence=0.4)
-
-
-def _source_identity(source: SourceRecord) -> MaterialIdentity:
-    category = source.metadata.get("material_category", "")
-    identity = _material_identity(source.material_name, product_form=source.product_form,
-                                  composition=source.composition, production_process=source.production_process)
-    if category:
-        try:
-            identity = replace(identity, category=MaterialCategory(category))
-        except ValueError:
-            pass
-    return identity
-
-
-def _qualification(activity: NormalizedActivity, source: SourceRecord) -> CandidateQualification:
-    target = activity.material_identity or _material_identity(activity.canonical_name, product_form=activity.product_form,
-                                                               composition=activity.composition,
-                                                               production_process=activity.production_process)
-    observed = _source_identity(source)
-    identity_reasons: list[str] = []
-    identity_exclusions: list[str] = []
-    if target.category != MaterialCategory.UNKNOWN and observed.category != MaterialCategory.UNKNOWN and target.category != observed.category:
-        identity_reasons.append(f"{observed.category.value} is not {target.category.value}")
-        identity_exclusions.append("material_category_mismatch")
-    if target.material_family and observed.material_family and target.material_family != observed.material_family:
-        identity_reasons.append(f"{observed.material_family} is not {target.material_family}")
-        identity_exclusions.append("material_family_mismatch")
-    if target.head_material and observed.head_material and target.head_material != observed.head_material:
-        identity_reasons.append(f"{observed.head_material} is not {target.head_material}")
-        identity_exclusions.append("head_material_mismatch")
-    if identity_exclusions:
-        identity_status = QualificationStatus.MISMATCH
-    else:
-        identity_status = QualificationStatus.PASS if observed.head_material or target.category != MaterialCategory.UNKNOWN else QualificationStatus.UNKNOWN
-    kind = source.factor_kind
-    if kind == FactorKind.EMISSION_LIMIT:
-        kind_dim = QualificationDimension(QualificationStatus.MISMATCH, ("emission limit is not an A1 lifecycle factor",))
-    elif kind in {FactorKind.LIFECYCLE_FACTOR, FactorKind.EPD_INDICATOR, FactorKind.DERIVED_PROXY_FACTOR}:
-        kind_dim = QualificationDimension(QualificationStatus.PASS)
-    else:
-        kind_dim = QualificationDimension(QualificationStatus.UNKNOWN, ("factor kind is not explicitly classified",))
-    indicator_status = QualificationStatus.PASS if source.indicator in (None, "", "GWP-total", "gwp-total") else QualificationStatus.MISMATCH
-    indicator_reasons = () if indicator_status == QualificationStatus.PASS else (f"indicator {source.indicator!r} is not GWP-total",)
-    declared_status = QualificationStatus.UNKNOWN if not source.declared_product else (
-        QualificationStatus.PASS if _text(target.canonical_name) in _text(source.declared_product) or _text(source.declared_product) in _text(target.canonical_name)
-        else QualificationStatus.MISMATCH
-    )
-    declared_reasons: tuple[str, ...] = () if declared_status != QualificationStatus.MISMATCH else (
-        f"declared product {source.declared_product!r} is not compatible with {target.canonical_name!r}",
-    )
-
-    target_boundary = _text(activity.boundary).replace(" ", "-")
-    required_modules: set[str] = set()
-    if target_boundary in {"cradle-to-gate", "a1-a3", "a1–a3"}:
-        required_modules = {"A1", "A2", "A3"}
-    elif target_boundary == "a1":
-        required_modules = {"A1"}
-    observed_modules = {str(module).strip().upper() for module in source.boundary_modules if str(module).strip()}
-    boundary_reasons: tuple[str, ...] = ()
-    if observed_modules:
-        if required_modules and not required_modules.issubset(observed_modules):
-            boundary_status = QualificationStatus.MISMATCH
-            boundary_reasons = (
-                f"boundary modules {sorted(observed_modules)!r} do not cover {sorted(required_modules)!r}",
-            )
-        else:
-            boundary_status = QualificationStatus.PASS
-    elif source.boundary:
-        observed_boundary = _text(source.boundary).replace(" ", "-")
-        boundary_equivalent = (
-            observed_boundary == target_boundary
-            or required_modules == {"A1", "A2", "A3"} and observed_boundary in {"a1-a3", "a1–a3", "cradle-to-gate"}
-        )
-        boundary_status = QualificationStatus.PASS if boundary_equivalent else QualificationStatus.MISMATCH
-        if boundary_status == QualificationStatus.MISMATCH:
-            boundary_reasons = (f"boundary {source.boundary!r} is not compatible with {activity.boundary!r}",)
-    else:
-        boundary_status = QualificationStatus.UNKNOWN
-
-    parsed_unit = None
-    try:
-        parsed_unit = parse_factor_unit(source.factor_unit)
-        if parsed_unit.reference_product_qualifier and not source.declared_product:
-            declared_status = QualificationStatus.MISMATCH
-            declared_reasons = ("reference-product qualifier requires a declared product",)
-            unit_dim = QualificationDimension(
-                QualificationStatus.UNKNOWN,
-                ("product qualifier requires declared-product validation",),
-            )
-        elif parsed_unit.reference_product_qualifier and declared_status != QualificationStatus.PASS:
-            unit_dim = QualificationDimension(
-                QualificationStatus.UNKNOWN,
-                ("product qualifier requires a compatible declared product",),
-            )
-        else:
-            unit_dim = QualificationDimension(QualificationStatus.PASS)
-    except ValueError as exc:
-        unit_dim = QualificationDimension(QualificationStatus.MISMATCH, (str(exc),))
-    additional: list[str] = []
-    additional.extend(identity_exclusions)
-    if kind_dim.status == QualificationStatus.MISMATCH:
-        additional.append("factor_kind_mismatch")
-    if indicator_status == QualificationStatus.MISMATCH:
-        additional.append("indicator_mismatch")
-    if declared_status == QualificationStatus.MISMATCH:
-        additional.append("declared_product_mismatch")
-    if boundary_status == QualificationStatus.MISMATCH:
-        additional.append("boundary_mismatch")
-    if parsed_unit and parsed_unit.reference_product_qualifier and declared_status != QualificationStatus.PASS:
-        additional.append("unit_qualifier_requires_validation")
-    if unit_dim.status == QualificationStatus.MISMATCH:
-        additional.append("unit_syntax_mismatch")
-    primary = additional[0] if additional else None
-    eligible = not additional
-    return CandidateQualification(
-        source_id=source.source_id,
-        identity=QualificationDimension(identity_status, tuple(identity_reasons)),
-        factor_kind=kind_dim,
-        indicator=QualificationDimension(indicator_status, indicator_reasons),
-        declared_product=QualificationDimension(declared_status, declared_reasons),
-        boundary=QualificationDimension(boundary_status, boundary_reasons), unit=unit_dim,
-        eligible=eligible, primary_exclusion=primary,
-        additional_exclusions=tuple(dict.fromkeys(additional[1:] if primary else additional)),
-    )
-
-
 def _candidate(
     activity: NormalizedActivity,
     source: SourceRecord,
@@ -431,11 +294,14 @@ async def evaluate_records(
     material_class: MaterialClass | None = None,
     qualification_sink: list[CandidateQualification] | None = None,
     observation_sink: list[RecallObservation] | None = None,
+    registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY,
 ) -> tuple[tuple[Candidate, ...], tuple[CandidateExclusion, ...]]:
     candidates: list[Candidate] = []
     exclusions: list[CandidateExclusion] = []
-    for source in records:
-        qualification = _qualification(activity, source)
+    for raw_source in records:
+        source = registry.enrich_source(raw_source)
+        policy = QualificationPolicy.PROXY if origin == CandidateOrigin.PROXY else QualificationPolicy.DIRECT
+        qualification = qualify_record(activity, source, policy, registry=registry)
         if qualification_sink is not None:
             qualification_sink.append(qualification)
         strategy = source.metadata.get("match_strategy", LinkStrategy.EXACT.value)
@@ -446,8 +312,9 @@ async def evaluate_records(
                     product_form=activity.product_form,
                     composition=activity.composition,
                     production_process=activity.production_process,
+                    registry=registry,
                 )
-                source_identity = _source_identity(source)
+                source_identity = _source_identity(source, registry)
                 retrieval_basis = (
                     (f"product form matched: {target_identity.product_form}",)
                     if target_identity.product_form
@@ -500,8 +367,15 @@ class ValidateNode(Node[GraphState]):
 class NormalizeNode(Node[GraphState]):
     name = "normalize"
 
-    def __init__(self, understanding: MaterialUnderstandingPort) -> None:
+    def __init__(
+        self,
+        understanding: MaterialUnderstandingPort,
+        registry: MaterialSemanticRegistryPort,
+        suggestion_port: MaterialRuleSuggestionPort,
+    ) -> None:
         self.understanding = understanding
+        self.registry = registry
+        self.suggestion_port = suggestion_port
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.NORMALIZE
@@ -516,9 +390,20 @@ class NormalizeNode(Node[GraphState]):
         canonical_product_form = _canonical_product_form(product_form.value)
         composition = normalize_text(interpretation.composition or state.request.composition)
         production_process = normalize_text(interpretation.production_process or state.request.production_process)
-        identity = _material_identity(canonical.value, product_form=canonical_product_form,
-                                      composition=composition.value or None,
-                                      production_process=production_process.value or None)
+        registry_resolution = self.registry.resolve(
+            canonical.value,
+            product_form=canonical_product_form,
+            composition=composition.value or None,
+            production_process=production_process.value or None,
+        )
+        identity = registry_resolution.identity
+        registry_suggestion = None
+        if not registry_resolution.sufficiently_identified:
+            registry_suggestion = await self.suggestion_port.suggest(canonical.value)
+        canonical_product_form = identity.product_form or canonical_product_form
+        resolved_process = production_process.value or (
+            identity.manufacturing_route[0] if identity.manufacturing_route else None
+        )
         request_gaps = tuple(
             RequestGap(
                 gap_id=f"{state.request.request_id}:{field}",
@@ -542,13 +427,16 @@ class NormalizeNode(Node[GraphState]):
         state.normalized = NormalizedActivity(
             request_id=state.request.request_id,
             canonical_name=canonical.value,
+            # Registry material aliases identify the head material; they are
+            # not full-product synonyms and must not erase process/grade
+            # qualifiers such as electrofused versus sintered.
             aliases=tuple(field.value for field in alias_fields if field.value),
             quantity_kg=quantity_kg,
             geography=state.request.geography,
             year=state.request.year,
             product_form=canonical_product_form,
             composition=composition.value or None,
-            production_process=production_process.value or None,
+            production_process=resolved_process,
             boundary=boundary.value,
             target_factor_unit=state.request.target_factor_unit,
             normalization_rule_ids=tuple(dict.fromkeys(rule_ids)),
@@ -556,7 +444,14 @@ class NormalizeNode(Node[GraphState]):
             original_quantity_unit=state.request.quantity_unit,
             material_identity=identity,
             request_gaps=request_gaps,
+            semantic_registry_version=registry_resolution.registry_version,
+            material_rule_ids=registry_resolution.material_rule_ids,
+            process_rule_ids=registry_resolution.process_rule_ids,
+            form_rule_ids=registry_resolution.form_rule_ids,
+            relation_ids=registry_resolution.relation_ids,
+            registry_suggestion=registry_suggestion,
         )
+        state.trace.normalized_business_fingerprint = normalized_business_fingerprint(state.normalized)
         state.request_gaps = request_gaps
         if request_gaps:
             state.provisional_options = (
@@ -579,11 +474,23 @@ class NormalizeNode(Node[GraphState]):
             "target_factor_unit": state.normalized.target_factor_unit,
             "normalization_rule_ids": state.normalized.normalization_rule_ids,
             "material_identity": identity.to_dict(),
+            "semantic_registry": {
+                "version": registry_resolution.registry_version,
+                "material_rule_ids": registry_resolution.material_rule_ids,
+                "process_rule_ids": registry_resolution.process_rule_ids,
+                "form_rule_ids": registry_resolution.form_rule_ids,
+                "relation_ids": registry_resolution.relation_ids,
+                "sufficiently_identified": registry_resolution.sufficiently_identified,
+                "draft_suggestion": registry_suggestion.to_dict() if registry_suggestion else None,
+                "suggestion_requires_human_review": registry_suggestion is not None,
+            },
             "request_gaps": tuple(gap.__dict__ if hasattr(gap, "__dict__") else {
                 "gap_id": gap.gap_id, "gap_type": gap.gap_type.value, "field": gap.field,
                 "reason": gap.reason, "required": gap.required, "options": gap.options,
             } for gap in request_gaps),
             "request_resolution_plan": state.request_resolution_plan.to_dict(),
+            "raw_request_fingerprint": state.trace.raw_request_fingerprint,
+            "normalized_business_fingerprint": state.trace.normalized_business_fingerprint,
         })
         return state
 
@@ -626,18 +533,42 @@ class LocalRetrievalNode(Node[GraphState]):
 class LocalEvaluateNode(Node[GraphState]):
     name = "local_evaluate"
 
-    def __init__(self, understanding: MaterialUnderstandingPort) -> None:
+    def __init__(
+        self,
+        understanding: MaterialUnderstandingPort,
+        registry: MaterialSemanticRegistryPort,
+    ) -> None:
         self.understanding = understanding
+        self.registry = registry
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.LOCAL_EVALUATE
         if state.normalized is not None:
             qualifications: list[CandidateQualification] = []
             observations: list[RecallObservation] = list(state.recall_observations)
-            state.local_candidates, exclusions = await evaluate_records(
-                state.normalized, state.local_records, CandidateOrigin.LOCAL, self.understanding,
-                qualification_sink=qualifications, observation_sink=observations
-            )
+            exclusions: tuple[CandidateExclusion, ...] = ()
+            selected: tuple[Candidate, ...] = ()
+            for strategy in (LinkStrategy.EXACT, LinkStrategy.SYNONYM, LinkStrategy.RELATED):
+                layer = tuple(
+                    record for record in state.local_records
+                    if record.metadata.get("match_strategy", LinkStrategy.EXACT.value) == strategy.value
+                )
+                if not layer:
+                    continue
+                layer_candidates, layer_exclusions = await evaluate_records(
+                    state.normalized,
+                    layer,
+                    CandidateOrigin.LOCAL,
+                    self.understanding,
+                    qualification_sink=qualifications,
+                    observation_sink=observations,
+                    registry=self.registry,
+                )
+                exclusions = (*exclusions, *layer_exclusions)
+                if layer_candidates:
+                    selected = layer_candidates
+                    break
+            state.local_candidates = selected
             state.qualifications = tuple(qualifications)
             state.recall_observations = tuple(observations)
             state.excluded_candidates.extend(exclusions)
@@ -679,8 +610,23 @@ class ResolutionPlannerNode(Node[GraphState]):
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.RESOLUTION_PLANNER
         for candidate in state.resolution_candidates:
+            aliases = {
+                "unit": RouterType.UNIT_SCALE,
+                "reference_flow": RouterType.REFERENCE_FLOW,
+                "process": RouterType.PROCESS_VARIANT,
+                "grade": RouterType.GRADE_COMPOSITION,
+                "proxy": RouterType.CLASS_AWARE_PROXY,
+            }
+            preferred_order = tuple(
+                aliases[item]
+                for item in (
+                    part.strip().casefold()
+                    for part in candidate.source.metadata.get("resolution_order", "").split(",")
+                )
+                if item in aliases
+            )
             state.resolution_plans[candidate.candidate_id] = build_resolution_plan(
-                candidate.candidate_id, candidate.gaps
+                candidate.candidate_id, candidate.gaps, preferred_order
             )
         state.event(Stage.RESOLUTION_PLANNER, "deterministic resolution plans created", {
             "plans": tuple(plan.to_dict() for plan in state.resolution_plans.values()),
@@ -733,8 +679,10 @@ class ReferenceFlowResolutionNode(Node[GraphState]):
                 continue
             resolved = resolve_reference_flow(state.normalized, candidate, state.reference_flow_records)
             if not resolved:
-                state.required_fields = ("mass_per_piece", "dimensions+density")
-                state.warnings.append("reference-flow conversion lacks mass-per-unit evidence")
+                state.required_fields = _reference_flow_required_fields(state.normalized.original_quantity_unit)
+                state.warnings.append(
+                    f"reference-flow conversion lacks evidence for {state.normalized.original_quantity_unit}"
+                )
                 continue
             output.extend(
                 replace(item, gaps=tuple(gap for gap in item.gaps if gap.gap_type != GapType.REFERENCE_FLOW))
@@ -792,8 +740,13 @@ class ProcessVariantResolutionNode(Node[GraphState]):
 class GradeCompositionResolutionNode(Node[GraphState]):
     name = "grade_composition_resolution"
 
-    def __init__(self, repository: GradeSeriesRepositoryPort) -> None:
+    def __init__(
+        self,
+        repository: GradeSeriesRepositoryPort,
+        registry: MaterialSemanticRegistryPort,
+    ) -> None:
         self.repository = repository
+        self.registry = registry
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.GRADE_COMPOSITION_RESOLUTION
@@ -805,9 +758,34 @@ class GradeCompositionResolutionNode(Node[GraphState]):
             if not needs:
                 output.append(candidate)
                 continue
-            series = tuple(await self.repository.search(state.normalized, candidate.source))
-            resolved = resolve_grade(state.normalized, candidate, series)
-            if resolved.resolution_type in {ResolutionType.GRADE_INTERPOLATED, ResolutionType.GRADE_ADJUSTED}:
+            recalled = (candidate.source, *tuple(await self.repository.search(state.normalized, candidate.source)))
+            qualified: list[SourceRecord] = []
+            for anchor in recalled:
+                qualification = qualify_record(
+                    state.normalized,
+                    anchor,
+                    QualificationPolicy.GRADE_ANCHOR,
+                    reference=candidate.source,
+                    registry=self.registry,
+                )
+                state.qualifications = (*state.qualifications, qualification)
+                if qualification.eligible:
+                    qualified.append(anchor)
+                elif anchor.source_id != candidate.source.source_id:
+                    state.excluded_candidates.append(CandidateExclusion(
+                        anchor.source_id,
+                        candidate.origin,
+                        tuple(filter(None, (
+                            qualification.primary_exclusion,
+                            *qualification.additional_exclusions,
+                        ))) or ("grade anchor qualification failed",),
+                    ))
+            resolved = resolve_grade(state.normalized, candidate, tuple(qualified))
+            if resolved.resolution_type in {
+                ResolutionType.GRADE_EXACT_ANCHOR,
+                ResolutionType.GRADE_INTERPOLATED,
+                ResolutionType.GRADE_ADJUSTED,
+            }:
                 resolved = replace(resolved, gaps=tuple(
                     gap for gap in resolved.gaps if gap.gap_type != GapType.GRADE_COMPOSITION
                 ))
@@ -869,8 +847,13 @@ class ProxyResolutionNode(Node[GraphState]):
 class ProxyEvaluateNode(Node[GraphState]):
     name = "proxy_evaluate"
 
-    def __init__(self, understanding: MaterialUnderstandingPort) -> None:
+    def __init__(
+        self,
+        understanding: MaterialUnderstandingPort,
+        registry: MaterialSemanticRegistryPort,
+    ) -> None:
         self.understanding = understanding
+        self.registry = registry
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.PROXY_EVALUATE
@@ -880,6 +863,7 @@ class ProxyEvaluateNode(Node[GraphState]):
             state.proxy_candidates, exclusions = await evaluate_records(
                 state.normalized, state.proxy_records, CandidateOrigin.PROXY, self.understanding, state.material_class,
                 qualification_sink=qualifications, observation_sink=observations,
+                registry=self.registry,
             )
             state.qualifications = tuple((*state.qualifications, *qualifications))
             state.recall_observations = tuple(observations)
@@ -907,8 +891,14 @@ class ReEvaluateNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.RE_EVALUATE
-        state.resolution_candidates = tuple(finalize_candidate(candidate) for candidate in state.resolution_candidates)
-        state.proxy_candidates = tuple(finalize_candidate(candidate) for candidate in state.proxy_candidates)
+        state.resolution_candidates = tuple(
+            finalize_candidate(candidate, min_score=state.request.min_score)
+            for candidate in state.resolution_candidates
+        )
+        state.proxy_candidates = tuple(
+            finalize_candidate(candidate, min_score=state.request.min_score)
+            for candidate in state.proxy_candidates
+        )
         all_candidates = state.resolution_candidates + state.proxy_candidates
         state.transformation_steps = [
             step for candidate in all_candidates for step in candidate.transformation_steps

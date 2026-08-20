@@ -1,7 +1,7 @@
 # OFR 完整技术文档
 
 > 文档对象：当前仓库中的 A1 Factor Resolution Engine V1（下文简称 OFR）  
-> 实现版本：`0.3.0`（`proxy-resolution-v1.0` + `steel-fiber-qualification-v1.0`）  
+> 实现版本：`0.5.0`（`proxy-resolution-v1.0` + `steel-fiber-qualification-v1.0` + `major-fixes-v1.0` + `material-semantic-registry-v1.0`）  
 > 技术基线：Python 3.11+  
 > 文档日期：2026-08-19  
 > 文档性质：以当前代码为准的架构、接口、算法与运行说明
@@ -231,7 +231,7 @@ production_process  可选
 boundary            默认 cradle-to-gate
 target_factor_unit  默认 kgCO2e/kg
 top_k               1..50，默认 3
-min_score           0..1，默认 0.65；仅为 0.1 请求兼容，不再阻断结果
+min_score           0..1，默认 0.65；低于阈值的候选最多为 REFERENCE_ONLY，不作一刀切丢弃
 request_id          默认 UUID
 ```
 
@@ -592,7 +592,7 @@ evidence_coverage = covered_weight / total_weight
 
 ## 15. 最小硬约束
 
-`min_score` 为兼容旧请求保留，但不再决定“有没有结果”。Process、composition、form、material、geography、time 和证据缺失优先成为 Gap、Assumption 或 Limitation。
+`min_score` 为兼容旧请求保留，但不再决定“有没有结果”：低于阈值的候选仍可见，但最多进入 `REFERENCE_ONLY`。Process、composition、form、material、geography、time 和证据缺失优先成为 Gap、Assumption 或 Limitation。
 
 V1 只硬阻断：
 
@@ -896,7 +896,7 @@ Graph 当前没有统一捕获 Repository、LLM 或 Store 的运行时异常。�
 
 ## 26. 测试与验证
 
-当前测试集覆盖 25 个场景，包括：
+当前测试集包含 56 个场景。基础覆盖包括：
 
 1. 合格 Local Candidate 绕过 Proxy；
 2. Material Class 仅在 Proxy 路径调用；
@@ -908,7 +908,7 @@ Graph 当前没有统一捕获 Repository、LLM 或 Store 的运行时异常。�
 8. Trace 解释 local hits、Proxy 路由、排除和排名；
 9. 相同请求跨数据库版本差异；
 10. HTTP 正式目录和 SHA 锚点；
-11. exact 命中后 synonym skipped；
+11. 合格 exact 截断后续候选；无效 exact 允许显式 synonym 继续；
 12. synonym 必须显式登记；
 13. 规范化规则、证据覆盖率和置信度可观察；
 14. 全策略失败后显式 unresolved attempt；
@@ -922,14 +922,28 @@ Graph 当前没有统一捕获 Repository、LLM 或 Store 的运行时异常。�
 22. Reference Flow → Process → Grade 多 Gap 顺序与 lineage；
 23. Class-aware Proxy 对件数活动仍必须取得 Reference Flow 证据；
 24. 声明不含参考过程的 SourceRecord 禁止执行 Delta 扣除；
-25. related-candidate recall 不得伪装成 Direct Exact。
+25. related-candidate recall 不得伪装成 Direct Exact；
+26. Process 共同上游非负、能源份额完整、显式 includes-process 和参数作用域；
+27. Grade exact anchor 优先、series/provider/process/declared-product/unit 完整资格；
+28. emission-limit 和跨 series 记录不得成为 Grade Anchor；
+29. Proxy family 差异成为 Gap，并按声明依赖执行一次 Grade → Process 解析；
+30. Proxy 因子单位转换保留独立 TransformationStep；
+31. `score < min_score` 与 unknown kind/indicator 只可进入 REFERENCE_ONLY；
+32. `1 t` 与 `1000 kg` 共享 normalized business fingerprint；
+33. 重复 request_id 不得拆分 Recommendation 与 Trace；
+34. HTTP Catalog 保留上游提供的 document locator/SHA/page/table/row；
+35. m³/m²/袋/卷等 reference flow 返回与功能单位相符的问题；
+36. 未验证 supplier 标签不能自动获得最高来源质量；
+37. Steel Fiber 请求缺口、记录类型、产品限定单位与审批模式；
+38. 其余回归覆盖 Trace、排序、锁定、数据库锚点和终止状态。
 
 推荐验证命令：
 
 ```powershell
-py -3.11 -m compileall -q src tests
-uv run --python 3.12 --with pytest --with pytest-asyncio pytest -q
-uvx ruff check src tests --select I,F
+uv lock --check
+uv run --extra test python -m pytest -q
+uv run --extra test python -m compileall -q src tests
+uvx ruff check --select I,F src tests
 ```
 
 ## 27. 部署与运行建议
@@ -1064,6 +1078,8 @@ OFR 的关键差异是：Candidate Gap Analysis、四类 Resolution Router、版
 | `src/a1_factor_engine/ports.py` | Async Port 协议 |
 | `src/a1_factor_engine/graph.py` | GraphState、Stage 和有界路由状态 |
 | `src/a1_factor_engine/nodes.py` | Gap/Planner/Router Node、评分、Top-K |
+| `src/a1_factor_engine/qualification.py` | Direct/Proxy/Grade Anchor 共用资格策略 |
+| `src/a1_factor_engine/material_registry.py` | 版本化 Material/Process/Form Rules、Typed Relations 与待审建议契约 |
 | `src/a1_factor_engine/gap_analysis.py` | 结构化 Candidate Gap Analysis |
 | `src/a1_factor_engine/resolution_planner.py` | 依赖有序的 Resolution Plan |
 | `src/a1_factor_engine/unit_resolution.py` | 版本化比例单位转换 |
@@ -1089,8 +1105,37 @@ OFR 的关键差异是：Candidate Gap Analysis、四类 Resolution Router、版
 
 HTTP Catalog Adapter 已支持上述字段，正式目录仍由外部只读端口管理。本仓库没有自动写入正式数据库；两条钢纤维 EPD 可在数据治理审批后通过目录端口接入，其设计验收值明确对应 A1-A3 `GWP-total`。
 
-## 35. 结论
+## 35. Major Fixes V1
+
+`0.4.0` 对公开审核发现的数值、候选和审计一致性风险进行了收敛：
+
+- Process Router 在替换与 Delta 公式中先验证 `common_upstream = reference - removed >= 0`；目标能源份额必须完整，参考因子必须显式声明包含待扣除过程；参数端口必须显式绑定 reference source、target material 和 target process。
+- Grade Router 使用 `exact-grade anchor → qualified bracket interpolation → qualified nearest grade → unchanged proxy`；锚点必须显式同 series，并通过 factor kind、GWP indicator、declared product、process、boundary、unit 和 provider 检查。地域与年份仍作为适用性和排序证据。
+- `QualificationPolicy.DIRECT/PROXY/GRADE_ANCHOR` 共用同一资格引擎。Proxy 的 family、form、grade 和 process 差异进入 Gap；材料类别、生命周期语义、指标、边界、单位及 provenance 仍受约束。
+- Class-aware Proxy 在评估后只进行一次有界的 Gap/Planner/Unit/Reference Flow/Grade/Process 回送；Grade 与 Process 的先后由来源的 `resolution_order` 依赖声明决定，不引入循环 Agent。
+- 相同 `request_id` 在执行前和原子保存时均被拒绝；首个 Recommendation 与 Trace 由 `save_resolution_run()` 同步绑定，避免新 Trace/旧 Recommendation。
+- Trace 同时保存 raw fingerprint 与 normalized business fingerprint；正式目录在提供字段时保留原始文档 locator/SHA-256/page/table/row。
+- `score < min_score`、`FactorKind.OTHER` 或未知 indicator 的候选最多为 `REFERENCE_ONLY`；坏 Exact 不再阻断合法注册 Alias。
+- 对抗测试覆盖上述不变量，GitHub Actions 固定执行 Python 3.11、lock、pytest、compileall 和 Ruff I/F。
+
+## 36. Material Semantic Registry V1
+
+`0.5.0` 把材料理解从散落的名称判断收敛为一个可版本化、可审核、可扩展的语义层：
+
+`纯文本 → 标准化 → Material Rules / Process Rules / Form Rules / Typed Relations → 充分性判断`
+
+- Request 与 SourceRecord 共用同一个 `VersionedMaterialSemanticRegistry`，避免检索侧和资格侧采用不同材料解释；
+- 只有 `ACTIVE` 规则参与运行，`DRAFT`、`DEPRECATED`、`REJECTED` 均不能改变候选；
+- 未识别材料可以调用可选 `MaterialRuleSuggestionPort`，但返回值固定为待审 `RegistryRuleSuggestion`，不会自动发布或携带排放因子数值；
+- Normalize Trace 保存 registry version、Material/Process/Form rule IDs、relation IDs、识别充分性与待审建议；
+- 内置 V1 规则覆盖莫来石、尖晶石、刚玉、氧化铝、钢等材料，以及电熔、烧结、煅烧、EAF、BOF 等过程；
+- `电熔莫来石` 与 `烧结莫来石` 被识别为相同 head material 的不同 process variant，进入 Process Gap；`电熔刚玉` 不会因共享“电熔”工艺词而被误召回；
+- 新材料通过新增待审规则、回归测试和 registry version 发布扩展，不需要修改 Graph、Node 或数值公式。
+
+统一注册表是语义治理层，不是排放因子库。它不能产生、修正或推断因子数值；所有数值仍必须来自带 provenance 的 `SourceRecord` 或 `ParameterEvidence`。
+
+## 37. 结论
 
 当前 OFR 已形成一个独立、可测试、可解释的 A1 因子解析内核。它的核心不是“让模型猜一个数”，而是识别候选与目标之间的差异，选择可追溯的工程解析策略，把 SourceRecord、ParameterEvidence、版本化公式、假设、Top-K 和人工决策组合成一个有界 Graph。
 
-V1 已经适合作为正式系统的领域内核和集成基线；正式生产使用前，优先完成全字段目录映射、持久化 Store、生产级 Proxy Repository、受限 LLM Adapter、异常治理和真实数据验收。
+V1 已经适合作为正式系统的领域内核和集成基线。`0.5.0` 在 0.4 的数学、资格与审计修复之上增加了版本化材料语义治理；在持久化事务 Store、生产级 Proxy Repository、受限 LLM Adapter、真实目录全字段映射和材料族 gold-set 验收完成前，仍不应把内存参考实现直接宣称为生产锁定服务。

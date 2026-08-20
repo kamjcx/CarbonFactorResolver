@@ -15,10 +15,17 @@ from .adapters import (
     NullReferenceFlowRepository,
 )
 from .graph import GraphState, Router, Stage
+from .material_registry import (
+    DEFAULT_MATERIAL_REGISTRY,
+    MaterialRuleSuggestionPort,
+    MaterialSemanticRegistryPort,
+    NullMaterialRuleSuggestion,
+)
 from .models import (
     ApprovalMode,
     ApprovalRecord,
     ApprovalStatus,
+    Candidate,
     GapType,
     LockedResolution,
     Recommendation,
@@ -26,6 +33,7 @@ from .models import (
     ResolutionStatus,
     ResolutionTrace,
     ResultTier,
+    RouterType,
 )
 from .nodes import (
     CandidatePoolNode,
@@ -67,25 +75,59 @@ class A1ResolutionGraph:
     reference_flows: ReferenceFlowRepositoryPort
     process_parameters: ProcessParameterRepositoryPort
     grade_series: GradeSeriesRepositoryPort
+    material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
+    rule_suggestions: MaterialRuleSuggestionPort = NullMaterialRuleSuggestion()
 
     def __post_init__(self) -> None:
         self.validate = ValidateNode()
-        self.normalize = NormalizeNode(self.understanding)
+        self.normalize = NormalizeNode(self.understanding, self.material_registry, self.rule_suggestions)
         self.local = LocalRetrievalNode(self.local_retrieval)
-        self.local_evaluate = LocalEvaluateNode(self.understanding)
+        self.local_evaluate = LocalEvaluateNode(self.understanding, self.material_registry)
         self.gap_analysis = GapAnalysisNode()
         self.planner = ResolutionPlannerNode()
         self.unit_scale = UnitScaleResolutionNode()
         self.reference_flow = ReferenceFlowResolutionNode(self.reference_flows)
         self.process_variant = ProcessVariantResolutionNode(self.process_parameters)
-        self.grade_composition = GradeCompositionResolutionNode(self.grade_series)
+        self.grade_composition = GradeCompositionResolutionNode(self.grade_series, self.material_registry)
         self.material = MaterialResolutionNode(self.understanding)
         self.proxy = ProxyResolutionNode(self.proxy_retrieval)
-        self.proxy_evaluate = ProxyEvaluateNode(self.understanding)
+        self.proxy_evaluate = ProxyEvaluateNode(self.understanding, self.material_registry)
         self.re_evaluate = ReEvaluateNode()
         self.pool = CandidatePoolNode()
         self.rank = RankNode()
         self.top_k = TopKNode()
+
+    @staticmethod
+    def _technical_order(candidate: Candidate) -> tuple[RouterType, ...]:
+        aliases = {
+            "process": RouterType.PROCESS_VARIANT,
+            "grade": RouterType.GRADE_COMPOSITION,
+        }
+        preferred = tuple(
+            aliases[item]
+            for item in (
+                part.strip().casefold()
+                for part in candidate.source.metadata.get("resolution_order", "").split(",")
+            )
+            if item in aliases
+        )
+        return tuple(dict.fromkeys((*preferred, RouterType.PROCESS_VARIANT, RouterType.GRADE_COMPOSITION)))
+
+    async def _resolve_current_candidates(self, state: GraphState) -> None:
+        """Run each candidate's finite plan once, preserving declared Grade/Process dependencies."""
+
+        await self.unit_scale.run(state)
+        await self.reference_flow.run(state)
+        resolved: list[Candidate] = []
+        for candidate in state.resolution_candidates:
+            state.resolution_candidates = (candidate,)
+            for router in self._technical_order(candidate):
+                if router == RouterType.PROCESS_VARIANT:
+                    await self.process_variant.run(state)
+                elif router == RouterType.GRADE_COMPOSITION:
+                    await self.grade_composition.run(state)
+            resolved.extend(state.resolution_candidates)
+        state.resolution_candidates = tuple(resolved)
 
     async def run(self, request: ResolutionRequest) -> GraphState:
         state = GraphState(request=request)
@@ -134,10 +176,7 @@ class A1ResolutionGraph:
                 "decision": "resolve_local_gaps",
                 "plans": tuple(plan.to_dict() for plan in state.resolution_plans.values()),
             })
-            await self.unit_scale.run(state)
-            await self.reference_flow.run(state)
-            await self.process_variant.run(state)
-            await self.grade_composition.run(state)
+            await self._resolve_current_candidates(state)
         elif not state.request_gaps:
             state.event(Stage.LOCAL_EVALUATE, "no local candidate recalled; no evaluable candidates after qualification; class-aware proxy is the final fallback", {
                 "decision": "enter_proxy",
@@ -155,13 +194,17 @@ class A1ResolutionGraph:
             await self.material.run(state)
             await self.proxy.run(state)
             await self.proxy_evaluate.run(state)
-            if state.normalized.quantity_kg is None and state.proxy_candidates:
+            if state.proxy_candidates:
                 local_resolved = state.resolution_candidates
+                local_candidates = state.local_candidates
                 state.resolution_candidates = state.proxy_candidates
                 state.proxy_candidates = ()
-                await self.reference_flow.run(state)
+                await self.gap_analysis.run(state)
+                await self.planner.run(state)
+                await self._resolve_current_candidates(state)
                 state.proxy_candidates = state.resolution_candidates
                 state.resolution_candidates = local_resolved
+                state.local_candidates = local_candidates
         await self.re_evaluate.run(state)
         if Router.after_proxy(state) == Stage.CANDIDATE_POOL:
             await self.pool.run(state)
@@ -182,6 +225,8 @@ class A1FactorResolutionEngine:
         reference_flows: ReferenceFlowRepositoryPort | None = None,
         process_parameters: ProcessParameterRepositoryPort | None = None,
         grade_series: GradeSeriesRepositoryPort | None = None,
+        material_registry: MaterialSemanticRegistryPort | None = None,
+        rule_suggestions: MaterialRuleSuggestionPort | None = None,
         store: ResolutionStorePort | None = None,
     ) -> None:
         self.store = store or InMemoryResolutionStore()
@@ -192,15 +237,18 @@ class A1FactorResolutionEngine:
             reference_flows or NullReferenceFlowRepository(),
             process_parameters or NullProcessParameterRepository(),
             grade_series or NullGradeSeriesRepository(),
+            material_registry or DEFAULT_MATERIAL_REGISTRY,
+            rule_suggestions or NullMaterialRuleSuggestion(),
         )
 
     async def resolve(self, request: ResolutionRequest | Mapping[str, object]) -> Recommendation:
         if isinstance(request, Mapping):
             request = ResolutionRequest.from_mapping(request)
+        if await self.store.has_resolution_run(request.request_id):
+            raise ValueError(f"duplicate request_id: {request.request_id}")
         state = await self.graph.run(request)
         assert state.recommendation is not None
-        await self.store.save_trace(state.trace)
-        await self.store.save_recommendation(state.recommendation)
+        await self.store.save_resolution_run(state.recommendation, state.trace)
         return state.recommendation
 
     async def state(self, request_id: str) -> Recommendation | None:
@@ -299,7 +347,9 @@ class A1FactorResolutionEngine:
         after = await self.store.get_trace(after_request_id)
         if before is None or after is None:
             raise KeyError("both resolution traces must exist")
-        if before.request_fingerprint != after.request_fingerprint:
+        before_fingerprint = before.normalized_business_fingerprint or before.request_fingerprint
+        after_fingerprint = after.normalized_business_fingerprint or after.request_fingerprint
+        if before_fingerprint != after_fingerprint:
             raise ValueError("trace comparison requires equivalent business requests")
 
         before_hits = self._trace_ids(before, "local_retrieval", "records", "source_id")
@@ -326,7 +376,9 @@ class A1FactorResolutionEngine:
             explanations.append("no result-driving trace difference detected")
         return {
             "same_request": True,
-            "request_fingerprint": before.request_fingerprint,
+            "request_fingerprint": before_fingerprint,
+            "raw_request_fingerprint_before": before.raw_request_fingerprint or before.request_fingerprint,
+            "raw_request_fingerprint_after": after.raw_request_fingerprint or after.request_fingerprint,
             "database_changed": database_changed,
             "before_database": before_anchor.to_dict() if before_anchor else None,
             "after_database": after_anchor.to_dict() if after_anchor else None,

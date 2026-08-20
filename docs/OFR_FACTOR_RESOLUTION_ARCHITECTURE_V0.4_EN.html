@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OFR 0.4.0 — Factor Resolution Architecture</title>
+  <style>
+    :root { --paper:#f5f5f5; --ink:#2d3142; --muted:#4f5d75; --soft:#7a8399; --rule:rgba(45,49,66,.12); --accent:#eb6c36; --accent-tint:rgba(235,108,54,.08); --link:#2e5aa8; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; background:var(--paper); }
+    body { display:grid; place-items:center; }
+    svg { display:block; width:min(100vw,1280px); height:auto; }
+    .eyebrow { fill:var(--soft); font:500 8px "Geist Mono",monospace; letter-spacing:.18em; }
+    .title { fill:var(--ink); font:400 40px "Instrument Serif",serif; }
+    .subtitle { fill:var(--muted); font:400 12px "Geist",sans-serif; }
+    .zone { fill:rgba(45,49,66,.02); stroke:var(--rule); stroke-width:.8; }
+    .zone-mask,.label-mask { fill:var(--paper); }
+    .zone-label { fill:var(--soft); font:500 8px "Geist Mono",monospace; letter-spacing:.16em; }
+    .flow { fill:none; stroke:var(--muted); stroke-width:1.2; marker-end:url(#ofr04-arrow); }
+    .flow.accent { stroke:var(--accent); marker-end:url(#ofr04-arrow-accent); }
+    .flow.link { stroke:var(--link); marker-end:url(#ofr04-arrow-link); }
+    .flow.optional { stroke:var(--soft); stroke-width:1; stroke-dasharray:5 4; }
+    .arrow-label { fill:var(--soft); font:500 12px "Geist Mono",monospace; letter-spacing:.04em; }
+    .node-mask { fill:var(--paper); }
+    .node-box { fill:#fff; stroke:var(--ink); stroke-width:1; }
+    .node-box.store { fill:rgba(45,49,66,.05); stroke:var(--muted); }
+    .node-box.input { fill:rgba(79,93,117,.10); stroke:var(--soft); }
+    .node-box.focal { fill:var(--accent-tint); stroke:var(--accent); stroke-width:1.2; }
+    .node-tag { fill:var(--soft); font:500 8px "Geist Mono",monospace; letter-spacing:.12em; }
+    .node-name { fill:var(--ink); font:600 16px "Geist",sans-serif; }
+    .node-sub { fill:var(--muted); font:400 12px "Geist Mono",monospace; }
+    .node-note { fill:var(--soft); font:400 12px "Geist",sans-serif; }
+    .trace-title { fill:var(--ink); font:600 16px "Geist",sans-serif; }
+    .trace-copy { fill:var(--muted); font:400 12px "Geist Mono",monospace; }
+    .legend-label { fill:var(--soft); font:500 8px "Geist Mono",monospace; letter-spacing:.14em; }
+    .legend-copy { fill:var(--muted); font:400 12px "Geist",sans-serif; }
+  </style>
+</head>
+<body>
+  <svg viewBox="0 0 1280 720" role="img" aria-labelledby="ofr04-en-title ofr04-en-desc">
+    <title id="ofr04-en-title">OFR 0.4.0 factor resolution architecture</title>
+    <desc id="ofr04-en-desc">Architecture showing formal factor retrieval, policy-based qualification, deterministic process and grade resolution, one bounded proxy re-entry, evidence-based ranking, atomic audit storage, human approval, and locking.</desc>
+    <defs>
+      <marker id="ofr04-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+      <marker id="ofr04-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#eb6c36"/></marker>
+      <marker id="ofr04-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
+    </defs>
+
+    <rect width="1280" height="720" fill="#f5f5f5"/>
+    <text class="eyebrow" x="40" y="32">OPEN FACTOR RETRIEVAL · ARCHITECTURE · V0.4.0</text>
+    <text class="title" x="40" y="76">Factor resolution with bounded proxy engineering</text>
+    <text class="subtitle" x="40" y="104">Observed numbers only · deterministic derivation · explainable Top-K · human-controlled lock</text>
+
+    <rect class="zone" x="40" y="136" width="280" height="400" rx="8"/>
+    <rect class="zone-mask" x="56" y="140" width="144" height="16" rx="2"/>
+    <text class="zone-label" x="128" y="152" text-anchor="middle">INTAKE + EVIDENCE</text>
+    <rect class="zone" x="344" y="136" width="600" height="400" rx="8"/>
+    <rect class="zone-mask" x="360" y="140" width="156" height="16" rx="2"/>
+    <text class="zone-label" x="438" y="152" text-anchor="middle">RESOLUTION ENGINE</text>
+    <rect class="zone" x="968" y="136" width="272" height="400" rx="8"/>
+    <rect class="zone-mask" x="984" y="140" width="168" height="16" rx="2"/>
+    <text class="zone-label" x="1068" y="152" text-anchor="middle">DECISION + GOVERNANCE</text>
+
+    <!-- Connectors are intentionally painted before nodes. -->
+    <path class="flow link" d="M180,296 V360"/>
+    <path class="flow" d="M296,420 H324 Q332,420 332,412 V264 Q332,256 340,256 H368"/>
+    <path class="flow" d="M608,256 H648"/>
+    <path class="flow" d="M780,312 V368"/>
+    <path class="flow optional" d="M720,312 V328 Q720,336 712,336 H496 Q488,336 488,344 V368"/>
+    <path class="flow accent" d="M608,424 H648"/>
+    <path class="flow" d="M912,424 H944 Q952,424 952,416 V264 Q952,256 960,256 H992"/>
+    <path class="flow accent" d="M1104,312 V368"/>
+
+    <rect class="label-mask" x="676" y="324" width="88" height="16" rx="2"/>
+    <text class="arrow-label" x="720" y="336" text-anchor="middle">INSUFFICIENT</text>
+    <rect class="label-mask" x="608" y="400" width="40" height="16" rx="2"/>
+    <text class="arrow-label" x="628" y="412" text-anchor="middle">ONCE</text>
+
+    <rect class="node-mask" x="64" y="200" width="232" height="96" rx="8"/>
+    <rect class="node-box input" x="64" y="200" width="232" height="96" rx="8"/>
+    <text class="node-tag" x="80" y="220">REQUEST</text>
+    <text class="node-name" x="80" y="248">Validate + Normalize</text>
+    <text class="node-sub" x="80" y="272">MaterialIdentity · request gaps</text>
+    <text class="node-note" x="80" y="288">raw + normalized fingerprints</text>
+
+    <rect class="node-mask" x="64" y="360" width="232" height="120" rx="8"/>
+    <rect class="node-box store" x="64" y="360" width="232" height="120" rx="8"/>
+    <text class="node-tag" x="80" y="380">FORMAL CATALOGUE</text>
+    <text class="node-name" x="80" y="408">Local Retrieval</text>
+    <text class="node-sub" x="80" y="432">Exact → Alias → Related</text>
+    <text class="node-note" x="80" y="452">invalid Exact continues to Alias</text>
+    <text class="node-note" x="80" y="468">source URL · SHA · page · row</text>
+
+    <rect class="node-mask" x="368" y="200" width="240" height="112" rx="8"/>
+    <rect class="node-box" x="368" y="200" width="240" height="112" rx="8"/>
+    <text class="node-tag" x="384" y="220">QUALIFICATION POLICY</text>
+    <text class="node-name" x="384" y="248">Evidence Eligibility</text>
+    <text class="node-sub" x="384" y="272">DIRECT · PROXY · GRADE_ANCHOR</text>
+    <text class="node-note" x="384" y="292">kind · indicator · boundary · unit</text>
+    <text class="node-note" x="384" y="308">unknown evidence → Reference Only</text>
+
+    <rect class="node-mask" x="648" y="200" width="264" height="112" rx="8"/>
+    <rect class="node-box" x="648" y="200" width="264" height="112" rx="8"/>
+    <text class="node-tag" x="664" y="220">SOLVE-FIRST</text>
+    <text class="node-name" x="664" y="248">Gap Analysis + Plan</text>
+    <text class="node-sub" x="664" y="272">Grade → Process / Process → Grade</text>
+    <text class="node-note" x="664" y="292">candidate-declared dependency order</text>
+    <text class="node-note" x="664" y="308">bounded, acyclic execution</text>
+
+    <rect class="node-mask" x="648" y="368" width="264" height="112" rx="8"/>
+    <rect class="node-box" x="648" y="368" width="264" height="112" rx="8"/>
+    <text class="node-tag" x="664" y="388">DETERMINISTIC ROUTERS</text>
+    <text class="node-name" x="664" y="416">Unit · Ref Flow · Grade · Process</text>
+    <text class="node-sub" x="664" y="440">common upstream ≥ 0 · shares = 1</text>
+    <text class="node-note" x="664" y="460">explicit includes_process + scoped evidence</text>
+    <text class="node-note" x="664" y="476">exact grade before interpolation</text>
+
+    <rect class="node-mask" x="368" y="368" width="240" height="112" rx="8"/>
+    <rect class="node-box focal" x="368" y="368" width="240" height="112" rx="8"/>
+    <text class="node-tag" x="384" y="388">FINAL FALLBACK · ONCE</text>
+    <text class="node-name" x="384" y="416">Class-aware Proxy</text>
+    <text class="node-sub" x="384" y="440">one bounded router re-entry</text>
+    <text class="node-note" x="384" y="460">family · grade · process become gaps</text>
+    <text class="node-note" x="384" y="476">no open-ended retry loop</text>
+
+    <rect class="node-mask" x="992" y="200" width="224" height="112" rx="8"/>
+    <rect class="node-box" x="992" y="200" width="224" height="112" rx="8"/>
+    <text class="node-tag" x="1008" y="220">DETERMINISTIC OUTPUT</text>
+    <text class="node-name" x="1008" y="248">Pool · Rank · Top-K</text>
+    <text class="node-sub" x="1008" y="272">min_score controls result tier</text>
+    <text class="node-note" x="1008" y="292">supplier quality is evidence-based</text>
+    <text class="node-note" x="1008" y="308">sources · reasons · limitations</text>
+
+    <rect class="node-mask" x="992" y="368" width="224" height="112" rx="8"/>
+    <rect class="node-box focal" x="992" y="368" width="224" height="112" rx="8"/>
+    <text class="node-tag" x="1008" y="388">HUMAN CONTROL</text>
+    <text class="node-name" x="1008" y="416">Approve + Atomic Lock</text>
+    <text class="node-sub" x="1008" y="440">duplicate request_id rejected</text>
+    <text class="node-note" x="1008" y="460">Recommendation + Trace saved together</text>
+    <text class="node-note" x="1008" y="476">locked result remains immutable</text>
+
+    <rect class="node-box store" x="40" y="560" width="1200" height="104" rx="8"/>
+    <text class="node-tag" x="56" y="580">TRACE + RELEASE CONTROL</text>
+    <text class="trace-title" x="56" y="608">Mutable Trace · Database Version Anchor · Atomic Resolution Run</text>
+    <text class="trace-copy" x="56" y="632">1 t ≡ 1000 kg · raw/normalized fingerprints · catalogue + source-document provenance · exclusions · ranking lineage</text>
+    <text class="trace-copy" x="56" y="652">CI gate: uv lock --check · pytest · compileall · Ruff I/F</text>
+
+    <line x1="40" y1="684" x2="1240" y2="684" stroke="rgba(45,49,66,.12)" stroke-width=".8"/>
+    <text class="legend-label" x="40" y="708">LEGEND</text>
+    <rect x="128" y="696" width="24" height="12" rx="4" fill="#fff" stroke="#2d3142"/>
+    <text class="legend-copy" x="164" y="708">deterministic stage</text>
+    <rect x="336" y="696" width="24" height="12" rx="4" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
+    <text class="legend-copy" x="372" y="708">controlled focal point</text>
+    <line x1="600" y1="704" x2="628" y2="704" stroke="#7a8399" stroke-dasharray="5 4"/>
+    <text class="legend-copy" x="640" y="708">bounded fallback</text>
+    <line x1="820" y1="704" x2="848" y2="704" stroke="#2e5aa8"/>
+    <text class="legend-copy" x="860" y="708">formal evidence ingress</text>
+  </svg>
+</body>
+</html>

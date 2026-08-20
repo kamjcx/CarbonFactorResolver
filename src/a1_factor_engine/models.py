@@ -124,6 +124,7 @@ class ResolutionType(str, Enum):
     PROCESS_ADJUSTED = "PROCESS_ADJUSTED"
     UNADJUSTED_PROCESS_PROXY = "UNADJUSTED_PROCESS_PROXY"
     GRADE_INTERPOLATED = "GRADE_INTERPOLATED"
+    GRADE_EXACT_ANCHOR = "GRADE_EXACT_ANCHOR"
     GRADE_ADJUSTED = "GRADE_ADJUSTED"
     GRADE_PROXY = "GRADE_PROXY"
     CLASS_TECHNICAL_PROXY = "CLASS_TECHNICAL_PROXY"
@@ -153,6 +154,21 @@ class MaterialCategory(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class RegistryRuleStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+    REJECTED = "rejected"
+
+
+class SemanticRelationType(str, Enum):
+    IS_A = "is_a"
+    SAME_AS = "same_as"
+    PROCESS_VARIANT_OF = "process_variant_of"
+    FORM_VARIANT_OF = "form_variant_of"
+    GRADE_VARIANT_OF = "grade_variant_of"
+
+
 class RequestGapType(str, Enum):
     INPUT_SPECIFICATION = "INPUT_SPECIFICATION_GAP"
     MATERIAL_IDENTITY = "MATERIAL_IDENTITY_GAP"
@@ -163,6 +179,12 @@ class QualificationStatus(str, Enum):
     MISMATCH = "mismatch"
     UNKNOWN = "unknown"
     NOT_EVALUATED = "not_evaluated"
+
+
+class QualificationPolicy(str, Enum):
+    DIRECT = "direct"
+    PROXY = "proxy"
+    GRADE_ANCHOR = "grade_anchor"
 
 
 class ApprovalMode(str, Enum):
@@ -299,6 +321,42 @@ class MaterialIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class RegistryRuleSuggestion:
+    """A non-authoritative semantic proposal awaiting human review."""
+
+    suggestion_id: str
+    normalized_name: str
+    proposed_head_material: str | None = None
+    proposed_material_family: str | None = None
+    proposed_category: MaterialCategory = MaterialCategory.UNKNOWN
+    proposed_aliases: tuple[str, ...] = ()
+    rationale: str = ""
+    confidence: float = 0.0
+    status: RegistryRuleStatus = RegistryRuleStatus.DRAFT
+
+    def __post_init__(self) -> None:
+        if not self.suggestion_id.strip() or not self.normalized_name.strip():
+            raise ValueError("registry suggestion requires id and normalized_name")
+        if not 0 <= self.confidence <= 1:
+            raise ValueError("registry suggestion confidence must be between 0 and 1")
+        if self.status != RegistryRuleStatus.DRAFT:
+            raise ValueError("runtime registry suggestions must remain draft until human review")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "suggestion_id": self.suggestion_id,
+            "normalized_name": self.normalized_name,
+            "proposed_head_material": self.proposed_head_material,
+            "proposed_material_family": self.proposed_material_family,
+            "proposed_category": self.proposed_category.value,
+            "proposed_aliases": self.proposed_aliases,
+            "rationale": self.rationale,
+            "confidence": self.confidence,
+            "status": self.status.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RequestGap:
     gap_id: str
     gap_type: RequestGapType
@@ -345,8 +403,13 @@ class CandidateQualification:
     boundary: QualificationDimension
     unit: QualificationDimension
     eligible: bool
+    policy: QualificationPolicy = QualificationPolicy.DIRECT
+    policy_checks: Mapping[str, QualificationDimension] = field(default_factory=dict)
     primary_exclusion: str | None = None
     additional_exclusions: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "policy_checks", MappingProxyType(dict(self.policy_checks)))
 
     def to_dict(self) -> dict[str, Any]:
         def dimension(value: QualificationDimension) -> dict[str, Any]:
@@ -360,6 +423,8 @@ class CandidateQualification:
             "boundary": dimension(self.boundary),
             "unit": dimension(self.unit),
             "eligible": self.eligible,
+            "policy": self.policy.value,
+            "policy_checks": {key: dimension(item) for key, item in self.policy_checks.items()},
             "primary_exclusion": self.primary_exclusion,
             "additional_exclusions": self.additional_exclusions,
         }
@@ -583,6 +648,8 @@ class ResolutionTrace:
     trace_id: str
     request_id: str
     request_fingerprint: str
+    raw_request_fingerprint: str | None = None
+    normalized_business_fingerprint: str | None = None
     database_anchor: Optional[DatabaseVersionAnchor] = None
     revision: int = 0
     entries: list[TraceEntry] = field(default_factory=list)
@@ -608,11 +675,15 @@ class ResolutionTrace:
         gap_analysis = self.latest("gap_analysis")
         planner = self.latest("resolution_planner")
         re_evaluate = self.latest("re_evaluate")
+        normalize = self.latest("normalize")
         return {
             "trace_id": self.trace_id,
             "trace_revision": self.revision,
             "request_fingerprint": self.request_fingerprint,
+            "raw_request_fingerprint": self.raw_request_fingerprint or self.request_fingerprint,
+            "normalized_business_fingerprint": self.normalized_business_fingerprint,
             "database_version": self.database_anchor.to_dict() if self.database_anchor else None,
+            "semantic_registry": dict(normalize.details.get("semantic_registry") or {}) if normalize else None,
             "local_retrieval": dict(local.details) if local else None,
             "proxy_decision": dict(route.details) if route else None,
             "excluded_candidates": tuple(top_k.details.get("excluded", ())) if top_k else (),
@@ -674,6 +745,33 @@ def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
+    """Hash normalized business identity, independent of run and display settings."""
+
+    def normalized(value: object) -> object:
+        if value is None:
+            return None
+        return " ".join(str(value).casefold().replace("-", " ").split())
+
+    payload = {
+        "material_name": normalized(activity.canonical_name),
+        "quantity_kg": activity.quantity_kg,
+        "unresolved_quantity": (
+            (activity.original_quantity, normalized(activity.original_quantity_unit))
+            if activity.quantity_kg is None else None
+        ),
+        "geography": normalized(activity.geography),
+        "year": activity.year,
+        "product_form": normalized(activity.product_form),
+        "composition": normalized(activity.composition),
+        "production_process": normalized(activity.production_process),
+        "boundary": normalized(activity.boundary),
+        "target_factor_unit": normalized(activity.target_factor_unit),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Traceability for an observed factor value."""
@@ -685,6 +783,11 @@ class Provenance:
     retrieved_at: datetime = field(default_factory=_now)
     citation: str = ""
     excerpt: str = ""
+    catalog_locator: str | None = None
+    source_document_sha256: str | None = None
+    page: str | None = None
+    table: str | None = None
+    row: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or not self.provider.strip() or not self.locator.strip():
@@ -720,6 +823,11 @@ class SourceRecord:
     indicator: str | None = None
     declared_product: str | None = None
     boundary_modules: tuple[str, ...] = ()
+    catalog_locator: str | None = None
+    source_document_sha256: str | None = None
+    page: str | None = None
+    table: str | None = None
+    row: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or not self.material_name.strip():
@@ -750,6 +858,11 @@ class SourceRecord:
             retrieved_at=self.retrieved_at,
             citation=self.citation,
             excerpt=self.excerpt,
+            catalog_locator=self.catalog_locator,
+            source_document_sha256=self.source_document_sha256,
+            page=self.page,
+            table=self.table,
+            row=self.row,
         )
 
 
@@ -813,6 +926,12 @@ class NormalizedActivity:
     original_quantity_unit: str = "kg"
     material_identity: MaterialIdentity | None = None
     request_gaps: tuple[RequestGap, ...] = ()
+    semantic_registry_version: str | None = None
+    material_rule_ids: tuple[str, ...] = ()
+    process_rule_ids: tuple[str, ...] = ()
+    form_rule_ids: tuple[str, ...] = ()
+    relation_ids: tuple[str, ...] = ()
+    registry_suggestion: RegistryRuleSuggestion | None = None
 
 
 @dataclass(frozen=True, slots=True)

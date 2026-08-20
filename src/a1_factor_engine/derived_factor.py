@@ -7,6 +7,7 @@ from dataclasses import replace
 from .models import (
     Candidate,
     DerivedFactorCandidate,
+    FactorKind,
     FactorSourceType,
     ResolutionType,
     ResultTier,
@@ -19,6 +20,7 @@ TYPE_PRIORITY = {
     ResolutionType.UNIT_CONVERTED: 2,
     ResolutionType.REFERENCE_FLOW_CONVERTED: 3,
     ResolutionType.PROCESS_ADJUSTED: 4,
+    ResolutionType.GRADE_EXACT_ANCHOR: 4,
     ResolutionType.GRADE_INTERPOLATED: 5,
     ResolutionType.GRADE_ADJUSTED: 5,
     ResolutionType.GRADE_PROXY: 6,
@@ -28,12 +30,25 @@ TYPE_PRIORITY = {
 }
 
 SOURCE_QUALITY = {
-    FactorSourceType.SUPPLIER: 1.0,
+    FactorSourceType.SUPPLIER: 0.55,
     FactorSourceType.LOCAL_DATABASE: 0.9,
     FactorSourceType.EPD: 0.9,
     FactorSourceType.LITERATURE: 0.7,
     FactorSourceType.EXTERNAL_DATABASE: 0.75,
 }
+
+
+def source_quality(candidate: Candidate) -> float:
+    """Deterministic quality signal based on evidence, never source label alone."""
+
+    base = SOURCE_QUALITY.get(candidate.source.source_type, 0.6)
+    if candidate.source.source_type != FactorSourceType.SUPPLIER:
+        return base
+    metadata = candidate.source.metadata
+    verified = str(metadata.get("verified", "")).casefold() in {"true", "1", "yes"}
+    audited = str(metadata.get("audited", "")).casefold() in {"true", "1", "yes"}
+    documented = bool(candidate.source.citation and candidate.source.locator and candidate.source.boundary)
+    return min(0.95, base + 0.15 * verified + 0.15 * audited + 0.10 * documented)
 
 
 def resolution_strength(
@@ -44,22 +59,33 @@ def resolution_strength(
 ) -> float:
     steps = len(candidate.transformation_steps) if step_count is None else step_count
     assumptions = len(candidate.assumptions) if assumption_count is None else assumption_count
-    source_quality = SOURCE_QUALITY.get(candidate.source.source_type, 0.6)
+    quality = source_quality(candidate)
     derivation_signal = max(0.0, 1.0 - 0.12 * steps - 0.06 * assumptions)
     gap_penalty = min(0.25, 0.05 * sum(gap.severity for gap in candidate.gaps))
     return round(min(1.0, max(0.0,
         0.45 * candidate.score
         + 0.30 * candidate.evidence_coverage
-        + 0.15 * source_quality
+        + 0.15 * quality
         + 0.10 * derivation_signal
         - gap_penalty
     )), 6)
 
 
 def tier_for(candidate: Candidate) -> ResultTier:
+    if (
+        candidate.source.factor_kind not in {
+            FactorKind.LIFECYCLE_FACTOR,
+            FactorKind.EPD_INDICATOR,
+            FactorKind.DERIVED_PROXY_FACTOR,
+        }
+        or candidate.source.indicator not in {"GWP-total", "gwp-total"}
+    ):
+        return ResultTier.REFERENCE_ONLY
     if candidate.resolution_type in {ResolutionType.DIRECT_EXACT, ResolutionType.DIRECT_ALIAS, ResolutionType.UNIT_CONVERTED}:
         if any(gap.severity >= 0.5 for gap in candidate.gaps):
             return ResultTier.USABLE_WITH_ASSUMPTIONS
+        return ResultTier.PRIMARY_RECOMMENDATION
+    if candidate.resolution_type == ResolutionType.GRADE_EXACT_ANCHOR:
         return ResultTier.PRIMARY_RECOMMENDATION
     if candidate.resolution_type in {
         ResolutionType.REFERENCE_FLOW_CONVERTED,
@@ -72,8 +98,10 @@ def tier_for(candidate: Candidate) -> ResultTier:
     return ResultTier.REFERENCE_ONLY
 
 
-def finalize_candidate(candidate: Candidate) -> Candidate:
+def finalize_candidate(candidate: Candidate, *, min_score: float | None = None) -> Candidate:
     tier = tier_for(candidate)
+    if min_score is not None and candidate.score < min_score:
+        tier = ResultTier.REFERENCE_ONLY
     strength = resolution_strength(candidate)
     return replace(candidate, result_tier=tier, resolution_strength=strength)
 

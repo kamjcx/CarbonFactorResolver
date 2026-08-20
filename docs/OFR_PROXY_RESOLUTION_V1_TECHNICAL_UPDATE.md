@@ -2,7 +2,7 @@
 
 > 文档对象：A1 Factor Resolution Engine（OFR）的 Proxy Resolution 子系统  
 > 文档状态：目标设计与实现规范，不代表当前代码已全部实现  
-> 基线版本：现有 OFR `0.1.0`  
+> 历史设计基线版本（不是当前实现版本）：OFR `0.1.0`  
 > 设计版本：`proxy-resolution-v1.0`  
 > 技术基线：Python 3.11+  
 > 文档日期：2026-08-19  

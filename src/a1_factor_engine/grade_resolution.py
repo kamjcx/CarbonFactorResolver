@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 from .derived_factor import derive_candidate
 from .models import (
@@ -42,17 +43,37 @@ def resolve_grade(
     series: tuple[SourceRecord, ...],
 ) -> Candidate:
     target = extract_grade(activity.composition) or extract_grade(activity.canonical_name)
-    anchors = []
-    for record in (candidate.source, *series):
+    anchors: list[tuple[float, SourceRecord]] = []
+    seen: set[str] = set()
+    for record in series:
+        if record.source_id in seen:
+            continue
+        seen.add(record.source_id)
         grade = _record_grade(record)
         if grade is None:
             continue
-        if record.provider != candidate.source.provider:
-            continue
-        if record.boundary != candidate.source.boundary or record.production_process != candidate.source.production_process:
-            continue
         anchors.append((grade, record))
     if target is not None:
+        exact = sorted(
+            (item for item in anchors if abs(item[0] - target) <= 1e-9),
+            key=lambda item: item[1].source_id,
+        )
+        if exact:
+            exact_grade, record = exact[0]
+            exact_factor = convert_factor(record.factor_value, record.factor_unit, candidate.factor_unit)
+            selected = replace(
+                candidate,
+                source=record,
+                provenance=record.provenance,
+                factor_value=exact_factor,
+                base_source_ids=(record.source_id,),
+            )
+            return derive_candidate(
+                selected,
+                candidate_id=f"{candidate.candidate_id}:grade-{target:g}-exact",
+                resolution_type=ResolutionType.GRADE_EXACT_ANCHOR,
+                reasons=(f"selected qualified exact {exact_grade:g}% grade anchor before interpolation",),
+            )
         lower = max((item for item in anchors if item[0] <= target), default=None, key=lambda item: item[0])
         upper = min((item for item in anchors if item[0] >= target), default=None, key=lambda item: item[0])
         if lower and upper and lower[0] != upper[0]:
@@ -79,7 +100,7 @@ def resolve_grade(
                 },
                 output_value=output,
                 output_unit=candidate.factor_unit,
-                assumptions=("anchors belong to the same source, boundary and process series",),
+                assumptions=("anchors passed the same-series Grade Anchor qualification policy",),
             )
             return derive_candidate(
                 candidate,
@@ -92,12 +113,25 @@ def resolve_grade(
                 assumptions=step.assumptions,
             )
 
-    source_grade = _record_grade(candidate.source)
+    nearest = None
+    if target is not None and anchors:
+        nearest = min(anchors, key=lambda item: (abs(item[0] - target), item[1].source_id))
+    source = nearest[1] if nearest else candidate.source
+    source_grade = nearest[0] if nearest else _record_grade(candidate.source)
+    base = candidate
+    if source.source_id != candidate.source.source_id:
+        base = replace(
+            candidate,
+            source=source,
+            provenance=source.provenance,
+            factor_value=convert_factor(source.factor_value, source.factor_unit, candidate.factor_unit),
+            base_source_ids=(source.source_id,),
+        )
     difference = "unknown"
     if target is not None and source_grade is not None:
         difference = f"{target - source_grade:+g} percentage points"
     return derive_candidate(
-        candidate,
+        base,
         candidate_id=f"{candidate.candidate_id}:grade-proxy",
         resolution_type=ResolutionType.GRADE_PROXY,
         reasons=("retained the nearest available grade without changing its factor",),

@@ -31,6 +31,7 @@ EXPECTED_UNITS = {
     "reference_natural_gas_share": "fraction",
     "target_total_energy_kgce_per_t": "kgce/t",
     "target_electricity_share": "fraction",
+    "target_natural_gas_share": "fraction",
     "electricity_kgce_per_kwh": "kgce/kwh",
     "natural_gas_kgce_per_nm3": "kgce/nm3",
     "electricity_ef_kgco2e_per_kwh": "kgco2e/kwh",
@@ -54,11 +55,20 @@ def resolve_process_variant(
     parameters = _by_name(evidence)
     if FULL_REQUIRED <= parameters.keys():
         for name, expected in EXPECTED_UNITS.items():
+            if name not in parameters:
+                continue
             observed = parameters[name].unit.casefold().replace(" ", "")
             if observed != expected:
                 raise ValueError(f"{name} unit must be {expected}")
         values = {name: parameters[name].value for name in FULL_REQUIRED}
-        for share in ("reference_electricity_share", "reference_natural_gas_share", "target_electricity_share"):
+        target_gas_share = parameters.get("target_natural_gas_share")
+        values["target_natural_gas_share"] = target_gas_share.value if target_gas_share else 0.0
+        for share in (
+            "reference_electricity_share",
+            "reference_natural_gas_share",
+            "target_electricity_share",
+            "target_natural_gas_share",
+        ):
             if not 0 <= values[share] <= 1:
                 raise ValueError(f"{share} must be between zero and one")
         for name, value in values.items():
@@ -66,6 +76,11 @@ def resolve_process_variant(
                 raise ValueError(f"{name} must be positive")
         if abs(values["reference_electricity_share"] + values["reference_natural_gas_share"] - 1.0) > 1e-6:
             raise ValueError("reference process energy shares must sum to one")
+        if abs(values["target_electricity_share"] + values["target_natural_gas_share"] - 1.0) > 1e-6:
+            raise ValueError("target process energy shares must sum to one; target energy cannot silently disappear")
+        inclusion = candidate.source.metadata.get("includes_process")
+        if inclusion is None or inclusion.casefold() not in {"true", "1", "yes"}:
+            raise ValueError("reference factor must explicitly confirm that it includes the removed process")
 
         ref_electricity = (
             values["reference_total_energy_kgce_per_t"]
@@ -88,11 +103,20 @@ def resolve_process_variant(
             * values["electricity_ef_kgco2e_per_kwh"]
             / 1000
         )
+        target_gas = (
+            values["target_total_energy_kgce_per_t"]
+            * values["target_natural_gas_share"]
+            / values["natural_gas_kgce_per_nm3"]
+            * values["natural_gas_ef_kgco2e_per_nm3"]
+            / 1000
+        )
         reference_process = ref_electricity + ref_gas
         base_factor = convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
-        output_kg = base_factor - reference_process + target_electricity
-        if output_kg < 0:
+        common_upstream = base_factor - reference_process
+        if common_upstream < -1e-12:
             raise ValueError("process decomposition produced a negative common upstream factor")
+        common_upstream = max(0.0, common_upstream)
+        output_kg = common_upstream + target_electricity + target_gas
         output = convert_factor(output_kg, "kgCO2e/kg", candidate.factor_unit)
         assumptions = (
             "common raw-material upstream is equivalent between reference and target routes",
@@ -106,14 +130,19 @@ def resolve_process_variant(
             router_type=RouterType.PROCESS_VARIANT,
             method=ProcessResolutionMode.DECOMPOSE_AND_REBUILD.value,
             input_source_ids=(candidate.source.source_id,),
-            parameter_ids=tuple(parameters[name].parameter_id for name in sorted(FULL_REQUIRED)),
+            parameter_ids=tuple(
+                parameters[name].parameter_id
+                for name in sorted(FULL_REQUIRED | ({"target_natural_gas_share"} if target_gas_share else set()))
+            ),
             formula_id="process.replace_energy_components/v1",
             formula_expression="EF_target = EF_reference - EF_reference_process + EF_target_process",
             input_values={
                 "ef_reference": base_factor,
                 "reference_electricity": ref_electricity,
                 "reference_natural_gas": ref_gas,
+                "common_upstream": common_upstream,
                 "target_electricity": target_electricity,
+                "target_natural_gas": target_gas,
             },
             output_value=output,
             output_unit=candidate.factor_unit,
@@ -136,16 +165,20 @@ def resolve_process_variant(
             unit = parameters[name].unit.casefold().replace(" ", "")
             if unit not in {"kgco2e/kg", "tco2e/t"}:
                 raise ValueError(f"{name} unit must be kgCO2e/kg or tCO2e/t")
-        if candidate.source.metadata.get("includes_process", "true").casefold() in {"false", "0", "no"}:
-            raise ValueError("cannot subtract a process that the reference factor does not include")
+        inclusion = candidate.source.metadata.get("includes_process")
+        if inclusion is None or inclusion.casefold() not in {"true", "1", "yes"}:
+            raise ValueError("cannot subtract a process without explicit evidence that the reference factor includes it")
         removed = parameters["removed_process_factor"].value
         added = parameters["added_process_factor"].value
         delta_other = parameters.get("delta_other")
         delta = delta_other.value if delta_other else 0.0
         base_factor = convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
-        output_kg = base_factor - removed + added + delta
-        if removed < 0 or added < 0 or output_kg < 0:
+        common_upstream = base_factor - removed
+        output_kg = common_upstream + added + delta
+        if removed < 0 or added < 0 or common_upstream < -1e-12 or output_kg < 0:
             raise ValueError("delta process adjustment requires non-negative components and output")
+        common_upstream = max(0.0, common_upstream)
+        output_kg = common_upstream + added + delta
         output = convert_factor(output_kg, "kgCO2e/kg", candidate.factor_unit)
         used = tuple(parameters[name].parameter_id for name in sorted(delta_required | ({"delta_other"} if delta_other else set())))
         step = TransformationStep(
@@ -156,7 +189,13 @@ def resolve_process_variant(
             parameter_ids=used,
             formula_id="process.delta_adjust/v1",
             formula_expression="EF_target = EF_reference - EF_removed + EF_added + delta_other",
-            input_values={"ef_reference": base_factor, "removed": removed, "added": added, "delta_other": delta},
+            input_values={
+                "ef_reference": base_factor,
+                "removed": removed,
+                "common_upstream": common_upstream,
+                "added": added,
+                "delta_other": delta,
+            },
             output_value=output,
             output_unit=candidate.factor_unit,
             assumptions=("unadjusted contributions are shared between process variants",),

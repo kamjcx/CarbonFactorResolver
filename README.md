@@ -5,7 +5,7 @@
 ## Quick start
 
 ```python
-from a1_factor_engine import A1FactorResolutionEngine, ResolutionRequest, SourceRecord, FactorSourceType
+from a1_factor_engine import A1FactorResolutionEngine, ResolutionRequest, SourceRecord, FactorKind, FactorSourceType
 from a1_factor_engine.adapters import InMemoryFactorRepository, InMemoryProxyRepository
 
 record = SourceRecord(
@@ -15,6 +15,7 @@ record = SourceRecord(
     geography="CN", year=2024, product_form="coil",
     composition="carbon steel", production_process="electric arc furnace",
     boundary="cradle-to-gate", citation="EPD-001",
+    factor_kind=FactorKind.EPD_INDICATOR, indicator="GWP-total",
 )
 engine = A1FactorResolutionEngine(
     local_retrieval=InMemoryFactorRepository([record]),
@@ -66,7 +67,7 @@ Local and fallback linking use an observable, bounded strategy chain:
 
 - `exact_link` compares the normalized canonical material against catalogue name/code.
 - `synonym_link` accepts only aliases explicitly supplied by material understanding or registered in catalogue metadata; substring similarity is not a synonym.
-- An exact hit stops synonym expansion. Multiple hits remain a candidate set instead of being silently collapsed.
+- A qualified exact candidate stops lower-priority evaluation. Invalid exact rows remain auditable and allow a registered alias to continue.
 - `related_candidate_recall` is a bounded same-material-family recall for process/grade Gap Analysis; it is not a synonym.
 - `class_aware_proxy_link` is the final material-absence fallback and returns technical/generic Top-K candidates.
 - Every attempted, skipped and exhausted strategy is recorded in `Trace.link_attempts`.
@@ -79,6 +80,9 @@ Local and fallback linking use an observable, bounded strategy chain:
 - Factor and quantity units are converted deterministically (`g`, `kg`, `t`, `lb`; e.g. `kgCO2e/t → kgCO2e/kg`).
 - Scoring and stable ranking are deterministic. Semantic/LLM ports may interpret, classify and exclude candidates, but cannot originate numeric values.
 - Process, composition, form and material differences become structured gaps instead of immediate rejections. Only invalid/incompatible math, untraceable numerical inputs and double-counting risk hard-block a derived value.
+- Process derivation requires non-negative common upstream, complete target-energy shares, explicit process inclusion and explicitly scoped parameter evidence.
+- Direct, Proxy and Grade anchors use one policy-driven qualification engine. Proxy family/form/process/grade differences become gaps, while lifecycle meaning, indicator, boundary, unit and provenance stay strict.
+- Proxy candidates make at most one dependency-ordered pass through Unit/Reference Flow/Grade/Process resolution; no retry loop is introduced.
 - Ranking first uses `ResolutionType`, then resolution strength, suitability, evidence coverage, source quality, assumptions and stable lineage.
 - Candidates are labeled `PRIMARY_RECOMMENDATION`, `USABLE_WITH_ASSUMPTIONS` or `REFERENCE_ONLY`. Resolution strength is an explainable ordering signal, not a probability or approval decision.
 - Missing piece-to-mass evidence returns `MORE_INPUT_NEEDED` with the exact required fields; exhausted traceable evidence returns process-model/supplier-data follow-up without retry loops.
@@ -87,6 +91,21 @@ Local and fallback linking use an observable, bounded strategy chain:
 - `kgCO2e/t产品` is parsed as mass-per-declared-product; parsing success does not bypass declared-product or factor-kind qualification. `SourceRecord` preserves `factor_kind`, `indicator`, `declared_product` and `boundary_modules` for provenance.
 
 Normalization applies versioned Unicode, case, separator and whitespace rules. Applied rule IDs and semantic remapping are written to Trace so the mapping can be reproduced after rules or catalogue data change.
+
+## Versioned material semantic registry
+
+Version 0.5 adds a deterministic semantic layer before retrieval:
+
+`normalized text → Material Rules + Process Rules + Form Rules + Typed Relations`
+
+- Request names and source-record names use the same registry version and rules.
+- Only `ACTIVE` reviewed rules affect runtime identity or retrieval. `DRAFT`, `DEPRECATED` and `REJECTED` rules are ignored.
+- Unknown names may be sent to an optional `MaterialRuleSuggestionPort`. Its structured output remains a `DRAFT` review artifact and never becomes an active identity automatically.
+- Trace records the registry version plus every matched Material/Process/Form rule and typed relation.
+- The registry contains no emission-factor values. Numeric values still enter only through provenance-bearing `SourceRecord` or `ParameterEvidence`.
+- Built-in V1 rules recognize, among others, mullite/spinel/corundum/alumina, electrofused/sintered/calcined routes and common product forms. New vocabulary is released as reviewed registry data without changing Graph routing.
+
+For example, `电熔莫来石` resolves to material `mullite` plus process `electrofused`; `烧结莫来石` is therefore recalled as a same-material process variant, while `电熔刚玉` is not recalled merely because it shares the process word `电熔`.
 
 ## Mutable trace and database version anchor
 
@@ -108,7 +127,7 @@ print(trace.latest("local_retrieval").details)
 print(trace.latest("top_k").details)
 ```
 
-Equivalent business requests receive the same request fingerprint even though their run IDs differ. Results before and after a database update can therefore be compared explicitly:
+Trace stores both the raw-request fingerprint and a normalized business fingerprint. For example, `1 t` and `1000 kg` share the latter. Results before and after a database update can therefore be compared explicitly:
 
 ```python
 change = await engine.compare_traces(before_request_id, after_request_id)
@@ -135,6 +154,17 @@ approval = await engine.approve(
 ```
 
 Locked factor results are frozen dataclasses and stored immutably. Re-locking the same candidate is idempotent; attempting to lock a different candidate or alter an existing lock raises `ValueError`. The associated Trace remains appendable and is not converted into an immutable Trace snapshot.
+
+The V1 store rejects a duplicate `request_id` and atomically saves the initial Recommendation and Trace. A future repeated-run model should introduce a separate `business_request_id + run_id` contract rather than reusing request IDs.
+
+## Version 0.4 correctness hardening
+
+- Exact Grade anchors are selected before interpolation; all anchors require an explicit compatible series and full Grade Anchor qualification.
+- `min_score` remains a solve-first control: lower-scoring candidates are returned at most as `REFERENCE_ONLY`, not silently discarded.
+- Unknown factor kind or indicator can be inspected but cannot become Primary.
+- HTTP catalogue records preserve original document locator, SHA-256, page, table and row when the API supplies them; the engine never invents missing provenance.
+- Supplier source quality depends on verification, audit and documentation evidence rather than the supplier label alone.
+- The GitHub Actions workflow runs Python 3.11 lock, test, compile and Ruff I/F checks.
 
 ## Upstream engineering influences
 

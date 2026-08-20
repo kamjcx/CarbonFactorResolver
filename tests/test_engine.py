@@ -14,14 +14,19 @@ from a1_factor_engine import (
     GapType,
     LinkOutcome,
     LinkStrategy,
+    MaterialCategory,
+    MaterialRule,
     ParameterEvidence,
     ParameterSourceType,
     ReferenceFlowRecord,
+    RegistryRuleStatus,
+    RegistryRuleSuggestion,
     ResolutionRequest,
     ResolutionStatus,
     ResolutionType,
     ResultTier,
     SourceRecord,
+    VersionedMaterialSemanticRegistry,
 )
 from a1_factor_engine.adapters import (
     HttpCatalogFactorRepository,
@@ -31,7 +36,91 @@ from a1_factor_engine.adapters import (
     InMemoryProxyRepository,
     InMemoryReferenceFlowRepository,
 )
+from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.units import convert_factor, convert_mass, parse_factor_unit
+
+
+def test_versioned_registry_resolves_mullite_spinel_process_and_relations():
+    mullite = DEFAULT_MATERIAL_REGISTRY.resolve("电熔莫来石")
+    assert mullite.identity.head_material == "mullite"
+    assert mullite.identity.material_family == "mullite_products"
+    assert mullite.identity.category == MaterialCategory.MANUFACTURED_MINERAL
+    assert mullite.identity.manufacturing_route == ("electrofused",)
+    assert mullite.material_rule_ids == ("material.mullite/v1",)
+    assert mullite.process_rule_ids == ("process.electrofused/v1",)
+    assert mullite.relation_ids == ("relation.mullite-is-aluminosilicate/v1",)
+
+    spinel = DEFAULT_MATERIAL_REGISTRY.resolve("烧结尖晶石")
+    assert spinel.identity.head_material == "spinel"
+    assert spinel.identity.manufacturing_route == ("sintered",)
+
+
+def test_draft_registry_rule_cannot_affect_runtime_resolution():
+    registry = VersionedMaterialSemanticRegistry(
+        version="test-registry/draft-only",
+        material_rules=(MaterialRule(
+            "material.mullite/draft",
+            "mullite",
+            "mullite_products",
+            MaterialCategory.MANUFACTURED_MINERAL,
+            ("莫来石",),
+            status=RegistryRuleStatus.DRAFT,
+        ),),
+        process_rules=(),
+        form_rules=(),
+    )
+    result = registry.resolve("莫来石")
+    assert result.identity.category == MaterialCategory.UNKNOWN
+    assert result.material_rule_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_mullite_related_recall_is_material_aware_not_process_name_overlap():
+    sintered_mullite = record(
+        "mullite-sintered", "烧结莫来石", 2.1,
+        product_form=None, composition=None, production_process=None,
+        declared_product="烧结莫来石", boundary_modules=("A1", "A2", "A3"),
+    )
+    fused_corundum = record(
+        "corundum-fused", "电熔刚玉", 3.3,
+        product_form=None, composition=None, production_process=None,
+        declared_product="电熔刚玉", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sintered_mullite, fused_corundum])
+    ).resolve(ResolutionRequest(
+        material_name="电熔莫来石", quantity=1, geography="CN", year=2024,
+    ))
+    assert result.candidates
+    assert result.candidates[0].source.source_id == "mullite-sintered"
+    assert result.candidates[0].source.production_process == "sintered"
+    assert any(gap.gap_type == GapType.PROCESS_VARIANT for gap in result.candidates[0].gaps)
+    assert not any(gap.gap_type == GapType.MATERIAL_ABSENT for gap in result.candidates[0].gaps)
+    retrieved = result.trace.explain()["local_retrieval"]["records"]
+    assert {item["source_id"] for item in retrieved} == {"mullite-sintered"}
+
+
+@pytest.mark.asyncio
+async def test_unknown_material_suggestion_remains_draft_and_trace_visible():
+    class SuggestionPort:
+        async def suggest(self, normalized_name):
+            return RegistryRuleSuggestion(
+                suggestion_id="suggestion:new-material:1",
+                normalized_name=normalized_name,
+                proposed_head_material="new_material",
+                proposed_material_family="candidate_family",
+                rationale="LLM proposal constrained to semantic fields; no factor value",
+                confidence=0.62,
+            )
+
+    result = await A1FactorResolutionEngine(rule_suggestions=SuggestionPort()).resolve(
+        ResolutionRequest(material_name="全新材料X", quantity=1)
+    )
+    semantic = result.trace.explain()["semantic_registry"]
+    assert semantic["sufficiently_identified"] is False
+    assert semantic["draft_suggestion"]["status"] == "draft"
+    assert semantic["suggestion_requires_human_review"] is True
+    assert result.trace.explain()["material_identity"]["category"] == "UNKNOWN"
 
 
 def record(source_id: str, name: str, value: float, unit: str = "kgCO2e/kg", **kwargs) -> SourceRecord:
@@ -49,8 +138,10 @@ def record(source_id: str, name: str, value: float, unit: str = "kgCO2e/kg", **k
         composition=kwargs.pop("composition", "carbon steel"),
         production_process=kwargs.pop("production_process", "electric arc furnace"),
         boundary=kwargs.pop("boundary", "cradle-to-gate"),
-        factor_kind=kwargs.pop("factor_kind", FactorKind.OTHER),
-        indicator=kwargs.pop("indicator", None),
+        citation=kwargs.pop("citation", ""),
+        excerpt=kwargs.pop("excerpt", ""),
+        factor_kind=kwargs.pop("factor_kind", FactorKind.LIFECYCLE_FACTOR),
+        indicator=kwargs.pop("indicator", "GWP-total"),
         declared_product=kwargs.pop("declared_product", None),
         boundary_modules=kwargs.pop("boundary_modules", ()),
         metadata=kwargs.pop("metadata", kwargs),
@@ -305,7 +396,8 @@ async def test_exact_link_stops_before_registered_synonym_link():
     assert attempts[0]["strategy"] == LinkStrategy.EXACT.value
     assert attempts[0]["outcome"] == LinkOutcome.MATCHED.value
     assert attempts[1]["strategy"] == LinkStrategy.SYNONYM.value
-    assert attempts[1]["outcome"] == LinkOutcome.SKIPPED.value
+    assert attempts[1]["outcome"] == LinkOutcome.MATCHED.value
+    assert "pending exact-record qualification" in attempts[1]["reason"]
 
 
 @pytest.mark.asyncio
@@ -427,6 +519,7 @@ async def test_process_router_rebuilds_electrofused_mullite_from_sintered_factor
         "sintered-mullite", "sintered mullite", 3.431355,
         product_form="grain", composition="mullite",
         production_process="sintered", boundary="cradle-to-gate",
+        metadata={"includes_process": "true"},
     )
     values = (
         ("ref-energy", "reference_total_energy_kgce_per_t", 365, "kgce/t"),
@@ -439,7 +532,12 @@ async def test_process_router_rebuilds_electrofused_mullite_from_sintered_factor
         ("elec-ef", "electricity_ef_kgco2e_per_kwh", 0.5777, "kgCO2e/kWh"),
         ("gas-ef", "natural_gas_ef_kgco2e_per_nm3", 2.792671012566, "kgCO2e/Nm3"),
     )
-    evidence = [parameter(*item, reference_source_id="sintered-mullite", target_material="electrofused mullite") for item in values]
+    evidence = [parameter(
+        *item,
+        reference_source_id="sintered-mullite",
+        target_material="electrofused mullite",
+        target_process="electrofused",
+    ) for item in values]
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([sintered]),
         process_parameters=InMemoryProcessParameterRepository(evidence),
@@ -471,6 +569,7 @@ async def test_process_router_does_not_add_process_energy_without_supported_remo
     only_added = [parameter(
         "added", "added_process_factor", 0.8, "kgCO2e/kg",
         reference_source_id="finished-product", target_material="electrofused alumina",
+        target_process="electrofused",
     )]
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([finished]),
@@ -488,12 +587,14 @@ async def test_grade_router_interpolates_only_between_same_series_anchors():
     grade_90 = record(
         "magnesia-90", "magnesia", 1.0, composition="90% MgO",
         production_process="sintered", provider="series provider",
-        metadata={"series": "sintered magnesia", "grade": "90"},
+        declared_product="magnesia", boundary_modules=("A1", "A2", "A3"),
+        metadata={"series_id": "sintered magnesia", "grade": "90"},
     )
     grade_97 = record(
         "magnesia-97", "magnesia 97", 1.7, composition="97% MgO",
         production_process="sintered", provider="series provider",
-        metadata={"series": "sintered magnesia", "grade": "97"},
+        declared_product="magnesia", boundary_modules=("A1", "A2", "A3"),
+        metadata={"series_id": "sintered magnesia", "grade": "97"},
     )
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([grade_90]),
@@ -598,8 +699,8 @@ async def test_delta_adjustment_cannot_subtract_process_absent_from_source_bound
         metadata={"includes_process": "false"},
     )
     evidence = [
-        parameter("remove", "removed_process_factor", 0.4, "kgCO2e/kg", reference_source_id="raw-upstream", target_material="fused alumina"),
-        parameter("add", "added_process_factor", 0.7, "kgCO2e/kg", reference_source_id="raw-upstream", target_material="fused alumina"),
+        parameter("remove", "removed_process_factor", 0.4, "kgCO2e/kg", reference_source_id="raw-upstream", target_material="fused alumina", target_process="fused"),
+        parameter("add", "added_process_factor", 0.7, "kgCO2e/kg", reference_source_id="raw-upstream", target_material="fused alumina", target_process="fused"),
     ]
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([source]),
@@ -609,7 +710,7 @@ async def test_delta_adjustment_cannot_subtract_process_absent_from_source_bound
     candidate = result.candidates[0]
     assert candidate.resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY
     assert candidate.factor_value == 2.0
-    assert any("does not include" in warning for warning in candidate.warnings)
+    assert any("includes it" in warning for warning in candidate.warnings)
 
 
 @pytest.mark.asyncio
@@ -830,3 +931,464 @@ async def test_usable_with_assumptions_requires_acceptance_mode_and_can_lock():
     locked = await engine.lock(result.request_id, candidate.candidate_id, "reviewer")
     assert approval.mode == ApprovalMode.ASSUMPTION_ACCEPTANCE
     assert locked.approval.mode == ApprovalMode.ASSUMPTION_ACCEPTANCE
+
+
+def scoped_process_parameters(
+    *,
+    reference_source_id: str,
+    target_material: str,
+    target_process: str,
+    target_electricity_share: float = 1.0,
+) -> list[ParameterEvidence]:
+    values = (
+        ("ref-energy", "reference_total_energy_kgce_per_t", 365, "kgce/t"),
+        ("ref-elec-share", "reference_electricity_share", 0.76, "fraction"),
+        ("ref-gas-share", "reference_natural_gas_share", 0.24, "fraction"),
+        ("target-energy", "target_total_energy_kgce_per_t", 165, "kgce/t"),
+        ("target-elec-share", "target_electricity_share", target_electricity_share, "fraction"),
+        ("elec-coef", "electricity_kgce_per_kwh", 0.1229, "kgce/kWh"),
+        ("gas-coef", "natural_gas_kgce_per_nm3", 1.2143, "kgce/Nm3"),
+        ("elec-ef", "electricity_ef_kgco2e_per_kwh", 0.5777, "kgCO2e/kWh"),
+        ("gas-ef", "natural_gas_ef_kgco2e_per_nm3", 2.792671012566, "kgCO2e/Nm3"),
+    )
+    return [
+        parameter(
+            *item,
+            reference_source_id=reference_source_id,
+            target_material=target_material,
+            target_process=target_process,
+        )
+        for item in values
+    ]
+
+
+@pytest.mark.asyncio
+async def test_process_rejects_negative_common_upstream():
+    source = record(
+        "negative-upstream",
+        "sintered mullite",
+        0.1,
+        composition="mullite",
+        production_process="sintered",
+        metadata={"includes_process": "true"},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source]),
+        process_parameters=InMemoryProcessParameterRepository(scoped_process_parameters(
+            reference_source_id=source.source_id,
+            target_material="electrofused mullite",
+            target_process="electrofused",
+        )),
+    ).resolve(request(
+        material_name="electrofused mullite",
+        composition="mullite",
+        production_process="electrofused",
+    ))
+
+    assert result.candidates[0].resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY
+    assert any("negative common upstream" in warning for warning in result.candidates[0].warnings)
+
+
+@pytest.mark.asyncio
+async def test_target_energy_shares_cannot_silently_drop_energy():
+    source = record(
+        "incomplete-energy",
+        "sintered mullite",
+        3.5,
+        composition="mullite",
+        production_process="sintered",
+        metadata={"includes_process": "true"},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source]),
+        process_parameters=InMemoryProcessParameterRepository(scoped_process_parameters(
+            reference_source_id=source.source_id,
+            target_material="electrofused mullite",
+            target_process="electrofused",
+            target_electricity_share=0.6,
+        )),
+    ).resolve(request(
+        material_name="electrofused mullite",
+        composition="mullite",
+        production_process="electrofused",
+    ))
+
+    assert result.candidates[0].resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY
+    assert any("target process energy shares must sum to one" in warning for warning in result.candidates[0].warnings)
+
+
+@pytest.mark.asyncio
+async def test_process_evidence_without_scope_matches_nothing():
+    source = record(
+        "scoped-source",
+        "calcined alumina",
+        2.0,
+        production_process="calcined",
+        metadata={"includes_process": "true"},
+    )
+    unscoped = [
+        parameter("remove-unscoped", "removed_process_factor", 0.4, "kgCO2e/kg"),
+        parameter("add-unscoped", "added_process_factor", 0.7, "kgCO2e/kg"),
+    ]
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source]),
+        process_parameters=InMemoryProcessParameterRepository(unscoped),
+    ).resolve(request(material_name="fused alumina", production_process="fused"))
+
+    candidate = result.candidates[0]
+    assert candidate.resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY
+    assert candidate.parameter_evidence_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_missing_includes_process_never_defaults_to_true():
+    source = record(
+        "missing-inclusion",
+        "calcined alumina",
+        2.0,
+        production_process="calcined",
+        metadata={},
+    )
+    evidence = [
+        parameter(
+            "remove-scoped",
+            "removed_process_factor",
+            0.4,
+            "kgCO2e/kg",
+            reference_source_id=source.source_id,
+            target_material="fused alumina",
+            target_process="fused",
+        ),
+        parameter(
+            "add-scoped",
+            "added_process_factor",
+            0.7,
+            "kgCO2e/kg",
+            reference_source_id=source.source_id,
+            target_material="fused alumina",
+            target_process="fused",
+        ),
+    ]
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source]),
+        process_parameters=InMemoryProcessParameterRepository(evidence),
+    ).resolve(request(material_name="fused alumina", production_process="fused"))
+
+    candidate = result.candidates[0]
+    assert candidate.resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY
+    assert any("explicit evidence" in warning for warning in candidate.warnings)
+
+
+def qualified_grade_record(source_id: str, grade: float, value: float, *, series_id: str) -> SourceRecord:
+    return record(
+        source_id,
+        f"magnesia {grade:g}%",
+        value,
+        composition=f"{grade:g}% MgO",
+        production_process="sintered",
+        provider="grade registry",
+        declared_product="magnesia",
+        boundary_modules=("A1", "A2", "A3"),
+        metadata={"series_id": series_id, "grade": f"{grade:g}"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_exact_grade_anchor_is_selected_before_interpolation():
+    base = qualified_grade_record("magnesia-90-base", 90, 1.0, series_id="magnesia-series")
+    exact = qualified_grade_record("magnesia-95-exact", 95, 1.45, series_id="magnesia-series")
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([base]),
+        grade_series=InMemoryGradeSeriesRepository([exact]),
+    ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
+
+    candidate = result.candidates[0]
+    assert candidate.resolution_type == ResolutionType.GRADE_EXACT_ANCHOR
+    assert candidate.source.source_id == exact.source_id
+    assert candidate.factor_value == pytest.approx(1.45)
+
+
+@pytest.mark.asyncio
+async def test_grade_anchor_must_have_same_series_id():
+    base = qualified_grade_record("magnesia-series-a", 90, 1.0, series_id="series-a")
+    wrong = qualified_grade_record("magnesia-series-b", 95, 9.9, series_id="series-b")
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([base]),
+        grade_series=InMemoryGradeSeriesRepository([wrong]),
+    ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
+
+    assert result.candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.candidates[0].factor_value == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_emission_limit_cannot_be_grade_anchor():
+    base = qualified_grade_record("magnesia-life-90", 90, 1.0, series_id="series-limit-test")
+    limit = record(
+        "magnesia-limit-95",
+        "magnesia 95%",
+        8.0,
+        composition="95% MgO",
+        production_process="sintered",
+        provider="grade registry",
+        declared_product="magnesia",
+        boundary_modules=("A1", "A2", "A3"),
+        factor_kind=FactorKind.EMISSION_LIMIT,
+        metadata={"series_id": "series-limit-test", "grade": "95"},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([base]),
+        grade_series=InMemoryGradeSeriesRepository([limit]),
+    ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
+
+    assert result.candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert any(item["source_id"] == limit.source_id for item in result.trace.explain()["excluded_candidates"])
+
+
+@pytest.mark.asyncio
+async def test_invalid_exact_continues_to_valid_registered_alias():
+    invalid_exact = record(
+        "invalid-exact-limit",
+        "magnesia",
+        2.0,
+        factor_kind=FactorKind.EMISSION_LIMIT,
+    )
+    valid_alias = record(
+        "valid-magnesia-alias",
+        "high purity magnesia",
+        1.2,
+        metadata={"aliases": '["magnesia"]'},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([invalid_exact, valid_alias])
+    ).resolve(request(material_name="magnesia", composition="carbon steel", quantity_unit="kg"))
+
+    assert result.candidates[0].source.source_id == valid_alias.source_id
+    assert result.candidates[0].resolution_type == ResolutionType.DIRECT_ALIAS
+
+
+@pytest.mark.asyncio
+async def test_446_proxy_runs_grade_then_process_resolution():
+    base = record(
+        "ferritic-base-90",
+        "ferritic stainless steel coil 90%",
+        1.2,
+        unit="tCO2e/t",
+        product_form="coil",
+        composition="90% Cr",
+        production_process="cold rolling",
+        declared_product="ferritic stainless steel",
+        boundary_modules=("A1", "A2", "A3"),
+        metadata={
+            "material_category": "METAL",
+            "family": "metals",
+            "series_id": "ferritic-series",
+            "grade": "90",
+            "includes_process": "true",
+            "resolution_order": "grade,process",
+        },
+    )
+    exact_grade = record(
+        "ferritic-anchor-95",
+        "ferritic stainless steel coil 95%",
+        1.2,
+        unit="tCO2e/t",
+        product_form="coil",
+        composition="95% Cr",
+        production_process="cold rolling",
+        provider=base.provider,
+        declared_product="ferritic stainless steel",
+        boundary_modules=("A1", "A2", "A3"),
+        metadata={
+            "material_category": "METAL",
+            "series_id": "ferritic-series",
+            "grade": "95",
+            "includes_process": "true",
+            "resolution_order": "grade,process",
+        },
+    )
+    process = [
+        parameter(
+            "draw-remove",
+            "removed_process_factor",
+            0.2,
+            "kgCO2e/kg",
+            reference_source_id=exact_grade.source_id,
+            target_material="446 heat resistant steel fiber",
+            target_process="fiber drawing",
+        ),
+        parameter(
+            "draw-add",
+            "added_process_factor",
+            0.5,
+            "kgCO2e/kg",
+            reference_source_id=exact_grade.source_id,
+            target_material="446 heat resistant steel fiber",
+            target_process="fiber drawing",
+        ),
+    ]
+    result = await A1FactorResolutionEngine(
+        proxy_retrieval=InMemoryProxyRepository([base]),
+        grade_series=InMemoryGradeSeriesRepository([exact_grade]),
+        process_parameters=InMemoryProcessParameterRepository(process),
+    ).resolve(request(
+        material_name="446 heat resistant steel fiber",
+        product_form="fiber",
+        composition="95% Cr",
+        production_process="fiber drawing",
+        min_score=0.0,
+    ))
+
+    candidate = result.candidates[0]
+    assert candidate.origin == CandidateOrigin.PROXY
+    assert candidate.resolution_type == ResolutionType.PROCESS_ADJUSTED
+    assert candidate.factor_value == pytest.approx(1.5)
+    formulas = tuple(step.formula_id for step in candidate.transformation_steps)
+    assert "unit.factor_scale/v1" in formulas
+    assert "process.delta_adjust/v1" in formulas
+    stages = tuple(entry.stage for entry in result.trace.entries)
+    assert stages.index("grade_composition_resolution") < stages.index("process_variant_resolution")
+    assert candidate.result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS
+
+
+@pytest.mark.asyncio
+async def test_min_score_caps_low_score_candidate_at_reference_only():
+    sparse = record(
+        "sparse-score",
+        "steel coil",
+        1.0,
+        geography=None,
+        year=None,
+        product_form=None,
+        composition=None,
+        production_process=None,
+        boundary=None,
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sparse])
+    ).resolve(request(min_score=0.99))
+
+    assert result.candidates[0].score < 0.99
+    assert result.candidates[0].result_tier == ResultTier.REFERENCE_ONLY
+
+
+@pytest.mark.asyncio
+async def test_unknown_factor_kind_cannot_be_primary():
+    unknown = record(
+        "unknown-kind",
+        "steel coil",
+        1.0,
+        factor_kind=FactorKind.OTHER,
+        indicator=None,
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([unknown])
+    ).resolve(request())
+
+    assert result.candidates[0].result_tier == ResultTier.REFERENCE_ONLY
+
+
+@pytest.mark.asyncio
+async def test_one_tonne_and_1000kg_share_normalized_fingerprint():
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([record("fingerprint", "steel coil", 1.0)])
+    )
+    first = await engine.resolve(request(quantity=1, quantity_unit="t", request_id="fingerprint-tonne"))
+    second = await engine.resolve(request(quantity=1000, quantity_unit="kg", request_id="fingerprint-kg"))
+
+    assert first.trace.raw_request_fingerprint != second.trace.raw_request_fingerprint
+    assert first.trace.normalized_business_fingerprint == second.trace.normalized_business_fingerprint
+    comparison = await engine.compare_traces(first.request_id, second.request_id)
+    assert comparison["same_request"] is True
+
+
+@pytest.mark.asyncio
+async def test_duplicate_request_id_cannot_split_trace_and_recommendation():
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([record("duplicate", "steel coil", 1.0)])
+    )
+    first = request(request_id="same-run-id")
+    await engine.resolve(first)
+    with pytest.raises(ValueError, match="duplicate request_id"):
+        await engine.resolve(request(request_id="same-run-id", quantity=2))
+
+    stored = await engine.state("same-run-id")
+    trace = await engine.trace("same-run-id")
+    assert stored is not None and trace is not None
+    assert stored.trace is trace
+
+
+@pytest.mark.asyncio
+async def test_http_catalog_preserves_original_document_locator_when_supplied():
+    digest = "d" * 64
+    payload = {
+        "catalog_version": "v-provenance",
+        "database": {"name": "catalog.db", "sha256": digest},
+        "records": [{
+            "record_id": "documented-factor",
+            "name": "steel coil",
+            "primary_value": 1.1,
+            "primary_unit": "kgCO2e/kg",
+            "factor_kind": "lifecycle_factor",
+            "indicator": "GWP-total",
+            "boundary": "cradle-to-gate",
+            "source_document_locator": "https://example.test/epd.pdf",
+            "source_document_sha256": "e" * 64,
+            "page": 12,
+            "table": "A1-A3",
+            "row": 4,
+        }],
+    }
+    result = await A1FactorResolutionEngine(
+        local_retrieval=HttpCatalogFactorRepository(
+            expected_sha256=digest,
+            fetch_json=lambda _: payload,
+        )
+    ).resolve(request())
+
+    source = result.candidates[0].source
+    assert source.locator == "https://example.test/epd.pdf"
+    assert source.catalog_locator.endswith("#documented-factor")
+    assert source.provenance.source_document_sha256 == "e" * 64
+    assert (source.page, source.table, source.row) == ("12", "A1-A3", "4")
+
+
+@pytest.mark.asyncio
+async def test_reference_flow_question_matches_functional_unit():
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([
+            record("volume-factor", "refractory castable", 1.0, product_form="bulk")
+        ])
+    ).resolve(request(
+        material_name="refractory castable",
+        quantity=2,
+        quantity_unit="m3",
+        product_form="bulk",
+    ))
+
+    assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.trace.explain()["required_fields"] == ("density",)
+
+
+@pytest.mark.asyncio
+async def test_unverified_supplier_label_does_not_outrank_documented_epd():
+    supplier = record(
+        "supplier-unverified",
+        "steel coil",
+        1.0,
+        source_type=FactorSourceType.SUPPLIER,
+        citation="",
+        metadata={},
+    )
+    epd = record(
+        "documented-epd",
+        "steel coil",
+        1.0,
+        source_type=FactorSourceType.EPD,
+        citation="verified EPD",
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([supplier, epd])
+    ).resolve(request())
+
+    assert [candidate.source.source_id for candidate in result.candidates[:2]] == [epd.source_id, supplier.source_id]

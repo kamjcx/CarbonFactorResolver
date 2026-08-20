@@ -22,10 +22,13 @@ STEP_ORDER = (
 
 
 def build_resolution_plan(
-    candidate_id: str, gaps: tuple[ResolutionGap, ...]
+    candidate_id: str,
+    gaps: tuple[ResolutionGap, ...],
+    preferred_order: tuple[RouterType, ...] = (),
 ) -> ResolutionPlan:
     requested = {STEP_FOR_GAP[gap.gap_type] for gap in gaps if gap.gap_type in STEP_FOR_GAP}
-    steps = tuple(step for step in STEP_ORDER if step in requested)
+    ordered = tuple(dict.fromkeys((*preferred_order, *STEP_ORDER)))
+    steps = tuple(step for step in ordered if step in requested)
     return ResolutionPlan(
         plan_id=f"plan:{candidate_id}",
         candidate_id=candidate_id,

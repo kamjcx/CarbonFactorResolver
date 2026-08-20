@@ -100,10 +100,12 @@ class GraphState:
     trace: ResolutionTrace = field(init=False)
 
     def __post_init__(self) -> None:
+        raw_fingerprint = resolution_request_fingerprint(self.request)
         self.trace = ResolutionTrace(
             trace_id=f"trace:{self.request.request_id}",
             request_id=self.request.request_id,
-            request_fingerprint=resolution_request_fingerprint(self.request),
+            request_fingerprint=raw_fingerprint,
+            raw_request_fingerprint=raw_fingerprint,
         )
 
     def event(self, stage: Stage, message: str, details: dict | None = None) -> None:
@@ -125,18 +127,5 @@ class Router:
     """Bounded routing policy; each insufficiency branch is visited once."""
 
     @staticmethod
-    def after_local(state: GraphState) -> Stage:
-        return Stage.CANDIDATE_POOL if Router._sufficient(state.local_candidates, state) else Stage.MATERIAL_RESOLUTION
-
-    @staticmethod
     def after_proxy(state: GraphState) -> Stage:
         return Stage.CANDIDATE_POOL
-
-    @staticmethod
-    def _sufficient(candidates: tuple, state: GraphState) -> bool:
-        # A process or boundary contradiction is never hidden by a high
-        # aggregate score. Missing data may be assessed as a limitation.
-        return any(
-            candidate_is_sufficient(c, state)
-            for c in candidates
-        )

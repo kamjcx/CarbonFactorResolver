@@ -11,6 +11,7 @@ from .models import (
     ResolutionGap,
     RouterType,
 )
+from .qualification import source_identity
 from .units import is_mass_unit
 
 
@@ -95,11 +96,22 @@ def analyze_candidate_gaps(
     if candidate.origin.value == "proxy" or strategy == LinkStrategy.RELATED.value:
         target_terms = _material_terms(activity.canonical_name)
         source_terms = _material_terms(source.material_name)
+        target_identity = activity.material_identity
+        observed_identity = source_identity(source)
+        same_registered_material = bool(
+            target_identity
+            and target_identity.head_material
+            and target_identity.head_material == observed_identity.head_material
+        )
         has_same_material_resolution = any(
             gap.gap_type in {GapType.PROCESS_VARIANT, GapType.GRADE_COMPOSITION}
             for gap in gaps
         )
-        if candidate.origin.value == "proxy" or not target_terms & source_terms or not has_same_material_resolution:
+        if (
+            candidate.origin.value == "proxy"
+            or (not same_registered_material and not target_terms & source_terms)
+            or not has_same_material_resolution
+        ):
             add(
                 GapType.MATERIAL_ABSENT, activity.canonical_name, source.material_name, 1.0,
                 "target material is absent and this record is a material proxy", RouterType.CLASS_AWARE_PROXY,

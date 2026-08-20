@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OFR 0.4.0 — 因子解析架构</title>
+  <style>
+    :root { --paper:#f5f5f5; --ink:#2d3142; --muted:#4f5d75; --soft:#7a8399; --rule:rgba(45,49,66,.12); --accent:#eb6c36; --accent-tint:rgba(235,108,54,.08); --link:#2e5aa8; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; background:var(--paper); }
+    body { display:grid; place-items:center; }
+    svg { display:block; width:min(100vw,1280px); height:auto; }
+    .eyebrow { fill:var(--soft); font:500 8px "Geist Mono","Noto Sans SC",monospace; letter-spacing:.18em; }
+    .title { fill:var(--ink); font:600 40px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+    .subtitle { fill:var(--muted); font:400 12px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+    .zone { fill:rgba(45,49,66,.02); stroke:var(--rule); stroke-width:.8; }
+    .zone-mask,.label-mask { fill:var(--paper); }
+    .zone-label { fill:var(--soft); font:500 8px "Geist Mono","Noto Sans SC",monospace; letter-spacing:.12em; }
+    .flow { fill:none; stroke:var(--muted); stroke-width:1.2; marker-end:url(#ofr04zh-arrow); }
+    .flow.accent { stroke:var(--accent); marker-end:url(#ofr04zh-arrow-accent); }
+    .flow.link { stroke:var(--link); marker-end:url(#ofr04zh-arrow-link); }
+    .flow.optional { stroke:var(--soft); stroke-width:1; stroke-dasharray:5 4; }
+    .arrow-label { fill:var(--soft); font:500 12px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+    .node-mask { fill:var(--paper); }
+    .node-box { fill:#fff; stroke:var(--ink); stroke-width:1; }
+    .node-box.store { fill:rgba(45,49,66,.05); stroke:var(--muted); }
+    .node-box.input { fill:rgba(79,93,117,.10); stroke:var(--soft); }
+    .node-box.focal { fill:var(--accent-tint); stroke:var(--accent); stroke-width:1.2; }
+    .node-tag { fill:var(--soft); font:500 8px "Geist Mono","Noto Sans SC",monospace; letter-spacing:.10em; }
+    .node-name { fill:var(--ink); font:600 16px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+    .node-sub { fill:var(--muted); font:400 12px "Geist Mono","Noto Sans SC",monospace; }
+    .node-note { fill:var(--soft); font:400 12px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+    .trace-title { fill:var(--ink); font:600 16px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+    .trace-copy { fill:var(--muted); font:400 12px "Geist Mono","Noto Sans SC",monospace; }
+    .legend-label { fill:var(--soft); font:500 8px "Geist Mono","Noto Sans SC",monospace; letter-spacing:.12em; }
+    .legend-copy { fill:var(--muted); font:400 12px "Noto Sans SC","Microsoft YaHei",sans-serif; }
+  </style>
+</head>
+<body>
+  <svg viewBox="0 0 1280 720" role="img" aria-labelledby="ofr04-zh-title ofr04-zh-desc">
+    <title id="ofr04-zh-title">OFR 0.4.0 因子解析架构</title>
+    <desc id="ofr04-zh-desc">展示正式因子检索、策略化资格判断、确定性工艺与牌号解析、一次有界 Proxy 回送、证据化排名、原子审计保存、人工审批和结果锁定。</desc>
+    <defs>
+      <marker id="ofr04zh-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+      <marker id="ofr04zh-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#eb6c36"/></marker>
+      <marker id="ofr04zh-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
+    </defs>
+
+    <rect width="1280" height="720" fill="#f5f5f5"/>
+    <text class="eyebrow" x="40" y="32">开放因子解析 · 系统架构 · V0.4.0</text>
+    <text class="title" x="40" y="76">基于有界 Proxy 工程的因子解析</text>
+    <text class="subtitle" x="40" y="104">只使用可追溯数值 · 确定性派生 · 可解释 Top-K · 人工控制锁定</text>
+
+    <rect class="zone" x="40" y="136" width="280" height="400" rx="8"/>
+    <rect class="zone-mask" x="56" y="140" width="128" height="16" rx="2"/>
+    <text class="zone-label" x="120" y="152" text-anchor="middle">输入与证据</text>
+    <rect class="zone" x="344" y="136" width="600" height="400" rx="8"/>
+    <rect class="zone-mask" x="360" y="140" width="128" height="16" rx="2"/>
+    <text class="zone-label" x="424" y="152" text-anchor="middle">解析引擎</text>
+    <rect class="zone" x="968" y="136" width="272" height="400" rx="8"/>
+    <rect class="zone-mask" x="984" y="140" width="144" height="16" rx="2"/>
+    <text class="zone-label" x="1056" y="152" text-anchor="middle">决策与治理</text>
+
+    <!-- 连线先于节点绘制。 -->
+    <path class="flow link" d="M180,296 V360"/>
+    <path class="flow" d="M296,420 H324 Q332,420 332,412 V264 Q332,256 340,256 H368"/>
+    <path class="flow" d="M608,256 H648"/>
+    <path class="flow" d="M780,312 V368"/>
+    <path class="flow optional" d="M720,312 V328 Q720,336 712,336 H496 Q488,336 488,344 V368"/>
+    <path class="flow accent" d="M608,424 H648"/>
+    <path class="flow" d="M912,424 H944 Q952,424 952,416 V264 Q952,256 960,256 H992"/>
+    <path class="flow accent" d="M1104,312 V368"/>
+
+    <rect class="label-mask" x="684" y="324" width="72" height="16" rx="2"/>
+    <text class="arrow-label" x="720" y="336" text-anchor="middle">不足</text>
+    <rect class="label-mask" x="608" y="400" width="40" height="16" rx="2"/>
+    <text class="arrow-label" x="628" y="412" text-anchor="middle">一次</text>
+
+    <rect class="node-mask" x="64" y="200" width="232" height="96" rx="8"/>
+    <rect class="node-box input" x="64" y="200" width="232" height="96" rx="8"/>
+    <text class="node-tag" x="80" y="220">解析请求</text>
+    <text class="node-name" x="80" y="248">校验与标准化</text>
+    <text class="node-sub" x="80" y="272">材料身份 · 请求缺口</text>
+    <text class="node-note" x="80" y="288">原始指纹 + 标准化业务指纹</text>
+
+    <rect class="node-mask" x="64" y="360" width="232" height="120" rx="8"/>
+    <rect class="node-box store" x="64" y="360" width="232" height="120" rx="8"/>
+    <text class="node-tag" x="80" y="380">正式因子目录</text>
+    <text class="node-name" x="80" y="408">本地因子检索</text>
+    <text class="node-sub" x="80" y="432">精确 → 别名 → 相关召回</text>
+    <text class="node-note" x="80" y="452">无效精确命中后继续合法别名</text>
+    <text class="node-note" x="80" y="468">原文 URL · SHA · 页码 · 行号</text>
+
+    <rect class="node-mask" x="368" y="200" width="240" height="112" rx="8"/>
+    <rect class="node-box" x="368" y="200" width="240" height="112" rx="8"/>
+    <text class="node-tag" x="384" y="220">资格策略</text>
+    <text class="node-name" x="384" y="248">证据资格判断</text>
+    <text class="node-sub" x="384" y="272">DIRECT · PROXY · GRADE_ANCHOR</text>
+    <text class="node-note" x="384" y="292">类型 · 指标 · 边界 · 单位</text>
+    <text class="node-note" x="384" y="308">未知证据最多进入参考层</text>
+
+    <rect class="node-mask" x="648" y="200" width="264" height="112" rx="8"/>
+    <rect class="node-box" x="648" y="200" width="264" height="112" rx="8"/>
+    <text class="node-tag" x="664" y="220">先解析后降级</text>
+    <text class="node-name" x="664" y="248">缺口分析与解析计划</text>
+    <text class="node-sub" x="664" y="272">牌号 → 工艺 / 工艺 → 牌号</text>
+    <text class="node-note" x="664" y="292">候选声明依赖顺序</text>
+    <text class="node-note" x="664" y="308">有界且无环执行</text>
+
+    <rect class="node-mask" x="648" y="368" width="264" height="112" rx="8"/>
+    <rect class="node-box" x="648" y="368" width="264" height="112" rx="8"/>
+    <text class="node-tag" x="664" y="388">确定性路由器</text>
+    <text class="node-name" x="664" y="416">单位 · 参考流 · 牌号 · 工艺</text>
+    <text class="node-sub" x="664" y="440">共同上游 ≥ 0 · 能源份额 = 1</text>
+    <text class="node-note" x="664" y="460">显式 includes_process + 参数作用域</text>
+    <text class="node-note" x="664" y="476">精确牌号优先于插值</text>
+
+    <rect class="node-mask" x="368" y="368" width="240" height="112" rx="8"/>
+    <rect class="node-box focal" x="368" y="368" width="240" height="112" rx="8"/>
+    <text class="node-tag" x="384" y="388">最终后备 · 仅一次</text>
+    <text class="node-name" x="384" y="416">类别感知 Proxy</text>
+    <text class="node-sub" x="384" y="440">一次有界路由回送</text>
+    <text class="node-note" x="384" y="460">材料族 · 牌号 · 工艺差异转为缺口</text>
+    <text class="node-note" x="384" y="476">禁止开放式重试</text>
+
+    <rect class="node-mask" x="992" y="200" width="224" height="112" rx="8"/>
+    <rect class="node-box" x="992" y="200" width="224" height="112" rx="8"/>
+    <text class="node-tag" x="1008" y="220">确定性输出</text>
+    <text class="node-name" x="1008" y="248">候选池 · 排名 · Top-K</text>
+    <text class="node-sub" x="1008" y="272">min_score 控制结果层级</text>
+    <text class="node-note" x="1008" y="292">供应商质量由证据决定</text>
+    <text class="node-note" x="1008" y="308">来源 · 理由 · 局限</text>
+
+    <rect class="node-mask" x="992" y="368" width="224" height="112" rx="8"/>
+    <rect class="node-box focal" x="992" y="368" width="224" height="112" rx="8"/>
+    <text class="node-tag" x="1008" y="388">人工控制</text>
+    <text class="node-name" x="1008" y="416">审批与原子锁定</text>
+    <text class="node-sub" x="1008" y="440">拒绝重复 request_id</text>
+    <text class="node-note" x="1008" y="460">推荐与 Trace 原子保存</text>
+    <text class="node-note" x="1008" y="476">锁定结果保持不可变</text>
+
+    <rect class="node-box store" x="40" y="560" width="1200" height="104" rx="8"/>
+    <text class="node-tag" x="56" y="580">TRACE 与发布控制</text>
+    <text class="trace-title" x="56" y="608">可更新 Trace · 数据库版本锚点 · 原子解析运行</text>
+    <text class="trace-copy" x="56" y="632">1 t ≡ 1000 kg · 双指纹 · 目录与原始文档 provenance · 排除理由 · 排名 lineage</text>
+    <text class="trace-copy" x="56" y="652">CI 门禁：uv lock --check · pytest · compileall · Ruff I/F</text>
+
+    <line x1="40" y1="684" x2="1240" y2="684" stroke="rgba(45,49,66,.12)" stroke-width=".8"/>
+    <text class="legend-label" x="40" y="708">图例</text>
+    <rect x="128" y="696" width="24" height="12" rx="4" fill="#fff" stroke="#2d3142"/>
+    <text class="legend-copy" x="164" y="708">确定性阶段</text>
+    <rect x="336" y="696" width="24" height="12" rx="4" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
+    <text class="legend-copy" x="372" y="708">受控焦点</text>
+    <line x1="548" y1="704" x2="576" y2="704" stroke="#7a8399" stroke-dasharray="5 4"/>
+    <text class="legend-copy" x="588" y="708">有界后备路径</text>
+    <line x1="796" y1="704" x2="824" y2="704" stroke="#2e5aa8"/>
+    <text class="legend-copy" x="836" y="708">正式证据入口</text>
+  </svg>
+</body>
+</html>
