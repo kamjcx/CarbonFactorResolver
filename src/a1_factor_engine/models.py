@@ -1,0 +1,979 @@
+"""Immutable domain models for the factor-resolution graph.
+
+The model deliberately has no database or LLM dependency.  A factor value can
+only be represented by :class:`SourceRecord`, which requires provenance.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from math import isfinite
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
+from uuid import uuid4
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class FactorSourceType(str, Enum):
+    LOCAL_DATABASE = "local_database"
+    EXTERNAL_DATABASE = "external_database"
+    EPD = "epd"
+    LITERATURE = "literature"
+    SUPPLIER = "supplier"
+
+
+class FactorKind(str, Enum):
+    """Numeric meaning of a catalogue record, separate from its source."""
+
+    LIFECYCLE_FACTOR = "lifecycle_factor"
+    EPD_INDICATOR = "epd_indicator"
+    EMISSION_LIMIT = "emission_limit"
+    COMBUSTION_FACTOR = "combustion_factor"
+    ENERGY_FACTOR = "energy_factor"
+    TRANSPORT_FACTOR = "transport_factor"
+    STOICHIOMETRIC_FACTOR = "stoichiometric_factor"
+    DERIVED_PROXY_FACTOR = "derived_proxy_factor"
+    OTHER = "other"
+
+
+class CandidateOrigin(str, Enum):
+    LOCAL = "local"
+    PROXY = "proxy"
+
+
+class ResolutionStatus(str, Enum):
+    RECOMMENDATION_READY = "recommendation_ready"
+    UNRESOLVED = "unresolved"
+    PROCESS_MODEL_REQUIRED = "process_model_required"
+    SUPPLIER_DATA_REQUIRED = "supplier_data_required"
+    LOCKED = "locked"
+    ERROR = "error"
+    MORE_INPUT_NEEDED = "more_input_needed"
+
+
+class FollowUp(str, Enum):
+    UNRESOLVED = "unresolved"
+    PROCESS_MODEL = "process-model"
+    SUPPLIER_DATA = "supplier-data"
+    MORE_INPUT = "more-input"
+
+
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    LOCKED = "locked"
+
+
+class LinkStrategy(str, Enum):
+    EXACT = "exact_link"
+    SYNONYM = "synonym_link"
+    RELATED = "related_candidate_recall"
+    CLASS_AWARE_PROXY = "class_aware_proxy_link"
+    UNRESOLVED = "unresolved"
+
+
+class LinkOutcome(str, Enum):
+    MATCHED = "matched"
+    NO_MATCH = "no_match"
+    SKIPPED = "skipped"
+    CANDIDATE_SET = "candidate_set"
+
+
+class ParameterSourceType(str, Enum):
+    INTERNAL_MEASUREMENT = "internal_measurement"
+    USER_CONFIRMED_ENGINEERING_DATA = "user_confirmed_engineering_data"
+    SUPPLIER_SPECIFICATION = "supplier_specification"
+    FORMAL_STANDARD = "formal_standard"
+    INTERNAL_CATALOG = "internal_catalog"
+    LITERATURE_IMPORT = "literature_import"
+
+
+class GapType(str, Enum):
+    UNIT_SCALE = "UNIT_SCALE_GAP"
+    REFERENCE_FLOW = "REFERENCE_FLOW_GAP"
+    PROCESS_VARIANT = "PROCESS_VARIANT_GAP"
+    GRADE_COMPOSITION = "GRADE_COMPOSITION_GAP"
+    MATERIAL_ABSENT = "MATERIAL_ABSENT_GAP"
+    BOUNDARY = "BOUNDARY_GAP"
+    GEOGRAPHY = "GEOGRAPHY_GAP"
+    TEMPORAL = "TEMPORAL_GAP"
+    FORM = "FORM_GAP"
+
+
+class RouterType(str, Enum):
+    UNIT_SCALE = "UNIT_SCALE_CONVERSION"
+    REFERENCE_FLOW = "REFERENCE_FLOW_CONVERSION"
+    PROCESS_VARIANT = "PROCESS_VARIANT_RESOLUTION"
+    GRADE_COMPOSITION = "GRADE_COMPOSITION_RESOLUTION"
+    CLASS_AWARE_PROXY = "CLASS_AWARE_MATERIAL_PROXY"
+
+
+class ResolutionType(str, Enum):
+    DIRECT_EXACT = "DIRECT_EXACT"
+    DIRECT_ALIAS = "DIRECT_ALIAS"
+    UNIT_CONVERTED = "UNIT_CONVERTED"
+    REFERENCE_FLOW_CONVERTED = "REFERENCE_FLOW_CONVERTED"
+    PROCESS_ADJUSTED = "PROCESS_ADJUSTED"
+    UNADJUSTED_PROCESS_PROXY = "UNADJUSTED_PROCESS_PROXY"
+    GRADE_INTERPOLATED = "GRADE_INTERPOLATED"
+    GRADE_ADJUSTED = "GRADE_ADJUSTED"
+    GRADE_PROXY = "GRADE_PROXY"
+    CLASS_TECHNICAL_PROXY = "CLASS_TECHNICAL_PROXY"
+    CLASS_GENERIC_PROXY = "CLASS_GENERIC_PROXY"
+
+
+class ResultTier(str, Enum):
+    PRIMARY_RECOMMENDATION = "PRIMARY_RECOMMENDATION"
+    USABLE_WITH_ASSUMPTIONS = "USABLE_WITH_ASSUMPTIONS"
+    REFERENCE_ONLY = "REFERENCE_ONLY"
+
+
+class ProcessResolutionMode(str, Enum):
+    DECOMPOSE_AND_REBUILD = "DECOMPOSE_AND_REBUILD"
+    DELTA_ADJUST = "DELTA_ADJUST"
+    UNADJUSTED_PROCESS_PROXY = "UNADJUSTED_PROCESS_PROXY"
+
+
+class MaterialCategory(str, Enum):
+    NATURAL_MINERAL = "NATURAL_MINERAL"
+    MANUFACTURED_MINERAL = "MANUFACTURED_MINERAL"
+    SYNTHETIC_CHEMICAL = "SYNTHETIC_CHEMICAL"
+    METAL = "METAL"
+    RECYCLED_MATERIAL = "RECYCLED_MATERIAL"
+    BYPRODUCT = "BYPRODUCT"
+    ENERGY_CARRIER = "ENERGY_CARRIER"
+    UNKNOWN = "UNKNOWN"
+
+
+class RequestGapType(str, Enum):
+    INPUT_SPECIFICATION = "INPUT_SPECIFICATION_GAP"
+    MATERIAL_IDENTITY = "MATERIAL_IDENTITY_GAP"
+
+
+class QualificationStatus(str, Enum):
+    PASS = "pass"
+    MISMATCH = "mismatch"
+    UNKNOWN = "unknown"
+    NOT_EVALUATED = "not_evaluated"
+
+
+class ApprovalMode(str, Enum):
+    STANDARD = "standard"
+    ASSUMPTION_ACCEPTANCE = "assumption_acceptance"
+    REFERENCE_OVERRIDE = "reference_override"
+
+
+@dataclass(frozen=True, slots=True)
+class ParameterEvidence:
+    parameter_id: str
+    name: str
+    value: float
+    unit: str
+    source_type: ParameterSourceType
+    provider: str
+    locator: str
+    citation: str = ""
+    observed_at: datetime = field(default_factory=_now)
+    quality_note: str = ""
+    metadata: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.parameter_id.strip() or not self.name.strip() or not self.unit.strip():
+            raise ValueError("parameter evidence requires id, name and unit")
+        if not self.provider.strip() or not self.locator.strip():
+            raise ValueError("parameter evidence requires provider and locator")
+        if not isfinite(self.value):
+            raise ValueError("parameter evidence value must be finite")
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "parameter_id": self.parameter_id,
+            "name": self.name,
+            "value": self.value,
+            "unit": self.unit,
+            "source_type": self.source_type.value,
+            "provider": self.provider,
+            "locator": self.locator,
+            "citation": self.citation,
+            "observed_at": self.observed_at.isoformat(),
+            "quality_note": self.quality_note,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceFlowRecord:
+    record_id: str
+    material_name: str
+    reference_unit: str
+    mass_per_unit_kg: float
+    evidence: ParameterEvidence
+    method: str = "mass_per_unit"
+
+    def __post_init__(self) -> None:
+        if not self.record_id.strip() or not self.material_name.strip() or not self.reference_unit.strip():
+            raise ValueError("reference-flow record requires id, material and unit")
+        if not isfinite(self.mass_per_unit_kg) or self.mass_per_unit_kg <= 0:
+            raise ValueError("mass_per_unit_kg must be finite and positive")
+        if abs(self.mass_per_unit_kg - self.evidence.value) > 1e-12:
+            raise ValueError("reference-flow mass must equal its parameter evidence value")
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionGap:
+    gap_id: str
+    candidate_id: str
+    gap_type: GapType
+    target_value: Optional[str]
+    candidate_value: Optional[str]
+    severity: float
+    reason: str
+    resolvable_by: tuple[RouterType, ...]
+
+    def __post_init__(self) -> None:
+        if not self.gap_id.strip() or not self.candidate_id.strip() or not self.reason.strip():
+            raise ValueError("resolution gap requires ids and reason")
+        if not 0 <= self.severity <= 1:
+            raise ValueError("gap severity must be between 0 and 1")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gap_id": self.gap_id,
+            "candidate_id": self.candidate_id,
+            "gap_type": self.gap_type.value,
+            "target_value": self.target_value,
+            "candidate_value": self.candidate_value,
+            "severity": self.severity,
+            "reason": self.reason,
+            "resolvable_by": tuple(router.value for router in self.resolvable_by),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialIdentity:
+    canonical_name: str
+    head_material: str | None = None
+    material_family: str | None = None
+    category: MaterialCategory = MaterialCategory.UNKNOWN
+    product_form: str | None = None
+    grade: str | None = None
+    composition: str | None = None
+    surface_coating: str | None = None
+    manufacturing_route: tuple[str, ...] = ()
+    application: str | None = None
+    unresolved_attributes: tuple[str, ...] = ()
+    rationale: str = ""
+    confidence: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not self.canonical_name.strip():
+            raise ValueError("material identity canonical_name is required")
+        if not 0 <= self.confidence <= 1:
+            raise ValueError("material identity confidence must be between 0 and 1")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "canonical_name": self.canonical_name,
+            "head_material": self.head_material,
+            "material_family": self.material_family,
+            "category": self.category.value,
+            "product_form": self.product_form,
+            "grade": self.grade,
+            "composition": self.composition,
+            "surface_coating": self.surface_coating,
+            "manufacturing_route": self.manufacturing_route,
+            "application": self.application,
+            "unresolved_attributes": self.unresolved_attributes,
+            "rationale": self.rationale,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RequestGap:
+    gap_id: str
+    gap_type: RequestGapType
+    field: str
+    reason: str
+    required: bool
+    options: tuple[str, ...] = ()
+    depends_on: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gap_id": self.gap_id,
+            "gap_type": self.gap_type.value,
+            "field": self.field,
+            "reason": self.reason,
+            "required": self.required,
+            "options": self.options,
+            "depends_on": self.depends_on,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProvisionalOption:
+    option_type: str
+    not_selected_because: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {"option_type": self.option_type, "not_selected_because": self.not_selected_because}
+
+
+@dataclass(frozen=True, slots=True)
+class QualificationDimension:
+    status: QualificationStatus
+    reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateQualification:
+    source_id: str
+    identity: QualificationDimension
+    factor_kind: QualificationDimension
+    indicator: QualificationDimension
+    declared_product: QualificationDimension
+    boundary: QualificationDimension
+    unit: QualificationDimension
+    eligible: bool
+    primary_exclusion: str | None = None
+    additional_exclusions: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        def dimension(value: QualificationDimension) -> dict[str, Any]:
+            return {"status": value.status.value, "reasons": value.reasons}
+        return {
+            "source_id": self.source_id,
+            "identity": dimension(self.identity),
+            "factor_kind": dimension(self.factor_kind),
+            "indicator": dimension(self.indicator),
+            "declared_product": dimension(self.declared_product),
+            "boundary": dimension(self.boundary),
+            "unit": dimension(self.unit),
+            "eligible": self.eligible,
+            "primary_exclusion": self.primary_exclusion,
+            "additional_exclusions": self.additional_exclusions,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecallObservation:
+    source_id: str
+    material_name: str
+    retrieval_strategy: LinkStrategy
+    retrieval_basis: tuple[str, ...]
+    identity_compatibility: str
+    factor_kind: FactorKind
+    eligible_for_candidate_pool: bool
+    primary_exclusion: str | None = None
+    additional_exclusions: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_id": self.source_id,
+            "material_name": self.material_name,
+            "retrieval_strategy": self.retrieval_strategy.value,
+            "retrieval_basis": self.retrieval_basis,
+            "identity_compatibility": self.identity_compatibility,
+            "factor_kind": self.factor_kind.value,
+            "eligible_for_candidate_pool": self.eligible_for_candidate_pool,
+            "primary_exclusion": self.primary_exclusion,
+            "additional_exclusions": self.additional_exclusions,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RequestResolutionPlan:
+    request_id: str
+    gaps: tuple[RequestGap, ...]
+    next_question: RequestGap | None = None
+    provisional_options: tuple[ProvisionalOption, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "gaps": tuple(gap.to_dict() for gap in self.gaps),
+            "next_question": self.next_question.to_dict() if self.next_question else None,
+            "provisional_options": tuple(option.to_dict() for option in self.provisional_options),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionPlan:
+    plan_id: str
+    candidate_id: str
+    gap_ids: tuple[str, ...]
+    steps: tuple[RouterType, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "candidate_id": self.candidate_id,
+            "gap_ids": self.gap_ids,
+            "steps": tuple(step.value for step in self.steps),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TransformationStep:
+    step_id: str
+    router_type: RouterType
+    method: str
+    input_source_ids: tuple[str, ...]
+    parameter_ids: tuple[str, ...]
+    formula_id: str
+    formula_expression: str
+    input_values: Mapping[str, float]
+    output_value: float
+    output_unit: str
+    assumptions: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.step_id.strip() or not self.formula_id.strip() or not self.output_unit.strip():
+            raise ValueError("transformation step requires id, formula and output unit")
+        if not isfinite(self.output_value) or self.output_value < 0:
+            raise ValueError("transformation output must be finite and non-negative")
+        object.__setattr__(self, "input_values", MappingProxyType(dict(self.input_values)))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "step_id": self.step_id,
+            "router_type": self.router_type.value,
+            "method": self.method,
+            "input_source_ids": self.input_source_ids,
+            "parameter_ids": self.parameter_ids,
+            "formula_id": self.formula_id,
+            "formula_expression": self.formula_expression,
+            "input_values": dict(self.input_values),
+            "output_value": self.output_value,
+            "output_unit": self.output_unit,
+            "assumptions": self.assumptions,
+            "warnings": self.warnings,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class LinkAttempt:
+    strategy: LinkStrategy
+    outcome: LinkOutcome
+    candidate_source_ids: tuple[str, ...] = ()
+    reason: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "strategy": self.strategy.value,
+            "outcome": self.outcome.value,
+            "candidate_source_ids": self.candidate_source_ids,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecommendationConfidence:
+    value: float
+    level: str
+    top_score: float
+    score_margin: float
+    evidence_coverage: float
+    rationale: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("value", self.value),
+            ("top_score", self.top_score),
+            ("evidence_coverage", self.evidence_coverage),
+        ):
+            if not isfinite(value) or not 0 <= value <= 1:
+                raise ValueError(f"{name} must be finite and between 0 and 1")
+        if not isfinite(self.score_margin) or self.score_margin < 0:
+            raise ValueError("score_margin must be finite and non-negative")
+        if self.level not in {"low", "medium", "high"}:
+            raise ValueError("confidence level must be low, medium or high")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "value": self.value,
+            "level": self.level,
+            "top_score": self.top_score,
+            "score_margin": self.score_margin,
+            "evidence_coverage": self.evidence_coverage,
+            "rationale": self.rationale,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseVersionAnchor:
+    """Identity of the formal factor catalogue observed by one resolution run."""
+
+    catalog_name: str
+    catalog_version: str
+    database_sha256: Optional[str]
+    locator: str
+    observed_at: datetime = field(default_factory=_now)
+
+    def __post_init__(self) -> None:
+        if not self.catalog_name.strip() or not self.catalog_version.strip() or not self.locator.strip():
+            raise ValueError("database anchor requires catalog_name, catalog_version and locator")
+        if self.database_sha256 is not None:
+            digest = self.database_sha256.strip().lower()
+            if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+                raise ValueError("database_sha256 must be a lowercase SHA-256 or None")
+            object.__setattr__(self, "database_sha256", digest)
+
+    @property
+    def identity(self) -> str:
+        return self.database_sha256 or f"{self.catalog_name}:{self.catalog_version}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "catalog_name": self.catalog_name,
+            "catalog_version": self.catalog_version,
+            "database_sha256": self.database_sha256,
+            "locator": self.locator,
+            "observed_at": self.observed_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalResult:
+    """Records returned together with the exact catalogue version queried."""
+
+    records: tuple["SourceRecord", ...]
+    database_anchor: DatabaseVersionAnchor
+    attempts: tuple[LinkAttempt, ...] = ()
+    observations: tuple[RecallObservation, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateExclusion:
+    source_id: str
+    origin: CandidateOrigin
+    reasons: tuple[str, ...]
+    candidate_id: Optional[str] = None
+
+
+@dataclass(frozen=True, slots=True)
+class TraceEntry:
+    revision: int
+    stage: str
+    message: str
+    details: Mapping[str, Any] = field(default_factory=dict)
+    at: datetime = field(default_factory=_now)
+
+    def __post_init__(self) -> None:
+        if self.revision < 1:
+            raise ValueError("trace entry revision must be positive")
+        object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
+
+
+@dataclass(slots=True)
+class ResolutionTrace:
+    """Mutable, appendable explanation record; deliberately not a locked snapshot."""
+
+    trace_id: str
+    request_id: str
+    request_fingerprint: str
+    database_anchor: Optional[DatabaseVersionAnchor] = None
+    revision: int = 0
+    entries: list[TraceEntry] = field(default_factory=list)
+
+    def append(self, stage: str, message: str, details: Mapping[str, Any] | None = None) -> TraceEntry:
+        self.revision += 1
+        entry = TraceEntry(self.revision, stage, message, details or {})
+        self.entries.append(entry)
+        return entry
+
+    def set_database_anchor(self, anchor: DatabaseVersionAnchor) -> None:
+        self.database_anchor = anchor
+
+    def latest(self, stage: str) -> Optional[TraceEntry]:
+        return next((entry for entry in reversed(self.entries) if entry.stage == stage), None)
+
+    def explain(self) -> dict[str, Any]:
+        """Return the current answer-oriented view of this appendable trace."""
+        local = self.latest("local_retrieval")
+        route = self.latest("local_evaluate")
+        ranking = self.latest("rank")
+        top_k = self.latest("top_k")
+        gap_analysis = self.latest("gap_analysis")
+        planner = self.latest("resolution_planner")
+        re_evaluate = self.latest("re_evaluate")
+        return {
+            "trace_id": self.trace_id,
+            "trace_revision": self.revision,
+            "request_fingerprint": self.request_fingerprint,
+            "database_version": self.database_anchor.to_dict() if self.database_anchor else None,
+            "local_retrieval": dict(local.details) if local else None,
+            "proxy_decision": dict(route.details) if route else None,
+            "excluded_candidates": tuple(top_k.details.get("excluded", ())) if top_k else (),
+            "final_ranking": tuple(ranking.details.get("ranking", ())) if ranking else (),
+            "selected_candidate_ids": tuple(top_k.details.get("selected_candidate_ids", ())) if top_k else (),
+            "link_attempts": tuple(top_k.details.get("link_attempts", ())) if top_k else (),
+            "confidence": top_k.details.get("confidence") if top_k else None,
+            "resolution_strength": top_k.details.get("resolution_strength") if top_k else None,
+            "candidate_gaps": tuple(gap_analysis.details.get("candidate_gaps", ())) if gap_analysis else (),
+            "resolution_plans": tuple(planner.details.get("plans", ())) if planner else (),
+            "transformation_steps": tuple(re_evaluate.details.get("transformation_steps", ())) if re_evaluate else (),
+            "assumptions": tuple(re_evaluate.details.get("assumptions", ())) if re_evaluate else (),
+            "warnings": tuple(re_evaluate.details.get("warnings", ())) if re_evaluate else (),
+            "required_fields": tuple(top_k.details.get("required_fields", ())) if top_k else (),
+            "material_identity": dict(top_k.details.get("material_identity") or {}) if top_k and top_k.details.get("material_identity") else None,
+            "request_gaps": tuple(top_k.details.get("request_gaps", ())) if top_k else (),
+            "raw_related_hits": tuple(top_k.details.get("raw_related_hits", ())) if top_k else (),
+            "record_qualifications": tuple(top_k.details.get("record_qualifications", ())) if top_k else (),
+            "required_choice": top_k.details.get("required_choice") if top_k else None,
+            "provisional_options": tuple(top_k.details.get("provisional_options", ())) if top_k else (),
+            "request_resolution_plan": top_k.details.get("request_resolution_plan") if top_k else None,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the live trace without claiming snapshot immutability."""
+        return {
+            **self.explain(),
+            "entries": tuple(
+                {
+                    "revision": entry.revision,
+                    "stage": entry.stage,
+                    "message": entry.message,
+                    "details": dict(entry.details),
+                    "at": entry.at.isoformat(),
+                }
+                for entry in self.entries
+            ),
+        }
+
+
+def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
+    """Hash business inputs while deliberately excluding the per-run request ID."""
+
+    payload = {
+        "material_name": request.material_name,
+        "quantity": request.quantity,
+        "quantity_unit": request.quantity_unit,
+        "geography": request.geography,
+        "year": request.year,
+        "product_form": request.product_form,
+        "composition": request.composition,
+        "production_process": request.production_process,
+        "boundary": request.boundary,
+        "target_factor_unit": request.target_factor_unit,
+        "top_k": request.top_k,
+        "min_score": request.min_score,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class Provenance:
+    """Traceability for an observed factor value."""
+
+    source_id: str
+    source_type: FactorSourceType
+    provider: str
+    locator: str
+    retrieved_at: datetime = field(default_factory=_now)
+    citation: str = ""
+    excerpt: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip() or not self.provider.strip() or not self.locator.strip():
+            raise ValueError("provenance requires source_id, provider and locator")
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRecord:
+    """An externally observed numeric factor and its source metadata.
+
+    This is the sole ingress for numeric factors.  Adapters must not return a
+    bare float; they return records that can be audited later.
+    """
+
+    source_id: str
+    source_type: FactorSourceType
+    provider: str
+    locator: str
+    material_name: str
+    factor_value: float
+    factor_unit: str
+    geography: Optional[str] = None
+    year: Optional[int] = None
+    product_form: Optional[str] = None
+    composition: Optional[str] = None
+    production_process: Optional[str] = None
+    boundary: Optional[str] = None
+    citation: str = ""
+    excerpt: str = ""
+    retrieved_at: datetime = field(default_factory=_now)
+    metadata: Mapping[str, str] = field(default_factory=dict)
+    factor_kind: FactorKind = FactorKind.OTHER
+    indicator: str | None = None
+    declared_product: str | None = None
+    boundary_modules: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip() or not self.material_name.strip():
+            raise ValueError("source record requires source_id and material_name")
+        if not self.provider.strip() or not self.locator.strip():
+            raise ValueError("source record requires provider and locator")
+        if not isfinite(self.factor_value) or self.factor_value < 0:
+            raise ValueError("factor_value must be a finite non-negative number")
+        if not self.factor_unit.strip():
+            raise ValueError("factor_unit is required")
+        if self.year is not None and not 0 < self.year < 3000:
+            raise ValueError("year must be a plausible calendar year")
+        if not isinstance(self.factor_kind, FactorKind):
+            try:
+                object.__setattr__(self, "factor_kind", FactorKind(str(self.factor_kind)))
+            except ValueError as exc:
+                raise ValueError("factor_kind must be a supported FactorKind") from exc
+        object.__setattr__(self, "boundary_modules", tuple(self.boundary_modules))
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+
+    @property
+    def provenance(self) -> Provenance:
+        return Provenance(
+            source_id=self.source_id,
+            source_type=self.source_type,
+            provider=self.provider,
+            locator=self.locator,
+            retrieved_at=self.retrieved_at,
+            citation=self.citation,
+            excerpt=self.excerpt,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionRequest:
+    material_name: str
+    quantity: float
+    quantity_unit: str = "kg"
+    geography: Optional[str] = None
+    year: Optional[int] = None
+    product_form: Optional[str] = None
+    composition: Optional[str] = None
+    production_process: Optional[str] = None
+    boundary: str = "cradle-to-gate"
+    target_factor_unit: str = "kgCO2e/kg"
+    top_k: int = 3
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+    min_score: float = 0.65
+
+    def __post_init__(self) -> None:
+        if not self.material_name.strip():
+            raise ValueError("material_name is required")
+        if not isfinite(self.quantity) or self.quantity <= 0:
+            raise ValueError("quantity must be a finite positive number")
+        if self.year is not None and not 0 < self.year < 3000:
+            raise ValueError("year must be a plausible calendar year")
+        if not 1 <= self.top_k <= 50:
+            raise ValueError("top_k must be between 1 and 50")
+        if not 0 <= self.min_score <= 1:
+            raise ValueError("min_score must be between 0 and 1")
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ResolutionRequest":
+        return cls(**dict(value))
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialInterpretation:
+    canonical_name: str
+    aliases: tuple[str, ...] = ()
+    product_form: Optional[str] = None
+    composition: Optional[str] = None
+    production_process: Optional[str] = None
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedActivity:
+    request_id: str
+    canonical_name: str
+    aliases: tuple[str, ...]
+    quantity_kg: Optional[float]
+    geography: Optional[str]
+    year: Optional[int]
+    product_form: Optional[str]
+    composition: Optional[str]
+    production_process: Optional[str]
+    boundary: str
+    target_factor_unit: str
+    normalization_rule_ids: tuple[str, ...] = ()
+    original_quantity: float = 0.0
+    original_quantity_unit: str = "kg"
+    material_identity: MaterialIdentity | None = None
+    request_gaps: tuple[RequestGap, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialClass:
+    name: str
+    family: str = "unknown"
+    rationale: str = ""
+    confidence: float = 0.0
+    category: MaterialCategory = MaterialCategory.UNKNOWN
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("material class name is required")
+        if not 0 <= self.confidence <= 1:
+            raise ValueError("material class confidence must be between 0 and 1")
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticAssessment:
+    eligible: bool = True
+    note: str = ""
+    limitations: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Candidate:
+    candidate_id: str
+    origin: CandidateOrigin
+    source: SourceRecord
+    provenance: Provenance
+    factor_value: float
+    factor_unit: str
+    score: float
+    reasons: tuple[str, ...]
+    limitations: tuple[str, ...]
+    dimensions: Mapping[str, float]
+    proxy_material: Optional[str] = None
+    proxy_class: Optional[str] = None
+    evidence_coverage: float = 0.0
+    evidence_gaps: tuple[str, ...] = ()
+    resolution_type: ResolutionType = ResolutionType.DIRECT_EXACT
+    result_tier: ResultTier = ResultTier.PRIMARY_RECOMMENDATION
+    resolution_strength: float = 0.0
+    gaps: tuple[ResolutionGap, ...] = ()
+    transformation_steps: tuple[TransformationStep, ...] = ()
+    parameter_evidence_ids: tuple[str, ...] = ()
+    base_source_ids: tuple[str, ...] = ()
+    assumptions: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    resolved_quantity_kg: Optional[float] = None
+    total_emissions_kgco2e: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        if self.provenance.source_id != self.source.source_id:
+            raise ValueError("candidate provenance must point to its source record")
+        if not isfinite(self.factor_value) or self.factor_value < 0:
+            raise ValueError("candidate factor must be finite and non-negative")
+        if not 0 <= self.score <= 1:
+            raise ValueError("candidate score must be between 0 and 1")
+        if not self.factor_unit.strip():
+            raise ValueError("candidate factor unit is required")
+        if not isfinite(self.evidence_coverage) or not 0 <= self.evidence_coverage <= 1:
+            raise ValueError("candidate evidence coverage must be between 0 and 1")
+        if not isfinite(self.resolution_strength) or not 0 <= self.resolution_strength <= 1:
+            raise ValueError("candidate resolution strength must be between 0 and 1")
+        if self.resolved_quantity_kg is not None and (
+            not isfinite(self.resolved_quantity_kg) or self.resolved_quantity_kg <= 0
+        ):
+            raise ValueError("resolved quantity must be finite and positive")
+        if self.total_emissions_kgco2e is not None and (
+            not isfinite(self.total_emissions_kgco2e) or self.total_emissions_kgco2e < 0
+        ):
+            raise ValueError("total emissions must be finite and non-negative")
+        object.__setattr__(self, "dimensions", MappingProxyType(dict(self.dimensions)))
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedFactorCandidate:
+    candidate_id: str
+    resolution_type: ResolutionType
+    base_source_ids: tuple[str, ...]
+    parameter_evidence_ids: tuple[str, ...]
+    transformation_steps: tuple[TransformationStep, ...]
+    factor_value: float
+    factor_unit: str
+    boundary: Optional[str]
+    geography: Optional[str]
+    year: Optional[int]
+    reasons: tuple[str, ...]
+    limitations: tuple[str, ...]
+    evidence_coverage: float
+    resolution_strength: float
+    provenance_lineage: tuple[str, ...]
+    assumptions: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    resolved_quantity_kg: Optional[float] = None
+    total_emissions_kgco2e: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id.strip() or not self.base_source_ids:
+            raise ValueError("derived candidate requires id and base source lineage")
+        if not isfinite(self.factor_value) or self.factor_value < 0:
+            raise ValueError("derived factor must be finite and non-negative")
+        if not 0 <= self.evidence_coverage <= 1 or not 0 <= self.resolution_strength <= 1:
+            raise ValueError("derived coverage and strength must be between 0 and 1")
+
+
+@dataclass(frozen=True, slots=True)
+class Recommendation:
+    request_id: str
+    status: ResolutionStatus
+    candidates: tuple[Candidate, ...]
+    follow_up: Optional[FollowUp] = None
+    message: str = ""
+    trace: Optional[ResolutionTrace] = None
+    confidence: Optional[RecommendationConfidence] = None
+    resolution_strength: Optional[RecommendationConfidence] = None
+    created_at: datetime = field(default_factory=_now)
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalRecord:
+    request_id: str
+    candidate_id: str
+    reviewer: str
+    status: ApprovalStatus
+    note: str = ""
+    created_at: datetime = field(default_factory=_now)
+    mode: ApprovalMode = ApprovalMode.STANDARD
+
+    def __post_init__(self) -> None:
+        if not self.request_id.strip() or not self.candidate_id.strip() or not self.reviewer.strip():
+            raise ValueError("approval requires request_id, candidate_id and reviewer")
+        if not isinstance(self.mode, ApprovalMode):
+            try:
+                object.__setattr__(self, "mode", ApprovalMode(str(self.mode)))
+            except ValueError as exc:
+                raise ValueError("approval mode is not supported") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class LockedResolution:
+    request_id: str
+    candidate: Candidate
+    reviewer: str
+    approval: ApprovalRecord
+    locked_at: datetime = field(default_factory=_now)
+
+    def __post_init__(self) -> None:
+        if not self.request_id.strip() or not self.reviewer.strip():
+            raise ValueError("locked resolution requires request_id and reviewer")
+        if self.candidate.candidate_id != self.approval.candidate_id:
+            raise ValueError("lock approval must reference the locked candidate")
+        if self.request_id != self.approval.request_id:
+            raise ValueError("lock approval must reference the locked request")
+        if self.approval.status != ApprovalStatus.LOCKED:
+            raise ValueError("locked resolution requires a locked approval")
+
+
+@dataclass(frozen=True, slots=True)
+class AuditEvent:
+    stage: str
+    message: str
+    at: datetime = field(default_factory=_now)

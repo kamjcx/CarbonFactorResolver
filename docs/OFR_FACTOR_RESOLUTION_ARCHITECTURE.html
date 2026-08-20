@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A1 Factor Resolution Engine V1 — Architecture</title>
+  <style>
+    :root {
+      --paper: #f5f5f5;
+      --paper-2: #ececec;
+      --ink: #2d3142;
+      --muted: #4f5d75;
+      --soft: #7a8399;
+      --rule: rgba(45,49,66,.12);
+      --rule-solid: #bfc0c0;
+      --accent: #eb6c36;
+      --accent-tint: rgba(235,108,54,.08);
+      --link: #2e5aa8;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--paper); color: var(--ink); }
+    body { font-family: "Geist", system-ui, sans-serif; }
+    main { width: min(100%, 1520px); margin: 0 auto; padding: 40px 32px 28px; }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 32px;
+      align-items: end;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      font: 500 8px/1.4 "Geist Mono", monospace;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--soft);
+    }
+    h1 {
+      margin: 0;
+      font: 400 clamp(30px, 4vw, 52px)/.98 "Instrument Serif", serif;
+      letter-spacing: -.015em;
+    }
+    .dek {
+      max-width: 440px;
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .figure-shell { width: 100%; overflow-x: auto; }
+    svg { display: block; width: 100%; min-width: 1120px; height: auto; }
+
+    .zone { fill: rgba(45,49,66,.02); stroke: var(--rule); stroke-width: .8; }
+    .zone-mask { fill: var(--paper); }
+    .zone-label { fill: var(--soft); font: 500 8px "Geist Mono", monospace; letter-spacing: .18em; }
+    .zone-note { fill: var(--soft); font: 400 9px "Geist Mono", monospace; }
+
+    .node rect { fill: #fff; stroke: var(--ink); stroke-width: 1; rx: 6; }
+    .node.input rect { fill: rgba(79,93,117,.10); stroke: var(--soft); }
+    .node.store rect { fill: rgba(45,49,66,.05); stroke: var(--muted); }
+    .node.external rect { fill: rgba(45,49,66,.03); stroke: rgba(45,49,66,.30); }
+    .node.optional rect { fill: rgba(45,49,66,.02); stroke: rgba(45,49,66,.25); stroke-dasharray: 4 3; }
+    .node.focal rect { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.2; }
+    .node-name { fill: var(--ink); font: 600 12px "Geist", sans-serif; }
+    .node-sub { fill: var(--muted); font: 400 9px "Geist Mono", monospace; }
+    .node-note { fill: var(--soft); font: 400 9px "Geist", sans-serif; }
+    .node-tag { fill: var(--soft); font: 500 7px "Geist Mono", monospace; letter-spacing: .15em; }
+    .node-divider { stroke: var(--rule); stroke-width: .8; }
+    .status-text { fill: var(--ink); font: 500 9px "Geist Mono", monospace; }
+    .status-muted { fill: var(--soft); font: 400 8px "Geist Mono", monospace; }
+
+    .flow { fill: none; stroke: var(--muted); stroke-width: 1.2; marker-end: url(#ofr-arrow); }
+    .flow.primary { stroke: var(--ink); }
+    .flow.external { stroke: var(--link); }
+    .flow.optional { stroke: var(--soft); stroke-width: 1; stroke-dasharray: 4 3; }
+    .flow.accent { stroke: var(--accent); }
+    .trace-flow { fill: none; stroke: var(--soft); stroke-width: 1; stroke-dasharray: 4 3; marker-end: url(#ofr-arrow-soft); }
+    .arrow-mask { fill: var(--paper); }
+    .arrow-label { fill: var(--soft); font: 400 8px "Geist Mono", monospace; letter-spacing: .06em; }
+    .arrow-label-strong { fill: var(--ink); font: 500 8px "Geist Mono", monospace; letter-spacing: .06em; }
+
+    .trace-plane { fill: rgba(45,49,66,.045); stroke: var(--muted); stroke-width: 1; rx: 8; }
+    .trace-title { fill: var(--ink); font: 600 12px "Geist", sans-serif; }
+    .trace-label { fill: var(--soft); font: 500 7px "Geist Mono", monospace; letter-spacing: .15em; }
+    .trace-copy { fill: var(--muted); font: 400 9px "Geist Mono", monospace; }
+    .trace-rule { stroke: var(--rule); stroke-width: .8; }
+
+    .annotation-line { stroke: var(--accent); stroke-width: 1; }
+    .annotation-copy { fill: var(--ink); font: italic 400 14px "Instrument Serif", serif; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      align-items: center;
+      padding: 16px 4px 0;
+      border-top: 1px solid var(--rule);
+      color: var(--muted);
+      font: 400 10px/1.4 "Geist Mono", monospace;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 8px; }
+    .swatch { width: 20px; height: 10px; border: 1px solid var(--ink); border-radius: 3px; background: #fff; }
+    .swatch.focal { border-color: var(--accent); background: var(--accent-tint); }
+    .swatch.port { border-color: var(--link); background: rgba(46,90,168,.05); }
+    .line-key { width: 24px; height: 0; border-top: 1px solid var(--muted); }
+    .line-key.dashed { border-top-style: dashed; }
+    .caption {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      margin-top: 14px;
+      color: var(--soft);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .caption p { margin: 0; }
+    .caption .version { font-family: "Geist Mono", monospace; white-space: nowrap; }
+    @media (max-width: 760px) {
+      main { padding: 24px 16px; }
+      .masthead { grid-template-columns: 1fr; }
+      .dek { text-align: left; }
+      .caption { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">OpenFactorRetrieval · OFR 0.3.0 · Current implementation</p>
+        <h1>A1 Factor Resolution Engine V1</h1>
+      </div>
+      <p class="dek">A bounded, provenance-first resolution graph: exact material evidence first, deterministic gap resolution second, class-aware proxy only as the final fallback.</p>
+    </header>
+
+    <section class="figure-shell" aria-label="A1 factor resolution architecture diagram">
+      <svg viewBox="0 0 1440 900" role="img" aria-labelledby="ofr-title ofr-desc">
+        <title id="ofr-title">A1 Factor Resolution Engine V1 architecture</title>
+        <desc id="ofr-desc">A zoned architecture diagram showing request validation, normalization, formal factor catalogue retrieval, record qualification, deterministic same-material resolution, late class-aware proxy fallback, candidate ranking, Top-K recommendation, human approval, immutable result locking, and a mutable trace plane anchored to the factor database version.</desc>
+        <defs>
+          <marker id="ofr-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#4f5d75" />
+          </marker>
+          <marker id="ofr-arrow-soft" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#7a8399" />
+          </marker>
+        </defs>
+
+        <!-- Background zones -->
+        <rect class="zone" x="24" y="40" width="404" height="636" rx="8" />
+        <rect class="zone-mask" x="40" y="44" width="136" height="16" rx="2" />
+        <text class="zone-label" x="108" y="55" text-anchor="middle">INTAKE + EVIDENCE</text>
+
+        <rect class="zone" x="452" y="40" width="604" height="636" rx="8" />
+        <rect class="zone-mask" x="468" y="44" width="156" height="16" rx="2" />
+        <text class="zone-label" x="546" y="55" text-anchor="middle">RESOLUTION ENGINE</text>
+
+        <rect class="zone" x="1080" y="40" width="336" height="636" rx="8" />
+        <rect class="zone-mask" x="1096" y="44" width="148" height="16" rx="2" />
+        <text class="zone-label" x="1170" y="55" text-anchor="middle">DECISION + GOVERNANCE</text>
+
+        <!-- Connectors: rendered before nodes -->
+        <path class="flow primary" d="M172,152 H216" />
+        <path class="flow primary" d="M316,196 V244" />
+        <path class="flow external" d="M180,404 V436" />
+        <path class="flow primary" d="M396,496 H468" />
+        <path class="flow primary" d="M656,300 H688" />
+        <path class="flow primary" d="M784,356 V396" />
+        <path class="flow primary" d="M656,468 H920 V356" />
+        <path class="flow optional" d="M784,356 V440 H688" />
+        <path class="flow accent" d="M872,504 H920 V416" />
+        <path class="flow primary" d="M1040,356 H1104" />
+        <path class="flow primary" d="M1228,280 V336" />
+        <path class="flow accent" d="M1228,440 V492" />
+        <path class="flow optional" d="M1352,236 H1384 V604 H1352" />
+
+        <!-- Trace append paths -->
+        <path class="trace-flow" d="M236,556 V716" />
+        <path class="trace-flow" d="M548,356 V716" />
+        <path class="trace-flow" d="M980,420 V716" />
+        <path class="trace-flow" d="M1228,588 V716" />
+
+        <!-- Arrow labels with paper masks -->
+        <g>
+          <rect class="arrow-mask" x="444" y="480" width="48" height="16" rx="2" />
+          <text class="arrow-label-strong" x="468" y="491" text-anchor="middle">records</text>
+        </g>
+        <g>
+          <rect class="arrow-mask" x="732" y="376" width="104" height="16" rx="2" />
+          <text class="arrow-label-strong" x="784" y="387" text-anchor="middle">same-material gaps</text>
+        </g>
+        <g>
+          <rect class="arrow-mask" x="784" y="432" width="84" height="16" rx="2" />
+          <text class="arrow-label" x="826" y="443" text-anchor="middle">insufficient / none</text>
+        </g>
+        <g>
+          <rect class="arrow-mask" x="1056" y="340" width="64" height="16" rx="2" />
+          <text class="arrow-label-strong" x="1088" y="351" text-anchor="middle">ranked</text>
+        </g>
+        <g>
+          <rect class="arrow-mask" x="1188" y="300" width="80" height="16" rx="2" />
+          <text class="arrow-label-strong" x="1228" y="311" text-anchor="middle">ready</text>
+        </g>
+        <g>
+          <rect class="arrow-mask" x="1184" y="460" width="88" height="16" rx="2" />
+          <text class="arrow-label-strong" x="1228" y="471" text-anchor="middle">approved</text>
+        </g>
+        <g>
+          <rect class="arrow-mask" x="1356" y="412" width="56" height="16" rx="2" />
+          <text class="arrow-label" x="1384" y="423" text-anchor="middle">not ready</text>
+        </g>
+
+        <!-- Intake + evidence nodes -->
+        <g class="node input">
+          <rect x="52" y="112" width="120" height="80" />
+          <text class="node-tag" x="68" y="132">INPUT</text>
+          <text class="node-name" x="68" y="154">ResolutionRequest</text>
+          <text class="node-sub" x="68" y="174">material · qty · context</text>
+        </g>
+
+        <g class="node">
+          <rect x="216" y="104" width="180" height="92" />
+          <text class="node-tag" x="232" y="124">DETERMINISTIC + LLM PORT</text>
+          <text class="node-name" x="232" y="148">Validate + Normalize</text>
+          <text class="node-sub" x="232" y="168">canonical activity</text>
+          <text class="node-note" x="232" y="184">MaterialIdentity + request gaps</text>
+        </g>
+
+        <g class="node store">
+          <rect x="52" y="244" width="344" height="160" />
+          <text class="node-tag" x="68" y="264">FORMAL FACTOR CATALOGUE</text>
+          <text class="node-name" x="68" y="288">FactorRepositoryPort</text>
+          <text class="node-sub" x="68" y="308">GET /api/v2/factors/catalog</text>
+          <line class="node-divider" x1="68" y1="324" x2="380" y2="324" />
+          <text class="node-note" x="68" y="346">报批稿 · ecoinvent 3.10 · 官方电力 · 运输</text>
+          <text class="node-sub" x="68" y="366">database path + SHA-256 + version</text>
+          <text class="node-note" x="68" y="386">EPD / literature provenance enters via this port</text>
+        </g>
+
+        <g class="node">
+          <rect x="52" y="436" width="344" height="120" />
+          <text class="node-tag" x="68" y="456">BOUNDED LINKING</text>
+          <text class="node-name" x="68" y="480">Local Retrieval</text>
+          <text class="node-sub" x="68" y="500">exact → synonym → related recall</text>
+          <text class="node-note" x="68" y="520">RecallObservation preserves non-candidate hits</text>
+          <text class="node-note" x="68" y="540">No dedicated External Retrieval lane</text>
+        </g>
+
+        <line class="annotation-line" x1="52" y1="604" x2="84" y2="604" />
+        <text class="annotation-copy" x="96" y="610">Sources are recalled; numbers are never invented.</text>
+
+        <!-- Resolution engine nodes -->
+        <g class="node">
+          <rect x="468" y="244" width="188" height="112" />
+          <text class="node-tag" x="484" y="264">ELIGIBILITY GATE</text>
+          <text class="node-name" x="484" y="288">Record Qualification</text>
+          <text class="node-sub" x="484" y="308">FactorKind · indicator · product</text>
+          <text class="node-note" x="484" y="328">identity · boundary · unit qualifier</text>
+          <text class="node-note" x="484" y="344">exclusions remain traceable</text>
+        </g>
+
+        <g class="node">
+          <rect x="688" y="244" width="192" height="112" />
+          <text class="node-tag" x="704" y="264">SOLVE-FIRST PLANNING</text>
+          <text class="node-name" x="704" y="288">Gap Analysis + Planner</text>
+          <text class="node-sub" x="704" y="308">structured ResolutionGap[]</text>
+          <text class="node-note" x="704" y="328">dependency-ordered strategy plan</text>
+          <text class="node-note" x="704" y="344">request gaps stay request-scoped</text>
+        </g>
+
+        <g class="node">
+          <rect x="468" y="396" width="188" height="144" />
+          <text class="node-tag" x="484" y="416">SAME-MATERIAL RESOLUTION</text>
+          <text class="node-name" x="484" y="440">Deterministic Routers</text>
+          <text class="node-sub" x="484" y="464">01  unit scale</text>
+          <text class="node-sub" x="484" y="484">02  reference flow</text>
+          <text class="node-sub" x="484" y="504">03  process variant</text>
+          <text class="node-sub" x="484" y="524">04  grade / composition</text>
+        </g>
+
+        <g class="node focal">
+          <rect x="688" y="432" width="184" height="144" />
+          <text class="node-tag" x="704" y="452">FINAL FALLBACK · ONCE</text>
+          <text class="node-name" x="704" y="476">Late Material Resolution</text>
+          <text class="node-sub" x="704" y="500">MaterialClass → Proxy search</text>
+          <text class="node-note" x="704" y="520">technology · form · composition</text>
+          <text class="node-note" x="704" y="540">region · time · boundary</text>
+          <text class="node-note" x="704" y="560">class-aware qualification + evaluate</text>
+        </g>
+
+        <g class="node">
+          <rect x="920" y="292" width="120" height="128" />
+          <text class="node-tag" x="936" y="312">MERGE</text>
+          <text class="node-name" x="936" y="336">Candidate Pool</text>
+          <text class="node-sub" x="936" y="360">re-evaluate</text>
+          <line class="node-divider" x1="936" y1="376" x2="1024" y2="376" />
+          <text class="node-name" x="936" y="400">Stable Rank</text>
+        </g>
+
+        <g class="node optional">
+          <rect x="920" y="492" width="120" height="100" />
+          <text class="node-tag" x="936" y="512">NO LOOP</text>
+          <text class="node-name" x="936" y="536">Bounded Exit</text>
+          <text class="node-sub" x="936" y="556">unresolved</text>
+          <text class="node-note" x="936" y="576">strategies exhausted</text>
+        </g>
+
+        <!-- Decision + governance nodes -->
+        <g class="node">
+          <rect x="1104" y="192" width="248" height="88" />
+          <text class="node-tag" x="1120" y="212">DETERMINISTIC OUTPUT GATE</text>
+          <text class="node-name" x="1120" y="236">Top-K Recommendation</text>
+          <text class="node-sub" x="1120" y="256">tier · score · source · limits</text>
+          <text class="node-note" x="1120" y="272">PRIMARY / ASSUMPTIONS / REFERENCE</text>
+        </g>
+
+        <g class="node">
+          <rect x="1104" y="336" width="248" height="104" />
+          <text class="node-tag" x="1120" y="356">HUMAN CONTROL</text>
+          <text class="node-name" x="1120" y="380">Approve / Reject</text>
+          <text class="node-sub" x="1120" y="400">standard · assumption_acceptance</text>
+          <text class="node-sub" x="1120" y="420">reference_override + reason</text>
+        </g>
+
+        <g class="node focal">
+          <rect x="1104" y="492" width="248" height="96" />
+          <text class="node-tag" x="1120" y="512">CONTROLLED RESULT</text>
+          <text class="node-name" x="1120" y="536">LockedResolution</text>
+          <text class="node-sub" x="1120" y="556">frozen candidate + approval</text>
+          <text class="node-note" x="1120" y="576">same candidate re-lock is idempotent</text>
+        </g>
+
+        <g class="node optional">
+          <rect x="1104" y="604" width="248" height="52" />
+          <text class="node-name" x="1120" y="628">MORE_INPUT / SUPPLIER / PROCESS_MODEL</text>
+          <text class="node-sub" x="1120" y="646">explicit terminal follow-up · no retry loop</text>
+        </g>
+
+        <!-- Mutable trace plane -->
+        <rect class="trace-plane" x="24" y="716" width="1392" height="136" />
+        <text class="trace-label" x="48" y="740">CROSS-CUTTING AUDIT PLANE</text>
+        <text class="trace-title" x="48" y="764">Mutable ResolutionTrace + Database Version Anchor</text>
+        <text class="trace-copy" x="48" y="788">request fingerprint · appendable stage events · reproducible rule IDs · immutable source provenance</text>
+        <text class="trace-copy" x="48" y="808">operational trace may evolve; the selected factor result is locked separately</text>
+
+        <line class="trace-rule" x1="624" y1="740" x2="624" y2="828" />
+        <text class="trace-label" x="652" y="760">CAPTURED EVIDENCE</text>
+        <text class="trace-copy" x="652" y="784">catalogue hits · RecallObservation · qualifications · exclusions</text>
+        <text class="trace-copy" x="652" y="804">transformation lineage · assumptions · warnings · final ranking</text>
+
+        <line class="trace-rule" x1="1080" y1="740" x2="1080" y2="828" />
+        <text class="trace-label" x="1108" y="760">CHANGE EXPLANATION</text>
+        <text class="trace-copy" x="1108" y="784">compare_traces(before, after)</text>
+        <text class="trace-copy" x="1108" y="804">DB changed · hits ± · exclusions Δ · rank Δ</text>
+      </svg>
+    </section>
+
+    <aside class="legend" aria-label="Diagram legend">
+      <span class="legend-item"><span class="swatch"></span> deterministic engine component</span>
+      <span class="legend-item"><span class="swatch focal"></span> controlled focal decision</span>
+      <span class="legend-item"><span class="swatch port"></span> repository / integration port</span>
+      <span class="legend-item"><span class="line-key"></span> primary data path</span>
+      <span class="legend-item"><span class="line-key dashed"></span> fallback, terminal, or trace append path</span>
+    </aside>
+
+    <footer class="caption">
+      <p><strong>Architecture note.</strong> External Retrieval and External Evaluate are intentionally absent. Governed database, EPD, or literature records enter through repository ports. LLM-assisted understanding may classify and judge suitability, but numeric conversion, transformation, ranking, approval policy, and locking remain deterministic.</p>
+      <p class="version">Figure 01 · 2026-08-20</p>
+    </footer>
+  </main>
+</body>
+</html>

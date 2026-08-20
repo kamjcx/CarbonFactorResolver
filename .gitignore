@@ -1,0 +1,39 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Build and coverage output
+build/
+dist/
+.coverage
+htmlcov/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Databases, exports, backups, and runtime output
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.duckdb
+*.mdb
+*.accdb
+*.bak
+*.backup
+*.dump
+*.log
+data/
+datasets/
+exports/
+outputs/
+
+# Internal implementation-session notes
+task_plan.md
+findings.md
+progress.md
