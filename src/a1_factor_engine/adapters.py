@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Sequence
 from urllib.request import urlopen
 
@@ -29,15 +29,16 @@ from .models import (
     MaterialInterpretation,
     NormalizedActivity,
     ParameterEvidence,
-    RecallObservation,
     Recommendation,
     ReferenceFlowRecord,
     ResolutionRequest,
     ResolutionTrace,
+    RetrievalIntent,
     RetrievalResult,
     SemanticAssessment,
     SourceRecord,
 )
+from .semantic_index import SemanticFactorIndex
 
 
 def _norm(value: str | None) -> str:
@@ -111,72 +112,18 @@ class InMemoryFactorRepository:
                 locator="memory://factor-catalog",
             )
 
-    async def search(self, activity: NormalizedActivity) -> RetrievalResult:
+    async def search(self, intent: RetrievalIntent) -> RetrievalResult:
         allowed = self.source_types
-        query = _norm(activity.canonical_name)
-        aliases = {_norm(x) for x in activity.aliases if _norm(x)}
         eligible = tuple(
             record for record in self.records
             if allowed is None or record.source_type in allowed
         )
-        exact = tuple(
-            _with_match_strategy(record, LinkStrategy.EXACT)
-            for record in eligible if query and _norm(record.material_name) == query
-        )
-        exact_ids = {record.source_id for record in exact}
-        synonym = tuple(
-            _with_match_strategy(record, LinkStrategy.SYNONYM)
-            for record in eligible
-            if record.source_id not in exact_ids
-            and (
-                _norm(record.material_name) in aliases
-                or query in _record_aliases(record)
-                or bool(aliases & _record_aliases(record))
-            )
-        )
-        used_ids = exact_ids | {record.source_id for record in synonym}
-        related = tuple(
-            _with_match_strategy(record, LinkStrategy.RELATED)
-            for record in eligible
-            if record.source_id not in used_ids
-            and _related_material(activity, record.material_name, self.material_registry)
-        )
-        attempts = [
-            LinkAttempt(
-                LinkStrategy.EXACT,
-                LinkOutcome.NO_MATCH if not exact else LinkOutcome.MATCHED if len(exact) == 1 else LinkOutcome.CANDIDATE_SET,
-                tuple(record.source_id for record in exact),
-                "canonical material name matched exactly" if exact else "no exact canonical-name match",
-            ),
-            LinkAttempt(
-                LinkStrategy.SYNONYM,
-                LinkOutcome.NO_MATCH if not synonym else LinkOutcome.MATCHED if len(synonym) == 1 else LinkOutcome.CANDIDATE_SET,
-                tuple(record.source_id for record in synonym),
-                "registered aliases recalled pending exact-record qualification" if synonym else "no registered synonym match",
-            ),
-            LinkAttempt(
-                LinkStrategy.RELATED,
-                LinkOutcome.NO_MATCH if not related else LinkOutcome.MATCHED if len(related) == 1 else LinkOutcome.CANDIDATE_SET,
-                tuple(record.source_id for record in related),
-                "bounded material-family recall pending higher-priority qualification" if related else "no related local candidates",
-            ),
-        ]
-        results = (*exact, *synonym, *related)
         assert self.anchor is not None
-        observations = tuple(
-            RecallObservation(
-                source_id=record.source_id,
-                material_name=record.material_name,
-                retrieval_strategy=LinkStrategy.RELATED,
-                retrieval_basis=("material term overlap",),
-                identity_compatibility="unknown",
-                factor_kind=record.factor_kind,
-                eligible_for_candidate_pool=True,
-            )
-            for record in results
-            if record.metadata.get("match_strategy") == LinkStrategy.RELATED.value
+        index = SemanticFactorIndex(eligible, self.anchor, self.material_registry)
+        result = index.query(intent)
+        return RetrievalResult(
+            result.records, self.anchor, result.attempts, result.observations, result.anchor
         )
-        return RetrievalResult(tuple(results), self.anchor, tuple(attempts), observations)
 
 
 @dataclass(slots=True)
@@ -197,7 +144,7 @@ class InMemoryProxyRepository:
 
 
 class NullFactorRepository:
-    async def search(self, activity: NormalizedActivity) -> RetrievalResult:
+    async def search(self, intent: RetrievalIntent) -> RetrievalResult:
         return RetrievalResult(
             (),
             DatabaseVersionAnchor(
@@ -223,8 +170,10 @@ class HttpCatalogFactorRepository:
     timeout_seconds: float = 10.0
     fetch_json: Callable[[str], Mapping[str, Any]] | None = None
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
+    _cached_index_key: str | None = field(default=None, init=False)
+    _cached_index: SemanticFactorIndex | None = field(default=None, init=False)
 
-    async def search(self, activity: NormalizedActivity) -> RetrievalResult:
+    async def search(self, intent: RetrievalIntent) -> RetrievalResult:
         payload = await asyncio.to_thread(self._fetch)
         database = payload.get("database")
         if not isinstance(database, Mapping):
@@ -241,64 +190,20 @@ class HttpCatalogFactorRepository:
         records = payload.get("records")
         if not isinstance(records, list):
             raise ValueError("factor catalog response lacks records")
-        query = _norm(activity.canonical_name)
-        aliases = {_norm(alias) for alias in activity.aliases if _norm(alias)}
-        exact_items = tuple(
-            item for item in records
-            if isinstance(item, Mapping) and self._exact_match(item, query)
-        )
-        exact = self._convert_items(exact_items, anchor, LinkStrategy.EXACT)
-        exact_ids = {record.source_id for record in exact}
-        synonym_items = tuple(
-            item for item in records
-            if isinstance(item, Mapping)
-            and str(item.get("record_id") or item.get("code") or "").strip() not in exact_ids
-            and self._synonym_match(item, query, aliases)
-        )
-        synonym = self._convert_items(synonym_items, anchor, LinkStrategy.SYNONYM)
-        used_ids = exact_ids | {record.source_id for record in synonym}
-        related_items = tuple(
-            item for item in records
-            if isinstance(item, Mapping)
-            and str(item.get("record_id") or item.get("code") or "").strip() not in used_ids
-            and _related_material(activity, str(item.get("name") or ""), self.material_registry)
-        )
-        related = self._convert_items(related_items, anchor, LinkStrategy.RELATED)
-        matched = (*exact, *synonym, *related)
-        attempts = [
-            LinkAttempt(
-                LinkStrategy.EXACT,
-                LinkOutcome.NO_MATCH if not exact else LinkOutcome.MATCHED if len(exact) == 1 else LinkOutcome.CANDIDATE_SET,
-                tuple(record.source_id for record in exact),
-                "catalogue name or code matched exactly" if exact else "no usable exact catalogue match",
-            ),
-            LinkAttempt(
-                LinkStrategy.SYNONYM,
-                LinkOutcome.NO_MATCH if not synonym else LinkOutcome.MATCHED if len(synonym) == 1 else LinkOutcome.CANDIDATE_SET,
-                tuple(record.source_id for record in synonym),
-                "registered aliases recalled pending exact-record qualification" if synonym else "no registered synonym match",
-            ),
-            LinkAttempt(
-                LinkStrategy.RELATED,
-                LinkOutcome.NO_MATCH if not related else LinkOutcome.MATCHED if len(related) == 1 else LinkOutcome.CANDIDATE_SET,
-                tuple(record.source_id for record in related),
-                "bounded catalogue material-family recall pending higher-priority qualification" if related else "no related catalogue candidates",
-            ),
-        ]
-        observations = tuple(
-            RecallObservation(
-                source_id=record.source_id,
-                material_name=record.material_name,
-                retrieval_strategy=LinkStrategy.RELATED,
-                retrieval_basis=("product/material term overlap",),
-                identity_compatibility="unknown",
-                factor_kind=record.factor_kind,
-                eligible_for_candidate_pool=True,
+        cache_key = f"{anchor.identity}:{self.material_registry.sha256}"
+        if self._cached_index is None or self._cached_index_key != cache_key:
+            converted = tuple(
+                record
+                for item in records if isinstance(item, Mapping)
+                for record in (self._to_source_record(item, anchor),)
+                if record is not None
             )
-            for record in matched
-            if record.metadata.get("match_strategy") == LinkStrategy.RELATED.value
+            self._cached_index = SemanticFactorIndex(converted, anchor, self.material_registry)
+            self._cached_index_key = cache_key
+        result = self._cached_index.query(intent)
+        return RetrievalResult(
+            result.records, anchor, result.attempts, result.observations, result.anchor
         )
-        return RetrievalResult(matched, anchor, tuple(attempts), observations)
 
     def _fetch(self) -> Mapping[str, Any]:
         if self.fetch_json is not None:
@@ -355,9 +260,12 @@ class HttpCatalogFactorRepository:
             item.get("source_document_locator")
             or item.get("document_url")
             or item.get("source_url")
+            or item.get("source_path")
             or ""
         ).strip() or None
-        source_document_sha256 = str(item.get("source_document_sha256") or "").strip().lower() or None
+        source_document_sha256 = str(
+            item.get("source_document_sha256") or item.get("source_sha256") or ""
+        ).strip().lower() or None
         page = str(item.get("page") or "").strip() or None
         table = str(item.get("table") or "").strip() or None
         row = str(item.get("row") or "").strip() or None
@@ -374,6 +282,13 @@ class HttpCatalogFactorRepository:
             "source_document_page": page or "",
             "source_document_table": table or "",
             "source_document_row": row or "",
+            "primary_label": str(item.get("primary_label") or ""),
+            "scope": str(item.get("scope") or ""),
+            "standard": str(item.get("standard") or ""),
+            "source_version": str(item.get("source_version") or ""),
+            "source_status": str(item.get("source_status") or ""),
+            "upstream_source_status": str(item.get("upstream_source_status") or ""),
+            "includes_process": str(item.get("includes_process") or ""),
         }
         kind_aliases = {
             "lifecycle": FactorKind.LIFECYCLE_FACTOR,

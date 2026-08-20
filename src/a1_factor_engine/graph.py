@@ -9,6 +9,7 @@ from typing import Generic, TypeVar
 from .models import (
     AuditEvent,
     Candidate,
+    CandidateAdmission,
     CandidateExclusion,
     CandidateQualification,
     DerivedFactorCandidate,
@@ -26,6 +27,7 @@ from .models import (
     ResolutionPlan,
     ResolutionRequest,
     ResolutionTrace,
+    SemanticIndexAnchor,
     SourceRecord,
     TransformationStep,
     resolution_request_fingerprint,
@@ -74,6 +76,7 @@ class GraphState:
     raw_related_hits: tuple[SourceRecord, ...] = ()
     recall_observations: tuple[RecallObservation, ...] = ()
     qualifications: tuple[CandidateQualification, ...] = ()
+    candidate_admissions: tuple[CandidateAdmission, ...] = ()
     request_gaps: tuple[RequestGap, ...] = ()
     provisional_options: tuple[ProvisionalOption, ...] = ()
     request_resolution_plan: RequestResolutionPlan | None = None
@@ -94,6 +97,7 @@ class GraphState:
     candidate_pool: tuple[Candidate, ...] = ()
     ranked_candidates: tuple[Candidate, ...] = ()
     link_attempts: list[LinkAttempt] = field(default_factory=list)
+    semantic_index_anchor: SemanticIndexAnchor | None = None
     recommendation: Recommendation | None = None
     events: list[AuditEvent] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

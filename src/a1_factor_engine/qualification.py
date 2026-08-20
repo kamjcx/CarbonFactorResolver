@@ -91,6 +91,8 @@ def qualify_record(
     observed = source_identity(source, registry)
     identity_reasons: list[str] = []
     hard_identity_exclusions: list[str] = []
+    strategy = source.metadata.get("match_strategy", "exact_link")
+    exact_primary_name = text(activity.canonical_name) == text(source.material_name)
 
     def compare_identity(field: str, target_value: object, observed_value: object, *, always_hard: bool) -> None:
         if target_value in (None, "") or observed_value in (None, "") or target_value == observed_value:
@@ -99,19 +101,48 @@ def qualify_record(
         if always_hard or policy != QualificationPolicy.PROXY:
             hard_identity_exclusions.append(f"{field}_mismatch")
 
+    same_base_entity = bool(
+        target.base_entity_id
+        and observed.base_entity_id
+        and target.base_entity_id == observed.base_entity_id
+    )
+    if not same_base_entity:
+        compare_identity(
+            "material_category",
+            None if target.category == MaterialCategory.UNKNOWN else target.category.value,
+            None if observed.category == MaterialCategory.UNKNOWN else observed.category.value,
+            always_hard=True,
+        )
     compare_identity(
-        "material_category",
-        None if target.category == MaterialCategory.UNKNOWN else target.category.value,
-        None if observed.category == MaterialCategory.UNKNOWN else observed.category.value,
+        "base_entity_id",
+        target.base_entity_id,
+        observed.base_entity_id,
         always_hard=True,
     )
+    if policy == QualificationPolicy.RELATED:
+        if not target.base_entity_id or not observed.base_entity_id:
+            identity_reasons.append("same-entity Related retrieval requires resolved request and source entity IDs")
+            hard_identity_exclusions.append("identity_proof_missing")
+        elif target.base_entity_id != observed.base_entity_id:
+            identity_reasons.append(
+                f"Related source entity {observed.base_entity_id} is not request entity {target.base_entity_id}"
+            )
+            hard_identity_exclusions.append("base_entity_id_mismatch")
+    elif policy == QualificationPolicy.DIRECT and not target.base_entity_id and not observed.base_entity_id:
+        if exact_primary_name and strategy == "exact_link":
+            # A formal catalogue primary-name exact match is valid for this
+            # Direct record only; it does not enable Related or Proxy recall.
+            pass
+        else:
+            identity_reasons.append("Direct candidate lacks entity proof or exact primary-name identity")
+            hard_identity_exclusions.append("identity_proof_missing")
     compare_identity("material_family", target.material_family, observed.material_family, always_hard=False)
     compare_identity("head_material", target.head_material, observed.head_material, always_hard=False)
     identity_status = (
         QualificationStatus.MISMATCH
         if identity_reasons
         else QualificationStatus.PASS
-        if observed.head_material or target.category != MaterialCategory.UNKNOWN
+        if observed.base_entity_id or exact_primary_name or target.category != MaterialCategory.UNKNOWN
         else QualificationStatus.UNKNOWN
     )
 

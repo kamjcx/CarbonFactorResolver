@@ -154,6 +154,53 @@ class MaterialCategory(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class SemanticRole(str, Enum):
+    BASE_ENTITY = "BASE_ENTITY"
+    ENTITY_TYPE = "ENTITY_TYPE"
+    PROCESS = "PROCESS"
+    PRODUCT_FORM = "PRODUCT_FORM"
+    GRADE = "GRADE"
+    GRADE_MODIFIER = "GRADE_MODIFIER"
+    PURITY = "PURITY"
+    COATING = "COATING"
+    ROUTE = "ROUTE"
+    APPLICATION = "APPLICATION"
+    CONSTITUENT = "CONSTITUENT"
+
+
+class EntityType(str, Enum):
+    ELEMENTAL_METAL = "ELEMENTAL_METAL"
+    ELEMENT = "ELEMENT"
+    OXIDE = "OXIDE"
+    MINERAL = "MINERAL"
+    ALLOY = "ALLOY"
+    CHEMICAL_COMPOUND = "CHEMICAL_COMPOUND"
+    COMPOSITE = "COMPOSITE"
+    ENGINEERED_MATERIAL = "ENGINEERED_MATERIAL"
+    PRODUCT_FAMILY = "PRODUCT_FAMILY"
+    ENERGY_CARRIER = "ENERGY_CARRIER"
+    TRANSPORT_SERVICE = "TRANSPORT_SERVICE"
+    UNKNOWN = "UNKNOWN"
+
+
+class IdentityOutcome(str, Enum):
+    RESOLVED = "RESOLVED"
+    PARTIAL = "PARTIAL"
+    AMBIGUOUS = "AMBIGUOUS"
+    CONFLICT = "CONFLICT"
+    UNKNOWN = "UNKNOWN"
+
+
+class IdentityProofType(str, Enum):
+    CATALOG_PRIMARY_EXACT = "CATALOG_PRIMARY_EXACT"
+    REGISTRY_PRIMARY_NAME = "REGISTRY_PRIMARY_NAME"
+    REGISTRY_EXACT_ALIAS = "REGISTRY_EXACT_ALIAS"
+    REGISTRY_SAME_AS = "REGISTRY_SAME_AS"
+    STRUCTURED_ENTITY = "STRUCTURED_ENTITY"
+    COMPOSITE_CONSTITUENTS = "COMPOSITE_CONSTITUENTS"
+    NONE = "NONE"
+
+
 class RegistryRuleStatus(str, Enum):
     DRAFT = "draft"
     ACTIVE = "active"
@@ -183,6 +230,7 @@ class QualificationStatus(str, Enum):
 
 class QualificationPolicy(str, Enum):
     DIRECT = "direct"
+    RELATED = "related"
     PROXY = "proxy"
     GRADE_ANCHOR = "grade_anchor"
 
@@ -283,6 +331,12 @@ class ResolutionGap:
 @dataclass(frozen=True, slots=True)
 class MaterialIdentity:
     canonical_name: str
+    base_entity_id: str | None = None
+    product_entity_id: str | None = None
+    product_family_id: str | None = None
+    entity_type: EntityType = EntityType.UNKNOWN
+    chemical_formula: str | None = None
+    constituent_entity_ids: tuple[str, ...] = ()
     head_material: str | None = None
     material_family: str | None = None
     category: MaterialCategory = MaterialCategory.UNKNOWN
@@ -305,6 +359,12 @@ class MaterialIdentity:
     def to_dict(self) -> dict[str, Any]:
         return {
             "canonical_name": self.canonical_name,
+            "base_entity_id": self.base_entity_id,
+            "product_entity_id": self.product_entity_id,
+            "product_family_id": self.product_family_id,
+            "entity_type": self.entity_type.value,
+            "chemical_formula": self.chemical_formula,
+            "constituent_entity_ids": self.constituent_entity_ids,
             "head_material": self.head_material,
             "material_family": self.material_family,
             "category": self.category.value,
@@ -317,6 +377,141 @@ class MaterialIdentity:
             "unresolved_attributes": self.unresolved_attributes,
             "rationale": self.rationale,
             "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticSpan:
+    text: str
+    normalized_text: str
+    role: SemanticRole
+    start: int
+    end: int
+    evidence_id: str
+    entity_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.text or not self.normalized_text or not self.evidence_id:
+            raise ValueError("semantic span requires text, normalized text and evidence id")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("semantic span offsets are invalid")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "text": self.text,
+            "normalized_text": self.normalized_text,
+            "role": self.role.value,
+            "start": self.start,
+            "end": self.end,
+            "evidence_id": self.evidence_id,
+            "entity_id": self.entity_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialMention:
+    raw_text: str
+    normalized_text: str
+    spans: tuple[SemanticSpan, ...] = ()
+    base_entity_text: str | None = None
+    entity_type_hint: EntityType = EntityType.UNKNOWN
+    chemical_formula: str | None = None
+    process: str | None = None
+    route: str | None = None
+    product_form: str | None = None
+    grade: str | None = None
+    grade_modifiers: tuple[str, ...] = ()
+    purity: float | None = None
+    coating: str | None = None
+    application: str | None = None
+    constituent_entity_ids: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "raw_text": self.raw_text,
+            "normalized_text": self.normalized_text,
+            "spans": tuple(span.to_dict() for span in self.spans),
+            "base_entity_text": self.base_entity_text,
+            "entity_type_hint": self.entity_type_hint.value,
+            "chemical_formula": self.chemical_formula,
+            "process": self.process,
+            "route": self.route,
+            "product_form": self.product_form,
+            "grade": self.grade,
+            "grade_modifiers": self.grade_modifiers,
+            "purity": self.purity,
+            "coating": self.coating,
+            "application": self.application,
+            "constituent_entity_ids": self.constituent_entity_ids,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityResolution:
+    outcome: IdentityOutcome
+    selected_base_entity_id: str | None = None
+    selected_product_entity_id: str | None = None
+    product_family_id: str | None = None
+    candidate_entity_ids: tuple[str, ...] = ()
+    proof_type: IdentityProofType = IdentityProofType.NONE
+    evidence_ids: tuple[str, ...] = ()
+    conflicts: tuple[str, ...] = ()
+    unresolved_attributes: tuple[str, ...] = ()
+
+    @property
+    def sufficiently_resolved(self) -> bool:
+        return self.outcome == IdentityOutcome.RESOLVED and bool(self.selected_base_entity_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "outcome": self.outcome.value,
+            "selected_base_entity_id": self.selected_base_entity_id,
+            "selected_product_entity_id": self.selected_product_entity_id,
+            "product_family_id": self.product_family_id,
+            "candidate_entity_ids": self.candidate_entity_ids,
+            "proof_type": self.proof_type.value,
+            "evidence_ids": self.evidence_ids,
+            "conflicts": self.conflicts,
+            "unresolved_attributes": self.unresolved_attributes,
+            "sufficiently_resolved": self.sufficiently_resolved,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalIntent:
+    canonical_name: str
+    base_entity_id: str | None
+    product_entity_id: str | None = None
+    product_family_id: str | None = None
+    allowed_base_entity_ids: tuple[str, ...] = ()
+    allowed_product_entity_ids: tuple[str, ...] = ()
+    excluded_entity_ids: tuple[str, ...] = ()
+    aliases: tuple[str, ...] = ()
+    process: str | None = None
+    route: str | None = None
+    product_form: str | None = None
+    grade: str | None = None
+    purity: float | None = None
+    identity_outcome: IdentityOutcome = IdentityOutcome.UNKNOWN
+    identity_proof_ids: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "canonical_name": self.canonical_name,
+            "base_entity_id": self.base_entity_id,
+            "product_entity_id": self.product_entity_id,
+            "product_family_id": self.product_family_id,
+            "allowed_base_entity_ids": self.allowed_base_entity_ids,
+            "allowed_product_entity_ids": self.allowed_product_entity_ids,
+            "excluded_entity_ids": self.excluded_entity_ids,
+            "aliases": self.aliases,
+            "process": self.process,
+            "route": self.route,
+            "product_form": self.product_form,
+            "grade": self.grade,
+            "purity": self.purity,
+            "identity_outcome": self.identity_outcome.value,
+            "identity_proof_ids": self.identity_proof_ids,
         }
 
 
@@ -427,6 +622,28 @@ class CandidateQualification:
             "policy_checks": {key: dimension(item) for key, item in self.policy_checks.items()},
             "primary_exclusion": self.primary_exclusion,
             "additional_exclusions": self.additional_exclusions,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateAdmission:
+    source_id: str
+    retrieval_strategy: LinkStrategy
+    admitted: bool
+    observation_only: bool
+    identity_proof_ids: tuple[str, ...] = ()
+    source_identity_rule_ids: tuple[str, ...] = ()
+    hard_exclusions: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_id": self.source_id,
+            "retrieval_strategy": self.retrieval_strategy.value,
+            "admitted": self.admitted,
+            "observation_only": self.observation_only,
+            "identity_proof_ids": self.identity_proof_ids,
+            "source_identity_rule_ids": self.source_identity_rule_ids,
+            "hard_exclusions": self.hard_exclusions,
         }
 
 
@@ -610,6 +827,24 @@ class DatabaseVersionAnchor:
 
 
 @dataclass(frozen=True, slots=True)
+class SemanticIndexAnchor:
+    index_version: str
+    catalog_database_sha256: str | None
+    registry_version: str
+    registry_sha256: str
+    record_count: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index_version": self.index_version,
+            "catalog_database_sha256": self.catalog_database_sha256,
+            "registry_version": self.registry_version,
+            "registry_sha256": self.registry_sha256,
+            "record_count": self.record_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RetrievalResult:
     """Records returned together with the exact catalogue version queried."""
 
@@ -617,6 +852,7 @@ class RetrievalResult:
     database_anchor: DatabaseVersionAnchor
     attempts: tuple[LinkAttempt, ...] = ()
     observations: tuple[RecallObservation, ...] = ()
+    semantic_index_anchor: SemanticIndexAnchor | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -676,6 +912,17 @@ class ResolutionTrace:
         planner = self.latest("resolution_planner")
         re_evaluate = self.latest("re_evaluate")
         normalize = self.latest("normalize")
+        process_entries = tuple(
+            dict(entry.details)
+            for entry in self.entries
+            if entry.stage == "process_variant_resolution"
+        )
+        parameter_databases: dict[str, Mapping[str, Any]] = {}
+        for entry in process_entries:
+            for anchor in entry.get("parameter_databases", ()):
+                digest = anchor.get("database_sha256")
+                if digest:
+                    parameter_databases.setdefault(digest, anchor)
         return {
             "trace_id": self.trace_id,
             "trace_revision": self.revision,
@@ -684,6 +931,14 @@ class ResolutionTrace:
             "normalized_business_fingerprint": self.normalized_business_fingerprint,
             "database_version": self.database_anchor.to_dict() if self.database_anchor else None,
             "semantic_registry": dict(normalize.details.get("semantic_registry") or {}) if normalize else None,
+            "material_mention": dict(normalize.details.get("material_mention") or {}) if normalize else None,
+            "identity_resolution": dict(normalize.details.get("identity_resolution") or {}) if normalize else None,
+            "retrieval_intent": dict(normalize.details.get("retrieval_intent") or {}) if normalize else None,
+            "semantic_index": (
+                dict(local.details.get("semantic_index_anchor") or {}) if local else None
+            ),
+            "process_resolution": process_entries,
+            "parameter_databases": tuple(parameter_databases[key] for key in sorted(parameter_databases)),
             "local_retrieval": dict(local.details) if local else None,
             "proxy_decision": dict(route.details) if route else None,
             "excluded_candidates": tuple(top_k.details.get("excluded", ())) if top_k else (),
@@ -702,6 +957,7 @@ class ResolutionTrace:
             "request_gaps": tuple(top_k.details.get("request_gaps", ())) if top_k else (),
             "raw_related_hits": tuple(top_k.details.get("raw_related_hits", ())) if top_k else (),
             "record_qualifications": tuple(top_k.details.get("record_qualifications", ())) if top_k else (),
+            "candidate_admissions": tuple(top_k.details.get("candidate_admissions", ())) if top_k else (),
             "required_choice": top_k.details.get("required_choice") if top_k else None,
             "provisional_options": tuple(top_k.details.get("provisional_options", ())) if top_k else (),
             "request_resolution_plan": top_k.details.get("request_resolution_plan") if top_k else None,
@@ -755,6 +1011,14 @@ def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
 
     payload = {
         "material_name": normalized(activity.canonical_name),
+        "base_entity_id": (
+            activity.identity_resolution.selected_base_entity_id
+            if activity.identity_resolution else None
+        ),
+        "product_entity_id": (
+            activity.identity_resolution.selected_product_entity_id
+            if activity.identity_resolution else None
+        ),
         "quantity_kg": activity.quantity_kg,
         "unresolved_quantity": (
             (activity.original_quantity, normalized(activity.original_quantity_unit))
@@ -932,6 +1196,9 @@ class NormalizedActivity:
     form_rule_ids: tuple[str, ...] = ()
     relation_ids: tuple[str, ...] = ()
     registry_suggestion: RegistryRuleSuggestion | None = None
+    material_mention: MaterialMention | None = None
+    identity_resolution: IdentityResolution | None = None
+    retrieval_intent: RetrievalIntent | None = None
 
 
 @dataclass(frozen=True, slots=True)

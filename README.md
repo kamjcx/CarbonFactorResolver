@@ -92,20 +92,71 @@ Local and fallback linking use an observable, bounded strategy chain:
 
 Normalization applies versioned Unicode, case, separator and whitespace rules. Applied rule IDs and semantic remapping are written to Trace so the mapping can be reproduced after rules or catalogue data change.
 
-## Versioned material semantic registry
+## Entity-first semantic resolution
 
-Version 0.5 adds a deterministic semantic layer before retrieval:
+Version 0.7 upgrades the deterministic semantic layer from name-first matching to entity-first retrieval:
 
-`normalized text → Material Rules + Process Rules + Form Rules + Typed Relations`
+`normalized text → MaterialMention → IdentityResolution → RetrievalIntent → Semantic Index`
 
-- Request names and source-record names use the same registry version and rules.
+- The parser assigns explicit roles such as `BASE_ENTITY`, `ENTITY_TYPE`, `PROCESS`, `PRODUCT_FORM`, `GRADE`, `PURITY` and `CONSTITUENT`; modifiers constrain identity but do not replace the base entity.
+- Requests and source records use the same entity registry and Semantic Index. The index is rebuilt in process when the catalogue or registry digest changes and records both anchors in Trace.
+- Exact primary names and reviewed aliases can become direct candidates. Same-entity variants are admitted only when both sides have a resolved, equal `base_entity_id`; lexical CJK overlap is never sufficient.
+- Composite materials preserve multiple constituents. For example, `莫来石-碳化硅砖` retains both mullite and silicon-carbide entity IDs rather than being flattened to mullite.
+- `金属铝`, `氧化铝`, `铝合金`, `金属硅`, `二氧化硅` and `碳化硅` resolve to distinct identities. A `金属铝` query therefore cannot recall silicon or alumina merely because of shared characters.
+- A generic material with multiple route variants, such as primary and secondary aluminium, returns `MORE_INPUT_NEEDED` with an explicit route choice instead of silently selecting a factor.
 - Only `ACTIVE` reviewed rules affect runtime identity or retrieval. `DRAFT`, `DEPRECATED` and `REJECTED` rules are ignored.
 - Unknown names may be sent to an optional `MaterialRuleSuggestionPort`. Its structured output remains a `DRAFT` review artifact and never becomes an active identity automatically.
-- Trace records the registry version plus every matched Material/Process/Form rule and typed relation.
+- Trace records the structured mention, identity proof, retrieval intent, registry/index versions, link attempts, candidate admissions and hard exclusions.
 - The registry contains no emission-factor values. Numeric values still enter only through provenance-bearing `SourceRecord` or `ParameterEvidence`.
-- Built-in V1 rules recognize, among others, mullite/spinel/corundum/alumina, electrofused/sintered/calcined routes and common product forms. New vocabulary is released as reviewed registry data without changing Graph routing.
+- New vocabulary is released as reviewed registry data without changing Graph routing.
 
-For example, `电熔莫来石` resolves to material `mullite` plus process `electrofused`; `烧结莫来石` is therefore recalled as a same-material process variant, while `电熔刚玉` is not recalled merely because it shares the process word `电熔`.
+For example, `电熔莫来石` resolves to base entity `mat.mineral.mullite` plus process `electrofused`; `烧结莫来石` is therefore recalled only as a same-entity process variant and enters Process Gap analysis, while `电熔刚玉` is excluded despite sharing the process word `电熔`.
+
+The complete Chinese implementation contract is in `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`.
+
+## Versioned energy-evidence database
+
+Version 0.6 adds a separate read-only SQLite evidence database for process-route energy resolution. It is deliberately not part of the emission-factor catalogue:
+
+- `energy_quota` stores all three published quota grades, while runtime policy explicitly selects `quota_level=1`;
+- `energy_conversion` stores exact values and ranges separately, so an ambiguous range cannot silently become a calculation input;
+- `process_parameter` stores independently sourced energy shares, emission factors and route assumptions with exact reference-source scope;
+- `quota_modifier_rule` preserves conditional table notes without applying them unless their conditions are separately evidenced;
+- every returned `ParameterEvidence` carries the energy-database version/SHA, source standard, table, physical/printed page and evidence status.
+
+“1级” is a quota grade (green benchmark), not a claim that the value is primary/一次能源. Standard quotas are upper-limit engineering proxies, not measured plant consumption and not emission factors.
+
+The supplied standard can be imported locally without committing either the PDF or generated database:
+
+```powershell
+pip install -e ".[energy-import]"
+python tools/import_refractory_energy_standard.py `
+  path\to\T_CHNRISC_0008_2025.pdf `
+  path\to\energy_parameters.db `
+  --expected-source-sha256 <reviewed-pdf-sha256> `
+  --process-parameters-json path\to\reviewed-process-parameters.json
+```
+
+Connect both formal factor and energy evidence repositories at runtime:
+
+```python
+from a1_factor_engine import A1FactorResolutionEngine, SqliteEnergyProcessParameterRepository
+from a1_factor_engine.adapters import HttpCatalogFactorRepository
+
+engine = A1FactorResolutionEngine(
+    local_retrieval=HttpCatalogFactorRepository(
+        endpoint="http://127.0.0.1:5004/api/v2/factors/catalog",
+        expected_sha256="<formal-factor-database-sha256>",
+    ),
+    process_parameters=SqliteEnergyProcessParameterRepository(
+        "path/to/energy_parameters.db",
+        quota_level=1,
+        expected_database_sha256="<energy-database-sha256>",
+    ),
+)
+```
+
+The adapter first matches an exact canonical product, then permits only a unique material/process fallback. Scoped route parameters can additionally bind to an exact factor `source_id`; this prevents a high-alumina ecoinvent proxy whose display name contains “sintered mullite” from receiving the formal sintered-mullite subtraction bundle.
 
 ## Mutable trace and database version anchor
 
@@ -115,6 +166,7 @@ Each resolution creates an appendable `ResolutionTrace`; it is an operational ex
 - local records found, including source IDs and observed factor values;
 - structured candidate gaps and dependency-ordered resolution plans;
 - every unit, reference-flow, process or grade transformation, including source IDs, parameter IDs, Formula ID, inputs and output;
+- every process-parameter database anchor and the complete evidence records used or found insufficient;
 - assumptions, warnings, result tiers and resolution strength;
 - the complete deterministic ranking and returned Top-K IDs;
 - exact/synonym/related/proxy/unresolved link attempts and remaining evidence gaps;

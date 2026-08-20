@@ -1,7 +1,7 @@
 # OFR 完整技术文档
 
 > 文档对象：当前仓库中的 A1 Factor Resolution Engine V1（下文简称 OFR）  
-> 实现版本：`0.5.0`（`proxy-resolution-v1.0` + `steel-fiber-qualification-v1.0` + `major-fixes-v1.0` + `material-semantic-registry-v1.0`）  
+> 实现版本：`0.7.0`（在 `0.6.0` 基础上增加 Entity-first Semantic Resolution V2）
 > 技术基线：Python 3.11+  
 > 文档日期：2026-08-19  
 > 文档性质：以当前代码为准的架构、接口、算法与运行说明
@@ -53,6 +53,7 @@ OFR 用于解决 A1 原材料排放因子缺失、命名不一致和“不完全
 - 可更新 Trace 与数据库版本锚点；
 - 人工审批、拒绝和不可变结果锁定；
 - equivalent-request Trace 差异比较。
+- 独立、只读、带版本锚点的工艺能耗证据数据库及 Process Router 适配器。
 
 ### 2.3 明确不在当前范围内
 
@@ -1080,6 +1081,8 @@ OFR 的关键差异是：Candidate Gap Analysis、四类 Resolution Router、版
 | `src/a1_factor_engine/nodes.py` | Gap/Planner/Router Node、评分、Top-K |
 | `src/a1_factor_engine/qualification.py` | Direct/Proxy/Grade Anchor 共用资格策略 |
 | `src/a1_factor_engine/material_registry.py` | 版本化 Material/Process/Form Rules、Typed Relations 与待审建议契约 |
+| `src/a1_factor_engine/semantic_index.py` | 正式目录预解析、Entity/Reviewed Alias/Same-Entity 分层索引与版本锚点 |
+| `src/a1_factor_engine/energy_database.py` | 能耗证据库 Schema、Builder、版本锚点和 Process 参数 Adapter |
 | `src/a1_factor_engine/gap_analysis.py` | 结构化 Candidate Gap Analysis |
 | `src/a1_factor_engine/resolution_planner.py` | 依赖有序的 Resolution Plan |
 | `src/a1_factor_engine/unit_resolution.py` | 版本化比例单位转换 |
@@ -1092,6 +1095,7 @@ OFR 的关键差异是：Candidate Gap Analysis、四类 Resolution Router、版
 | `src/a1_factor_engine/adapters.py` | 内存、Null、HTTP 和默认语义 Adapter |
 | `src/a1_factor_engine/engine.py` | Graph 编排、Facade、审批、锁定和 Trace 比较 |
 | `tests/test_engine.py` | 主要行为和回归测试 |
+| `tools/import_refractory_energy_standard.py` | 带来源 SHA 校验的本地标准导入工具 |
 
 ## 34. Steel Fiber Qualification V1
 
@@ -1134,8 +1138,60 @@ HTTP Catalog Adapter 已支持上述字段，正式目录仍由外部只读端�
 
 统一注册表是语义治理层，不是排放因子库。它不能产生、修正或推断因子数值；所有数值仍必须来自带 provenance 的 `SourceRecord` 或 `ParameterEvidence`。
 
-## 37. 结论
+## 37. Energy Evidence Database V1
+
+`0.6.0` 在排放因子库之外增加独立的 SQLite 能耗证据库：
+
+- `energy_quota` 保存标准发布的 1/2/3 级单位产品综合能耗限额，运行时策略显式选择 1 级；
+- `energy_conversion` 区分精确折标值与范围值，范围不能自动进入确定性计算；
+- `process_parameter` 保存能源份额、能源排放因子等独立证据，并可绑定参考材料、参考工艺、目标材料、目标工艺和精确参考因子 `source_id`；
+- `quota_modifier_rule` 保存表格脚注条件，但没有相应输入证据时不自动加成；
+- Trace 同时记录正式因子库锚点和能耗证据库锚点，以及每个参数的标准、表格、页码、证据状态和局限。
+
+“1级”是能耗限额等级，不是“一次能源”的同义词。标准限额属于上限型工程 Proxy，不是企业实测值，也不是排放因子。完整 Process 重构仍要求能源结构、折标系数、排放因子、过程包含关系和来源作用域全部闭合。
+
+## 38. 电熔尖晶石过程差值验证
+
+正式目录与能耗证据库的联合测试使用请求 `电熔尖晶石，1 t，CN，2024`。语义注册表将其识别为 `head_material=spinel`、`material_family=spinel_products`、`production_process=electrofused`，置信度为 `0.90`。
+
+本地目录召回的两条镁铝尖晶石排放限额记录因 `factor_kind_mismatch` 等资格原因被排除；烧结尖晶石生命周期因子 `4.602431 kgCO2e/kg` 可进入候选池，但目标与来源存在 `PROCESS_VARIANT_GAP`。能耗库成功返回一级能耗证据：烧结镁铝尖晶石 `375 kgce/t`、电熔镁铝尖晶石 `185 kgce/t`，以及电力折标系数 `0.1229 kgce/kWh`。
+
+上述证据只证明两条工艺路线存在能耗差异，不能证明生命周期因子可按 `185/375` 整体缩放。当前缺少完整且闭合的参考/目标能源份额、各能源排放因子、精确折标参数，以及原始烧结因子明确包含被替换过程的作用域证据。因此 Process Router 保持：
+
+```text
+resolution_type = UNADJUSTED_PROCESS_PROXY
+result_tier      = REFERENCE_ONLY
+factor_value     = 4.602431 kgCO2e/kg（原值不变）
+```
+
+后续工艺和能源占比通过 `process_parameter` 增量补充，不修改 Graph。每项参数必须保留来源、适用地域/年份/边界，并绑定参考因子 `source_id`、参考/目标材料和工艺；参考与目标能源份额分别必须闭合为 `1.0`，显式零值也必须提供。参数审核发布后形成新的能耗库版本锚点，相同规范化请求可重跑并解释更新前后的模式、数值和排名变化。
+
+这项验证确立如下不变量：能耗限额是工程证据而非排放因子；不得跨材料复用未经证明的能源结构；不得用名称相似度补齐数值；参数不足时应返回有来源的未调整参考候选，而不是生成伪精确的派生因子。
+
+## 39. Entity-first Semantic Resolution V2
+
+`0.7.0` 将 Normalize 输出契约升级为：
+
+```text
+Normalize Text
+  → MaterialMention（带角色与字符区间）
+  → IdentityResolution（带实体 ID 与证明）
+  → RetrievalIntent（限定允许召回的实体与限定符）
+  → SemanticFactorIndex（目录 SHA + 注册表 SHA 锚定）
+```
+
+语义角色包括 `BASE_ENTITY`、`ENTITY_TYPE`、`PROCESS`、`PRODUCT_FORM`、`GRADE`、`GRADE_MODIFIER`、`PURITY`、`COATING`、`ROUTE`、`APPLICATION` 和 `CONSTITUENT`。`金属` 等限定词不会被简单删除：`金属铝` 解析为 elemental aluminium，`氧化铝` 解析为 alumina，两者具有不同 `entity_id`。复合材料保留多个 constituent ID，避免把 `莫来石-碳化硅砖` 或 `锆莫来石` 压扁成单一莫来石。
+
+本地检索由共享 Semantic Index 统一执行：Exact Primary → Reviewed Alias → Same-Entity Variant。Related 不再使用中文 bigram、共同工艺词或单一产品形态作为候选依据；只有请求与来源都达到 `RESOLVED` 且 `base_entity_id` 相同，才允许进入候选资格评估。每条评估记录生成 `CandidateAdmission`，说明检索策略、请求身份依据、来源规则、是否进入候选池以及 hard exclusions。评分只对已准入候选排序，不能修复身份不明或身份冲突。
+
+通用实体若对应多个产品路线，不自动选最低值或最高分。例如目录同时存在原铝与再生铝时，`金属铝` 返回 `MORE_INPUT_NEEDED`，要求选择 route/product entity。`Material Class` 仍保留在本地直接路径耗尽之后，用于指导受控 Proxy Resolution，不提前替代实体身份。
+
+正式目录不写回仓库。HTTP Adapter 在进程内把目录记录预解析成 Semantic Index；目录 SHA、注册表版本或注册表 SHA 变化时生成新的 index version。Trace 暴露 `material_mention`、`identity_resolution`、`retrieval_intent`、`semantic_index`、`candidate_admissions`、排除原因和最终排名，支持解释同一请求在目录或注册表更新前后的差异。
+
+完整契约、迁移边界和验收案例见 `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`。
+
+## 40. 结论
 
 当前 OFR 已形成一个独立、可测试、可解释的 A1 因子解析内核。它的核心不是“让模型猜一个数”，而是识别候选与目标之间的差异，选择可追溯的工程解析策略，把 SourceRecord、ParameterEvidence、版本化公式、假设、Top-K 和人工决策组合成一个有界 Graph。
 
-V1 已经适合作为正式系统的领域内核和集成基线。`0.5.0` 在 0.4 的数学、资格与审计修复之上增加了版本化材料语义治理；在持久化事务 Store、生产级 Proxy Repository、受限 LLM Adapter、真实目录全字段映射和材料族 gold-set 验收完成前，仍不应把内存参考实现直接宣称为生产锁定服务。
+V1 已经适合作为正式系统的领域内核和集成基线。`0.7.0` 在能耗证据层之上增加了实体优先的 Parser、Identity Resolution、Semantic Index 和候选准入审计；在持久化事务 Store、审核式 ProxyEdge Registry、生产级 Proxy Repository、受限 LLM Adapter、真实目录全字段治理和材料族 gold-set 验收完成前，仍不应把当前参考实现直接宣称为生产锁定服务。

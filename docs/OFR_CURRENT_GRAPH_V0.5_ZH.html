@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OFR 0.5.0 当前系统 Graph Engineering</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --color-paper: #f5f5f5;
+      --color-paper-2: #ececec;
+      --color-ink: #2d3142;
+      --color-muted: #4f5d75;
+      --color-soft: #7a8399;
+      --color-accent: #eb6c36;
+      --color-accent-tint: rgba(235,108,54,.08);
+      --color-link: #2e5aa8;
+      --color-rule: rgba(45,49,66,.12);
+      --font-sans: 'Geist', system-ui, sans-serif;
+      --font-serif: 'Instrument Serif', 'Noto Serif SC', serif;
+      --font-mono: 'Geist Mono', ui-monospace, monospace;
+      --motion-fast: 160ms;
+      --motion-step: 480ms;
+      --motion-hold: 720ms;
+      --motion-total: 4320ms;
+      --motion-ease: cubic-bezier(.2,.8,.2,1);
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 48px 32px 64px;
+      color: var(--color-ink);
+      background: var(--color-paper);
+      font-family: var(--font-sans);
+    }
+    main { width: min(100%, 1280px); margin: 0 auto; }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--color-muted);
+      font: 500 8px/1.4 var(--font-mono);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0 0 12px; font: 400 40px/1.1 var(--font-serif); }
+    .lede { max-width: 920px; margin: 0 0 24px; color: var(--color-muted); font-size: 16px; line-height: 1.7; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 32px; }
+    .tag {
+      padding: 4px 8px;
+      border: 1px solid var(--color-rule);
+      border-radius: 4px;
+      font: 500 8px/1.5 var(--font-mono);
+      letter-spacing: .08em;
+    }
+    .figure { overflow-x: auto; padding-bottom: 8px; }
+    svg { display: block; width: 100%; min-width: 960px; }
+    svg a { cursor: pointer; }
+    svg a:focus-visible .node-shape,
+    svg a:hover .node-shape { stroke: var(--color-accent); stroke-width: 2; }
+    .section { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--color-rule); }
+    h2 { margin: 0 0 8px; font: 400 32px/1.15 var(--font-serif); }
+    .section-intro { max-width: 880px; margin: 0 0 24px; color: var(--color-muted); line-height: 1.7; }
+    .motion-ready [data-motion-item] {
+      opacity: .12;
+      transform: translateY(8px);
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: opacity var(--motion-step) var(--motion-ease), transform var(--motion-step) var(--motion-ease);
+    }
+    .motion-ready [data-motion-item].is-visible,
+    .motion-ready[data-frame="end"] [data-motion-item],
+    .motion-ready[data-frame="static"] [data-motion-item] { opacity: 1; transform: none; }
+    [data-motion-controls] {
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-rule);
+    }
+    .motion-ready [data-motion-controls] { display: flex; }
+    [data-motion-controls][hidden] { display: none !important; }
+    [data-motion-controls] button {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--color-muted);
+      border-radius: 4px;
+      color: var(--color-ink);
+      background: var(--color-paper);
+      font: 600 12px/1 var(--font-sans);
+      cursor: pointer;
+    }
+    [data-motion-controls] button:hover { border-color: var(--color-accent); }
+    [data-motion-controls] button:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+    [data-motion-controls] button:disabled { cursor: not-allowed; opacity: .45; }
+    [data-motion-status-visible] { margin-left: auto; color: var(--color-muted); font: 500 12px/1.4 var(--font-mono); }
+    .keyboard-help { color: var(--color-soft); font: 400 12px/1.4 var(--font-mono); }
+    .state-layout { display: grid; grid-template-columns: 1.15fr .9fr .95fr; gap: 16px; align-items: start; }
+    details {
+      background: #fff;
+      border: 1px solid var(--color-rule);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    details[open] { border-color: rgba(45,49,66,.28); }
+    summary {
+      padding: 16px;
+      cursor: pointer;
+      font-weight: 600;
+      list-style: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: '+'; float: right; color: var(--color-accent); font: 500 16px var(--font-mono); }
+    details[open] summary::after { content: '−'; }
+    .detail-body { padding: 0 16px 16px; color: var(--color-muted); font-size: 14px; line-height: 1.65; }
+    .detail-body ul { margin: 8px 0 0; padding-left: 20px; }
+    .detail-body code { color: var(--color-ink); font: 500 12px var(--font-mono); }
+    .state-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    .state-table th, .state-table td { padding: 10px 8px; text-align: left; vertical-align: top; border-top: 1px solid var(--color-rule); }
+    .state-table th { color: var(--color-soft); font: 500 8px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+    .state-table code { font: 500 12px var(--font-mono); }
+    .governance { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
+    .card { padding: 20px; background: #fff; border: 1px solid var(--color-rule); border-radius: 6px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .card p, .card li { color: var(--color-muted); font-size: 14px; line-height: 1.65; }
+    .card ul { margin: 0; padding-left: 20px; }
+    .accent-card { border-color: var(--color-accent); background: var(--color-accent-tint); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    noscript p { margin: 12px 0 0; color: var(--color-muted); font: 500 12px/1.4 var(--font-mono); }
+    footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--color-rule); color: var(--color-soft); font: 400 12px/1.6 var(--font-mono); }
+    html[data-motion="static"] [data-motion-controls], html[data-motion="static"] [data-motion-decorative] { display: none !important; }
+    html[data-motion="static"] [data-motion-item] { opacity: 1 !important; transform: none !important; animation: none !important; transition: none !important; }
+    html[data-motion="step"] [data-motion-controls], html[data-motion="step"] [data-motion-decorative] { display: none !important; }
+    html[data-motion="step"] [data-motion-item] { animation: none !important; transition: none !important; }
+    @media (max-width: 880px) {
+      body { padding: 32px 16px 48px; }
+      h1 { font-size: 32px; }
+      .state-layout, .governance { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .001ms !important; }
+      [data-motion-item] { opacity: 1 !important; transform: none !important; }
+      [data-motion-decorative] { display: none !important; }
+      [data-motion-controls] { display: none !important; }
+    }
+    @media print {
+      body { padding: 16px; }
+      [data-motion-controls], [data-motion-decorative] { display: none !important; }
+      [data-motion-item] { opacity: 1 !important; transform: none !important; animation: none !important; transition: none !important; }
+      details { break-inside: avoid; }
+      details > .detail-body { display: block !important; }
+    }
+  </style>
+</head>
+<body>
+  <main data-motion-root data-motion-mode="step" data-step-count="6" data-step-current="6" data-frame="static" data-static-frame="complete">
+    <header>
+      <p class="eyebrow">OFR · CURRENT STATE · GRAPH ENGINEERING</p>
+      <h1>A1 Factor Resolution Engine 0.5.0</h1>
+      <p class="lede">当前系统不是一条“LLM 猜因子”的流水线，而是一个有界、可解释、State 驱动的解析图。Node 只做单一职责，Router 只根据显式 State 守卫分流，数值只能来自可追溯记录与确定性公式。</p>
+      <div class="meta">
+        <span class="tag">GRAPH: BOUNDED</span>
+        <span class="tag">STATE: TYPED</span>
+        <span class="tag">TRACE: MUTABLE + VERSIONED</span>
+        <span class="tag">LLM: SEMANTIC ONLY</span>
+        <span class="tag">NUMERIC: DETERMINISTIC</span>
+      </div>
+    </header>
+
+    <section aria-labelledby="overview-heading">
+      <h2 id="overview-heading">一、解析主图</h2>
+      <p class="section-intro">点击节点可跳转到对应 State 说明。播放控件按 6 个语义阶段逐步展示；禁用 JavaScript、打印或减少动态效果时，完整图仍保持可读。</p>
+      <div class="figure">
+        <svg viewBox="0 0 1200 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ofr-main-title ofr-main-desc">
+          <title id="ofr-main-title">OFR 0.5.0 因子解析主图</title>
+          <desc id="ofr-main-desc">从输入校验和语义注册表标准化开始，经正式本地检索、资格评估、Gap Analysis、候选级有限解析、必要时的晚期材料 Proxy，最终汇总排序并进入明确终态。</desc>
+          <defs>
+            <marker id="ofr-main-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+            <marker id="ofr-main-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#eb6c36"/></marker>
+            <marker id="ofr-main-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
+          </defs>
+          <rect width="1200" height="880" fill="#f5f5f5"/>
+
+          <!-- Persistent connectors: drawn before nodes. -->
+          <path d="M200 136 H240" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M440 136 H480" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M680 136 H704" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M816 136 H856" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M760 192 V224 Q760 232 768 232 H1072 Q1080 232 1080 224 V176" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M1120 136 H1144 Q1152 136 1152 144 V336 Q1152 344 1144 344 H968 Q960 344 960 352 V360" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M896 456 H760 Q752 456 752 464 V500" fill="none" stroke="#eb6c36" marker-end="url(#ofr-main-arrow-accent)"/>
+          <path d="M1024 456 H1080 Q1088 456 1088 464 V500" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M960 488 H608 Q600 488 600 496 V592 Q600 600 608 600 H880 Q888 600 888 608 V640" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M872 540 H960" fill="none" stroke="#4f5d75" stroke-dasharray="5,4" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M752 580 V608 Q752 616 760 616 H840 Q848 616 848 624 V640" fill="none" stroke="#eb6c36" marker-end="url(#ofr-main-arrow-accent)"/>
+          <path d="M1088 580 V608 Q1088 616 1080 616 H984 Q976 616 976 624 V640" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+          <path d="M912 720 V752" fill="none" stroke="#4f5d75" marker-end="url(#ofr-main-arrow)"/>
+
+          <!-- Decision labels with opaque masks and visible connector gaps. -->
+          <rect x="816" y="108" width="40" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="836" y="120" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">充分</text>
+          <rect x="768" y="204" width="152" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="844" y="216" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">缺失 → required_fields</text>
+          <rect x="780" y="428" width="96" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="828" y="440" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">有本地候选</text>
+          <rect x="1036" y="428" width="112" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="1092" y="440" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">无候选且输入完整</text>
+          <rect x="876" y="516" width="80" height="12" rx="2" fill="#f5f5f5"/>
+          <text x="916" y="524" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">MATERIAL GAP</text>
+          <rect x="608" y="612" width="120" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="668" y="624" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">required_fields</text>
+
+          <g data-motion-item data-step="1" aria-label="步骤 1：接收结构化请求">
+            <a href="#state-request" aria-label="查看 Input State">
+              <rect class="node-shape" x="40" y="96" width="160" height="80" rx="20" fill="#f5f5f5" stroke="#4f5d75"/>
+              <text x="120" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">INPUT</text>
+              <text x="120" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">ResolutionRequest</text>
+            </a>
+          </g>
+
+          <g data-motion-item data-step="2" aria-label="步骤 2：校验并通过版本化语义注册表标准化">
+            <a href="#state-normalize" aria-label="查看 Validate 与 Normalize State">
+              <rect class="node-shape" x="240" y="88" width="200" height="96" rx="6" fill="#fff" stroke="#2d3142"/>
+              <rect x="252" y="100" width="48" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,.4)"/>
+              <text x="276" y="112" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">NODE 1–2</text>
+              <text x="340" y="136" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Validate + Normalize</text>
+              <text x="340" y="160" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">registry / units / fingerprint</text>
+            </a>
+          </g>
+
+          <g data-motion-item data-step="3" aria-label="步骤 3：从正式目录检索并逐层资格评估">
+            <a href="#state-local" aria-label="查看 Local Retrieval 与 Evaluate State">
+              <rect class="node-shape" x="480" y="88" width="200" height="96" rx="6" fill="#fff" stroke="#2e5aa8"/>
+              <rect x="492" y="100" width="48" height="16" rx="2" fill="transparent" stroke="rgba(46,90,168,.5)"/>
+              <text x="516" y="112" text-anchor="middle" fill="#2e5aa8" font-family="Geist Mono,monospace" font-size="8">NODE 3–4</text>
+              <text x="580" y="136" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Local Retrieval + Evaluate</text>
+              <text x="580" y="160" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">exact → alias → related</text>
+            </a>
+          </g>
+
+          <g data-motion-item data-step="4" aria-label="步骤 4：检查请求身份完整性">
+            <a href="#state-identity" aria-label="查看身份守卫 State">
+              <polygon class="node-shape" points="760,80 816,136 760,192 704,136" fill="#f5f5f5" stroke="#2d3142"/>
+              <text x="760" y="132" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">身份完整?</text>
+              <text x="760" y="148" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">request_gaps</text>
+            </a>
+            <a href="#state-plan" aria-label="查看 Gap Analysis 与 Planner State">
+              <rect class="node-shape" x="856" y="96" width="264" height="80" rx="6" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
+              <text x="988" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Gap Analysis + Planner</text>
+              <text x="988" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">ResolutionGap[] → ResolutionPlan</text>
+            </a>
+          </g>
+
+          <g data-motion-item data-step="5" aria-label="步骤 5：执行候选级有限解析，必要时进入晚期材料 Proxy">
+            <a href="#state-resolution" aria-label="查看候选守卫">
+              <polygon class="node-shape" points="960,360 1024,424 960,488 896,424" fill="#f5f5f5" stroke="#2d3142"/>
+              <text x="960" y="416" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">候选可解析?</text>
+              <text x="960" y="436" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">finite guard</text>
+            </a>
+            <a href="#candidate-detail" aria-label="查看候选级有界解析子图">
+              <rect class="node-shape" x="632" y="500" width="240" height="80" rx="6" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
+              <text x="752" y="532" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Bounded Technical Resolution</text>
+              <text x="752" y="556" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">unit / flow / process / grade · once</text>
+            </a>
+            <a href="#state-proxy" aria-label="查看 Material 与 Proxy State">
+              <rect class="node-shape" x="960" y="500" width="256" height="80" rx="6" fill="#fff" stroke="#2d3142"/>
+              <text x="1088" y="532" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Material + Proxy Resolution</text>
+              <text x="1088" y="556" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">late class-aware fallback</text>
+            </a>
+          </g>
+
+          <g data-motion-item data-step="6" aria-label="步骤 6：重新评估、汇总、稳定排序并返回 Top-K 或明确后续状态">
+            <a href="#state-output" aria-label="查看 Re-Evaluate、Pool、Rank 与 Top-K State">
+              <rect class="node-shape" x="792" y="640" width="240" height="80" rx="6" fill="#fff" stroke="#2d3142"/>
+              <text x="912" y="672" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Re-Evaluate → Pool → Rank</text>
+              <text x="912" y="696" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">Top-K + deterministic tier</text>
+            </a>
+            <rect x="600" y="752" width="600" height="56" rx="20" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/>
+            <text x="900" y="776" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">TERMINAL</text>
+            <text x="900" y="796" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">RECOMMENDATION_READY · MORE_INPUT · SUPPLIER_DATA · PROCESS_MODEL · ERROR</text>
+          </g>
+
+          <line x1="40" y1="828" x2="1160" y2="828" stroke="rgba(45,49,66,.12)"/>
+          <text x="40" y="852" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8" letter-spacing="1.2">LEGEND</text>
+          <rect x="152" y="840" width="32" height="20" rx="4" fill="#fff" stroke="#2d3142"/>
+          <text x="196" y="854" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">NODE</text>
+          <polygon points="292,840 304,852 292,864 280,852" fill="#f5f5f5" stroke="#2d3142"/>
+          <text x="320" y="854" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">GUARD</text>
+          <rect x="416" y="840" width="32" height="20" rx="4" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
+          <text x="460" y="854" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">BOUNDED / FOCAL</text>
+          <line x1="632" y1="852" x2="680" y2="852" stroke="#2e5aa8" stroke-dasharray="5,4"/>
+          <text x="692" y="854" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">EVIDENCE / OPTIONAL</text>
+        </svg>
+      </div>
+      <div data-motion-controls role="group" aria-label="图形播放控件">
+        <button type="button" data-motion-action="prev">上一步</button>
+        <button type="button" data-motion-action="play" aria-pressed="false">播放</button>
+        <button type="button" data-motion-action="pause" aria-pressed="true">暂停</button>
+        <button type="button" data-motion-action="next">下一步</button>
+        <button type="button" data-motion-action="replay">重播</button>
+        <span class="keyboard-help">←/→ 步进 · Space 播放/暂停 · R 重播 · Home/End 跳转</span>
+        <span data-motion-status-visible aria-hidden="true">步骤 <span data-motion-step-label>6</span> / 6</span>
+      </div>
+      <p class="sr-only" data-motion-status role="status" aria-live="polite" aria-atomic="true"></p>
+      <noscript><p>交互播放需要 JavaScript；上方已经显示完整静态图。</p></noscript>
+    </section>
+
+    <section class="section" id="candidate-detail" aria-labelledby="candidate-heading">
+      <p class="eyebrow">DETAIL GRAPH · PER CANDIDATE</p>
+      <h2 id="candidate-heading">二、候选级有界解析子图</h2>
+      <p class="section-intro">每个 Candidate 的 ResolutionPlan 只执行一次。Unit 与 Reference Flow 先执行；Process 与 Grade 按来源声明的依赖顺序执行。不存在回到 Local Retrieval 的无限重试边。</p>
+      <div class="figure">
+        <svg viewBox="0 0 1200 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ofr-candidate-title ofr-candidate-desc">
+          <title id="ofr-candidate-title">OFR 候选级有限解析子图</title>
+          <desc id="ofr-candidate-desc">候选与解析计划依次进入单位比例、参考流和依赖排序的过程及牌号解析，使用来源证据和确定性公式，最终输出带完整 lineage 的候选。</desc>
+          <defs>
+            <marker id="ofr-candidate-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+            <marker id="ofr-candidate-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#eb6c36"/></marker>
+            <marker id="ofr-candidate-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
+          </defs>
+          <rect width="1200" height="420" fill="#f5f5f5"/>
+          <path d="M224 140 H280" fill="none" stroke="#4f5d75" marker-end="url(#ofr-candidate-arrow)"/>
+          <path d="M456 140 H512" fill="none" stroke="#4f5d75" marker-end="url(#ofr-candidate-arrow)"/>
+          <path d="M688 140 H744" fill="none" stroke="#4f5d75" marker-end="url(#ofr-candidate-arrow)"/>
+          <path d="M944 140 H1000" fill="none" stroke="#eb6c36" marker-end="url(#ofr-candidate-arrow-accent)"/>
+          <path d="M600 184 V264" fill="none" stroke="#2e5aa8" stroke-dasharray="5,4" marker-end="url(#ofr-candidate-arrow-link)"/>
+          <path d="M844 184 V264" fill="none" stroke="#2e5aa8" stroke-dasharray="5,4" marker-end="url(#ofr-candidate-arrow-link)"/>
+          <rect x="616" y="220" width="88" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="660" y="232" text-anchor="middle" fill="#2e5aa8" font-family="Geist Mono,monospace" font-size="8">FLOW EVIDENCE</text>
+          <rect x="856" y="220" width="88" height="16" rx="2" fill="#f5f5f5"/>
+          <text x="900" y="232" text-anchor="middle" fill="#2e5aa8" font-family="Geist Mono,monospace" font-size="8">PARAMETERS</text>
+
+          <g>
+            <rect class="node-shape" x="40" y="96" width="184" height="88" rx="6" fill="#fff" stroke="#2d3142"/>
+            <text x="132" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Candidate + Plan</text>
+            <text x="132" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">gaps / resolution_order</text>
+          </g>
+          <g>
+            <rect class="node-shape" x="280" y="96" width="176" height="88" rx="6" fill="#fff" stroke="#2d3142"/>
+            <text x="368" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Unit Scale</text>
+            <text x="368" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">deterministic conversion</text>
+          </g>
+          <g>
+            <rect class="node-shape" x="512" y="96" width="176" height="88" rx="6" fill="#fff" stroke="#2d3142"/>
+            <text x="600" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Reference Flow</text>
+            <text x="600" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">piece / area / volume → mass</text>
+          </g>
+          <g>
+            <rect class="node-shape" x="744" y="88" width="200" height="104" rx="6" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
+            <text x="844" y="120" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Process ↔ Grade</text>
+            <text x="844" y="144" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">dependency-declared order</text>
+            <text x="844" y="168" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">each router at most once</text>
+          </g>
+          <g>
+            <rect class="node-shape" x="1000" y="96" width="176" height="88" rx="20" fill="#f5f5f5" stroke="#4f5d75"/>
+            <text x="1088" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Resolved Candidate</text>
+            <text x="1088" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">steps / assumptions / tier</text>
+          </g>
+          <g>
+            <rect x="488" y="264" width="224" height="96" rx="6" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/>
+            <text x="600" y="296" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">ReferenceFlowRecord</text>
+            <text x="600" y="320" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">mass_per_unit + provenance</text>
+            <text x="600" y="340" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">缺失 → required_fields</text>
+          </g>
+          <g>
+            <rect x="732" y="264" width="224" height="96" rx="6" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/>
+            <text x="844" y="296" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">ParameterEvidence / Anchors</text>
+            <text x="844" y="320" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">scope + source + formula inputs</text>
+            <text x="844" y="340" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">invalid math → hard block</text>
+          </g>
+          <line x1="40" y1="396" x2="1160" y2="396" stroke="rgba(45,49,66,.12)"/>
+          <text x="40" y="412" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">NO LOOP BACK · NO LLM NUMERIC INPUT · SOURCE VALUE + EVIDENCE + VERSIONED FORMULA</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="state-heading">
+      <p class="eyebrow">GRAPHSTATE · READ / WRITE CONTRACT</p>
+      <h2 id="state-heading">三、关键 State 分组</h2>
+      <p class="section-intro">GraphState 是所有 Node 的共享、显式载体。展开面板可查看主要字段、写入 Node 与后续消费者。</p>
+      <div class="state-layout">
+        <div>
+          <details id="state-request" open>
+            <summary>1. Request / Identity State</summary>
+            <div class="detail-body" id="state-normalize">
+              <code>request</code> → <code>normalized</code> → <code>material_identity</code>
+              <ul>
+                <li>Normalize 写入数量、单位、地域、年份、边界、产品形态、组成和生产过程。</li>
+                <li>语义注册表写入 registry version、Material/Process/Form rule IDs 与 relation IDs。</li>
+                <li>未知材料的 LLM 建议只能进入 <code>registry_suggestion=DRAFT</code>，不能激活规则或产生因子。</li>
+                <li>同时计算 raw fingerprint 与 normalized business fingerprint。</li>
+              </ul>
+            </div>
+          </details>
+          <details id="state-identity">
+            <summary>2. Request Gap / More-input State</summary>
+            <div class="detail-body">
+              <code>request_gaps</code> · <code>required_fields</code> · <code>provisional_options</code> · <code>request_resolution_plan</code>
+              <ul>
+                <li>宽泛产品族不能静默选择某个子类型。</li>
+                <li>存在必填身份缺口时清空可决策候选，但保留 recall 与 qualification 证据。</li>
+                <li>最终由 Top-K 统一返回 <code>MORE_INPUT_NEEDED</code>。</li>
+              </ul>
+            </div>
+          </details>
+          <details id="state-local">
+            <summary>3. Retrieval / Qualification State</summary>
+            <div class="detail-body">
+              <code>local_records</code> · <code>link_attempts</code> · <code>recall_observations</code> · <code>qualifications</code> · <code>excluded_candidates</code>
+              <ul>
+                <li>检索顺序：Exact → registered Alias → identity-aware Related。</li>
+                <li>Direct、Proxy、Grade Anchor 共用 Qualification Policy。</li>
+                <li>排放限值、错误指标、边界或产品限定不能进入正常 A1 Candidate Pool。</li>
+                <li>Trace 同时锚定正式数据库 catalog version 与 SHA-256。</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+        <div>
+          <details id="state-plan" open>
+            <summary>4. Gap / Plan State</summary>
+            <div class="detail-body">
+              <code>resolution_candidates</code> · <code>gaps[candidate_id]</code> · <code>resolution_plans[candidate_id]</code>
+              <ul>
+                <li>Gap 类型：Unit、Reference Flow、Process、Grade/Composition、Material Absent、Boundary、Geography、Time、Form。</li>
+                <li>Planner 只建立有限步骤和依赖，不执行数值计算。</li>
+                <li>Material Class 仍未参与前置路由。</li>
+              </ul>
+            </div>
+          </details>
+          <details id="state-resolution">
+            <summary>5. Evidence / Derivation State</summary>
+            <div class="detail-body">
+              <code>reference_flow_records</code> · <code>parameter_evidence</code> · <code>transformation_steps</code> · <code>derived_candidates</code>
+              <ul>
+                <li>每个数值变换保留 formula ID、输入、输出、source IDs 和 parameter IDs。</li>
+                <li>过程计算验证共同上游非负、能源份额完整、includes_process 与参数作用域。</li>
+                <li>牌号只接受同 series 且资格完整的锚点；禁止按纯度比例缩放整个因子。</li>
+              </ul>
+            </div>
+          </details>
+          <details id="state-proxy">
+            <summary>6. Late Proxy State</summary>
+            <div class="detail-body">
+              <code>material_class</code> · <code>proxy_records</code> · <code>proxy_candidates</code>
+              <ul>
+                <li>守卫：无可解析本地候选，或候选仍有 <code>MATERIAL_ABSENT</code>。</li>
+                <li>Material Class 仅指导最后的技术代理，不抢占目标材料本身的检索。</li>
+                <li>Proxy 也必须资格评估，并只允许一次候选级有限解析。</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+        <div>
+          <details id="state-output" open>
+            <summary>7. Pool / Ranking / Output State</summary>
+            <div class="detail-body">
+              <code>candidate_pool</code> · <code>ranked_candidates</code> · <code>recommendation</code>
+              <ul>
+                <li>按 Candidate ID 合并场景，不按 source ID 粗暴去重。</li>
+                <li>排序键：Resolution Type → Strength → Score → Evidence Coverage → Assumptions → Stable Lineage。</li>
+                <li>Result Tier：Primary、Usable with Assumptions、Reference Only。</li>
+              </ul>
+            </div>
+          </details>
+          <details>
+            <summary>8. Trace / Diagnostics State</summary>
+            <div class="detail-body">
+              <code>events</code> · <code>trace</code> · <code>assumptions</code> · <code>warnings</code> · <code>errors</code>
+              <ul>
+                <li>每个 Node 通过 <code>state.event()</code> 追加 AuditEvent 和 TraceEntry。</li>
+                <li>Trace 可更新，不是不可变快照；锁定的候选结果保持不可变。</li>
+                <li>可解释数据库更新前后的召回、排除和排名变化。</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="matrix-heading">
+      <p class="eyebrow">NODE CONTRACT MATRIX</p>
+      <h2 id="matrix-heading">四、Node 与 State 读写矩阵</h2>
+      <table class="state-table">
+        <thead><tr><th>NODE GROUP</th><th>主要读取</th><th>主要写入</th><th>关键守卫 / 不变量</th></tr></thead>
+        <tbody>
+          <tr><td>Validate / Normalize</td><td><code>request</code></td><td><code>normalized</code>, identity, gaps, fingerprints</td><td>ACTIVE registry rules only；LLM suggestion stays DRAFT</td></tr>
+          <tr><td>Local Retrieval</td><td><code>normalized</code></td><td><code>local_records</code>, anchor, link attempts</td><td>Exact → Alias → Related；正式库只读</td></tr>
+          <tr><td>Local Evaluate</td><td>records, identity</td><td>qualifications, exclusions, candidates</td><td>FactorKind / indicator / boundary / unit / provenance</td></tr>
+          <tr><td>Gap / Planner</td><td>candidate + target</td><td>gaps, plans</td><td>差异先成为 Gap；计划有限且可审计</td></tr>
+          <tr><td>Technical Routers</td><td>plan + evidence</td><td>derived candidates, steps, assumptions</td><td>每候选每 Router 至多一次；无证据不生成数值</td></tr>
+          <tr><td>Material / Proxy</td><td>late insufficiency guard</td><td>material_class, proxy candidates</td><td>目标材料优先；Proxy 是最后路径</td></tr>
+          <tr><td>Re-Evaluate / Rank</td><td>all resolved candidates</td><td>pool, ranking, tiers</td><td>确定性排序；低质量最多 Reference Only</td></tr>
+          <tr><td>Top-K</td><td>ranked + required_fields</td><td>recommendation, terminal status</td><td>显式终止；不无限重试</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" aria-labelledby="governance-heading">
+      <p class="eyebrow">POST-GRAPH GOVERNANCE</p>
+      <h2 id="governance-heading">五、人工审批与锁定支线</h2>
+      <div class="governance">
+        <div class="card accent-card">
+          <h3>Recommendation Ready → Human Approval → Lock</h3>
+          <ul>
+            <li><code>PRIMARY_RECOMMENDATION</code> 可走标准审批。</li>
+            <li><code>USABLE_WITH_ASSUMPTIONS</code> 必须显式接受假设。</li>
+            <li><code>REFERENCE_ONLY</code> 必须使用带理由的 Reference Override。</li>
+            <li>锁定后 Factor Resolution 不可变；重复锁定同一 Candidate 幂等，改锁其他 Candidate 拒绝。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>为什么不画成 Graph Node</h3>
+          <p>审批、拒绝和锁定由 <code>A1FactorResolutionEngine</code> Facade 与 <code>ResolutionStorePort</code> 执行。它们消费 Graph 的 Recommendation，但不参与因子检索和候选解析，因此保持为清晰的后处理治理边界。</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>IMPLEMENTATION GROUNDING · engine.py / graph.py / nodes.py / models.py · package 0.5.0 · diagram generated 2026-08-20</footer>
+  </main>
+
+  <script data-diagram-controls>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const staticOverride = params.get('motion') === 'static' || document.documentElement.dataset.motion === 'static';
+      const requestedStep = params.get('step');
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+      document.fonts.ready.then(() => { document.documentElement.dataset.fontsReady = 'true'; });
+
+      document.querySelectorAll('[data-motion-root]').forEach((root) => {
+        const count = Number(root.dataset.stepCount);
+        const hold = parseFloat(getComputedStyle(root).getPropertyValue('--motion-hold')) || 720;
+        const parsedStep = requestedStep !== null && /^\d+$/.test(requestedStep) ? Number(requestedStep) : null;
+        const exactStep = params.get('motion') === 'step' && Number.isSafeInteger(parsedStep) && parsedStep >= 0 && parsedStep <= count ? parsedStep : null;
+        const items = [...root.querySelectorAll('[data-motion-item]')];
+        const labels = Array.from({ length: count + 1 }, (_, index) => index === 0
+          ? 'Ready'
+          : items.filter((item) => !item.hasAttribute('data-motion-decorative') && Number(item.dataset.step) === index)
+              .map((item) => item.getAttribute('aria-label')).join('; '));
+        const controls = root.querySelector('[data-motion-controls]');
+        const status = root.querySelector('[data-motion-status]');
+        const visibleStep = root.querySelector('[data-motion-step-label]');
+        let step = count;
+        let timer = 0;
+        let playing = false;
+        let stepBeforeReduce = 0;
+        let resumeAfterReduce = root.dataset.motionMode === 'reveal';
+
+        const buttons = (action) => controls.querySelector(`[data-motion-action="${action}"]`);
+        const clearClock = () => { window.clearTimeout(timer); timer = 0; };
+        const announce = () => { status.textContent = `Step ${step} of ${count}: ${labels[step] || 'Complete'}`; };
+        const setControlsAvailable = (available) => {
+          controls.hidden = !available;
+          controls.setAttribute('aria-hidden', String(!available));
+          controls.dataset.playbackDisabled = String(!available);
+          controls.querySelectorAll('button').forEach((control) => { control.disabled = !available; });
+        };
+
+        function render(next, userInitiated = false) {
+          step = Math.max(0, Math.min(count, next));
+          root.dataset.stepCurrent = String(step);
+          root.dataset.frame = step === count ? 'end' : step === 0 ? 'start' : 'step';
+          items.forEach((item) => {
+            const itemStep = Number(item.dataset.step);
+            item.classList.toggle('is-visible', itemStep <= step);
+            item.classList.toggle('is-current', itemStep === step);
+          });
+          if (visibleStep) visibleStep.textContent = String(step);
+          const unavailable = controls.dataset.playbackDisabled === 'true';
+          buttons('prev').disabled = unavailable || step === 0;
+          buttons('next').disabled = unavailable || step === count;
+          if (userInitiated) announce();
+        }
+
+        function pause(userInitiated = false) {
+          clearClock();
+          playing = false;
+          root.classList.remove('is-playing');
+          buttons('play').setAttribute('aria-pressed', 'false');
+          buttons('pause').setAttribute('aria-pressed', 'true');
+          if (userInitiated) status.textContent = `Paused at step ${step} of ${count}`;
+        }
+
+        function finish() {
+          pause(false);
+          root.dataset.frame = 'end';
+          status.textContent = `Complete · step ${count} of ${count}`;
+        }
+
+        function tick() {
+          if (!playing) return;
+          if (step >= count) { finish(); return; }
+          render(step + 1, false);
+          if (step >= count) { finish(); return; }
+          timer = window.setTimeout(tick, hold);
+        }
+
+        function play(fromStart = false, userInitiated = false) {
+          clearClock();
+          if (fromStart || step >= count) render(0, userInitiated);
+          playing = true;
+          root.classList.add('is-playing');
+          buttons('play').setAttribute('aria-pressed', 'true');
+          buttons('pause').setAttribute('aria-pressed', 'false');
+          timer = window.setTimeout(tick, hold);
+        }
+
+        controls.addEventListener('click', (event) => {
+          const button = event.target.closest('[data-motion-action]');
+          if (!button) return;
+          const action = button.dataset.motionAction;
+          if (action === 'play') play(false, true);
+          if (action === 'pause') pause(true);
+          if (action === 'replay') play(true, true);
+          if (action === 'prev') { pause(false); render(step - 1, true); }
+          if (action === 'next') { pause(false); render(step + 1, true); }
+        });
+
+        root.addEventListener('keydown', (event) => {
+          if (event.target.matches('input, textarea, select, a[href]')) return;
+          const keys = { ArrowLeft: step - 1, ArrowRight: step + 1, Home: 0, End: count };
+          if (event.code === 'Space' && !event.target.closest('button')) {
+            event.preventDefault();
+            playing ? pause(true) : play(false, true);
+            return;
+          }
+          if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'r') {
+            event.preventDefault();
+            play(true, true);
+            return;
+          }
+          if (!(event.key in keys)) return;
+          event.preventDefault();
+          pause(false);
+          render(keys[event.key], true);
+        });
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden' && playing) pause(false);
+        });
+        reduce.addEventListener('change', (event) => {
+          if (event.matches && root.dataset.motionState !== 'reduced') {
+            stepBeforeReduce = step;
+            resumeAfterReduce = playing;
+          }
+          pause(false);
+          if (event.matches) {
+            setControlsAvailable(false);
+            render(count, false);
+            root.dataset.frame = 'static';
+            root.dataset.motionState = 'reduced';
+            status.textContent = 'Reduced motion · complete static frame · playback controls unavailable';
+          } else if (staticOverride || root.dataset.motionMode === 'none') {
+            setControlsAvailable(false);
+            render(count, false);
+            root.dataset.frame = 'static';
+            root.dataset.motionState = 'static';
+            status.textContent = 'Static frame · complete diagram · playback controls unavailable';
+          } else {
+            delete root.dataset.motionState;
+            if (exactStep !== null) {
+              setControlsAvailable(false);
+              render(exactStep, false);
+              root.dataset.frame = 'step';
+              root.dataset.motionState = 'test';
+              status.textContent = `Test frame · step ${step} of ${count} · playback controls unavailable`;
+            } else {
+              setControlsAvailable(true);
+              render(stepBeforeReduce, false);
+              status.textContent = `Ready · step ${step} of ${count}`;
+              if (resumeAfterReduce && root.dataset.motionMode === 'reveal') {
+                play(false, false);
+              }
+            }
+            resumeAfterReduce = false;
+          }
+        });
+
+        if (staticOverride) {
+          document.documentElement.dataset.motion = 'static';
+          pause(false);
+          setControlsAvailable(false);
+          render(count, false);
+          root.dataset.frame = 'static';
+          root.dataset.motionState = 'static';
+          status.textContent = 'Static frame · complete diagram · playback controls unavailable';
+        } else if (reduce.matches || root.dataset.motionMode === 'none') {
+          pause(false);
+          setControlsAvailable(false);
+          render(count, false);
+          root.dataset.frame = 'static';
+          root.dataset.motionState = reduce.matches ? 'reduced' : 'static';
+          status.textContent = reduce.matches
+            ? 'Reduced motion · complete static frame · playback controls unavailable'
+            : 'Static frame · complete diagram · playback controls unavailable';
+        } else if (exactStep !== null) {
+          document.documentElement.dataset.motion = 'step';
+          pause(false);
+          setControlsAvailable(false);
+          render(exactStep, false);
+          root.dataset.frame = 'step';
+          root.dataset.motionState = 'test';
+          status.textContent = `Test frame · step ${step} of ${count} · playback controls unavailable`;
+        } else if (root.dataset.motionMode === 'reveal') {
+          setControlsAvailable(true);
+          render(0, false);
+          play(false, false);
+        } else {
+          pause(false);
+          setControlsAvailable(true);
+          render(0, false);
+          status.textContent = `Ready · step 0 of ${count}`;
+        }
+        root.classList.add('motion-ready');
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -32,6 +32,10 @@ data/
 datasets/
 exports/
 outputs/
+tmp/
+
+# Locally supplied/licensed standards used only as import evidence
+docs/*--平台.pdf
 
 # Internal implementation-session notes
 task_plan.md

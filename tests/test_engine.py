@@ -9,9 +9,12 @@ from a1_factor_engine import (
     ApprovalMode,
     CandidateOrigin,
     DatabaseVersionAnchor,
+    EnergyConversionRecord,
+    EnergyQuotaRecord,
     FactorKind,
     FactorSourceType,
     GapType,
+    IdentityOutcome,
     LinkOutcome,
     LinkStrategy,
     MaterialCategory,
@@ -25,8 +28,12 @@ from a1_factor_engine import (
     ResolutionStatus,
     ResolutionType,
     ResultTier,
+    ScopedProcessParameterRecord,
+    SemanticRole,
     SourceRecord,
+    SqliteEnergyProcessParameterRepository,
     VersionedMaterialSemanticRegistry,
+    create_energy_database,
 )
 from a1_factor_engine.adapters import (
     HttpCatalogFactorRepository,
@@ -46,13 +53,103 @@ def test_versioned_registry_resolves_mullite_spinel_process_and_relations():
     assert mullite.identity.material_family == "mullite_products"
     assert mullite.identity.category == MaterialCategory.MANUFACTURED_MINERAL
     assert mullite.identity.manufacturing_route == ("electrofused",)
-    assert mullite.material_rule_ids == ("material.mullite/v1",)
-    assert mullite.process_rule_ids == ("process.electrofused/v1",)
-    assert mullite.relation_ids == ("relation.mullite-is-aluminosilicate/v1",)
+    assert mullite.material_rule_ids == ("material.mullite/v2",)
+    assert mullite.process_rule_ids == ("process.electrofused/v2",)
+    assert mullite.relation_ids == ("relation.mullite-is-aluminosilicate/v2",)
 
     spinel = DEFAULT_MATERIAL_REGISTRY.resolve("烧结尖晶石")
     assert spinel.identity.head_material == "spinel"
     assert spinel.identity.manufacturing_route == ("sintered",)
+
+
+def test_entity_first_parser_assigns_roles_without_treating_type_or_form_as_entity():
+    aluminium = DEFAULT_MATERIAL_REGISTRY.resolve("金属铝")
+    assert aluminium.identity.base_entity_id == "mat.element.aluminium"
+    assert aluminium.identity_resolution.outcome == IdentityOutcome.RESOLVED
+    roles = {(span.text, span.role) for span in aluminium.mention.spans}
+    assert ("金属", SemanticRole.ENTITY_TYPE) in roles
+    assert ("铝", SemanticRole.BASE_ENTITY) in roles
+
+    steel_fiber = DEFAULT_MATERIAL_REGISTRY.resolve("钢纤维")
+    roles = {(span.text, span.role) for span in steel_fiber.mention.spans}
+    assert ("钢", SemanticRole.BASE_ENTITY) in roles
+    assert ("钢纤维", SemanticRole.PRODUCT_FORM) in roles
+    assert steel_fiber.identity.base_entity_id == "mat.alloy.steel"
+
+    magnesia = DEFAULT_MATERIAL_REGISTRY.resolve("95%高纯镁砂")
+    assert magnesia.mention.purity == pytest.approx(95.0)
+    assert magnesia.mention.grade_modifiers == ("高纯",)
+    assert {span.role for span in magnesia.mention.spans} >= {
+        SemanticRole.PURITY, SemanticRole.GRADE_MODIFIER, SemanticRole.BASE_ENTITY,
+    }
+
+
+def test_entity_first_parser_preserves_composite_constituents_and_context_exclusions():
+    composite = DEFAULT_MATERIAL_REGISTRY.resolve("莫来石-碳化硅砖")
+    assert composite.identity.entity_type.value == "COMPOSITE"
+    assert set(composite.identity.constituent_entity_ids) == {
+        "mat.mineral.mullite", "mat.compound.silicon_carbide",
+    }
+    assert composite.identity.product_form == "brick"
+
+    zircon = DEFAULT_MATERIAL_REGISTRY.resolve("锆莫来石")
+    assert set(zircon.identity.constituent_entity_ids) == {
+        "mat.compound.zirconia", "mat.mineral.mullite",
+    }
+
+    ladle_component = DEFAULT_MATERIAL_REGISTRY.resolve("钢包用透气元件")
+    assert ladle_component.identity_resolution.outcome == IdentityOutcome.UNKNOWN
+    assert ladle_component.identity.base_entity_id is None
+
+
+@pytest.mark.asyncio
+async def test_semantic_index_does_not_recall_silicon_or_alumina_for_metallic_aluminium():
+    silicon = record(
+        "silicon", "金属硅粉", 13.1, product_form="powder",
+        declared_product="金属硅粉", boundary_modules=("A1", "A2", "A3"),
+    )
+    alumina = record(
+        "alumina", "氧化铝", 2.8,
+        declared_product="氧化铝", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([silicon, alumina])
+    ).resolve(ResolutionRequest(material_name="金属铝", quantity=1))
+
+    assert result.status == ResolutionStatus.SUPPLIER_DATA_REQUIRED
+    assert result.candidates == ()
+    explanation = result.trace.explain()
+    assert explanation["material_identity"]["base_entity_id"] == "mat.element.aluminium"
+    assert explanation["local_retrieval"]["record_count"] == 0
+    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.0.0"
+
+
+@pytest.mark.asyncio
+async def test_generic_aluminium_requires_route_choice_when_primary_and_secondary_both_exist():
+    primary = record(
+        "primary-al", "原铝", 10.0,
+        declared_product="原铝", boundary_modules=("A1", "A2", "A3"),
+    )
+    secondary = record(
+        "secondary-al", "再生铝", 1.0,
+        declared_product="再生铝", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([primary, secondary])
+    ).resolve(ResolutionRequest(material_name="金属铝", quantity=1))
+
+    assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.trace.explain()["required_choice"]["field"] == "route"
+    assert set(result.trace.explain()["required_choice"]["options"]) == {
+        "mat.product.primary_aluminium",
+        "mat.product.secondary_aluminium",
+        "unknown",
+    }
+    admissions = result.trace.explain()["candidate_admissions"]
+    assert {item["source_id"] for item in admissions} == {"primary-al", "secondary-al"}
+    assert all(item["retrieval_strategy"] == LinkStrategy.RELATED.value for item in admissions)
+    assert all(item["admitted"] and not item["observation_only"] for item in admissions)
+    assert all(item["identity_proof_ids"] for item in admissions)
 
 
 def test_draft_registry_rule_cannot_affect_runtime_resolution():
@@ -397,7 +494,7 @@ async def test_exact_link_stops_before_registered_synonym_link():
     assert attempts[0]["outcome"] == LinkOutcome.MATCHED.value
     assert attempts[1]["strategy"] == LinkStrategy.SYNONYM.value
     assert attempts[1]["outcome"] == LinkOutcome.MATCHED.value
-    assert "pending exact-record qualification" in attempts[1]["reason"]
+    assert "alias resolved" in attempts[1]["reason"]
 
 
 @pytest.mark.asyncio
@@ -557,6 +654,160 @@ async def test_process_router_rebuilds_electrofused_mullite_from_sintered_factor
         if step["formula_id"] == "process.replace_energy_components/v1"
     ]
     assert process_steps[0]["output_value"] == pytest.approx(2.701546778)
+
+
+def build_mullite_energy_database(path, *, include_scoped_parameters: bool = True):
+    standard_locator = "standard:T/CHNRISC-0008-2025#table-1"
+    standard_sha = "cde88c2a57249f8a8753955dcdfa8ba14b966266b6df56adc1ec06374b96323a"
+    quotas = [
+        EnergyQuotaRecord(
+            f"t-chnrisc-0008-2025:t1:sintered-mullite:l{level}",
+            "烧结莫来石", "mullite", "sintered", level, value,
+            "T/CHNRISC 0008-2025", "1", 6, 2,
+            product_group="莫来石", source_locator=standard_locator, source_sha256=standard_sha,
+        )
+        for level, value in ((1, 365), (2, 400), (3, 415))
+    ] + [
+        EnergyQuotaRecord(
+            f"t-chnrisc-0008-2025:t1:electrofused-mullite:l{level}",
+            "电熔莫来石", "mullite", "electrofused", level, value,
+            "T/CHNRISC 0008-2025", "1", 6, 2,
+            product_group="莫来石", source_locator=standard_locator, source_sha256=standard_sha,
+        )
+        for level, value in ((1, 165), (2, 174), (3, 185))
+    ]
+    conversion = EnergyConversionRecord(
+        "t-chnrisc-0008-2025:electricity-equivalent",
+        "electricity_kgce_per_kwh", "electricity", 0.1229, 0.1229, "kgce/kWh",
+        "equivalent_value", ParameterSourceType.FORMAL_STANDARD,
+        "河南省耐火材料行业协会", "standard:T/CHNRISC-0008-2025#6.2.4",
+        citation="T/CHNRISC 0008-2025 6.2.4", standard_code="T/CHNRISC 0008-2025",
+        physical_page=11,
+    )
+    values = (
+        ("ref-elec-share", "reference_electricity_share", 0.76, "fraction"),
+        ("ref-gas-share", "reference_natural_gas_share", 0.24, "fraction"),
+        ("target-elec-share", "target_electricity_share", 1.0, "fraction"),
+        ("target-gas-share", "target_natural_gas_share", 0.0, "fraction"),
+        ("gas-coef", "natural_gas_kgce_per_nm3", 1.2143, "kgce/Nm3"),
+        ("elec-ef", "electricity_ef_kgco2e_per_kwh", 0.5777, "kgCO2e/kWh"),
+        ("gas-ef", "natural_gas_ef_kgco2e_per_nm3", 2.792671012566, "kgCO2e/Nm3"),
+    )
+    process = [
+        ScopedProcessParameterRecord(
+            parameter_id, name, value, unit,
+            ParameterSourceType.USER_CONFIRMED_ENGINEERING_DATA,
+            "electrofused mullite engineering memo", "memo:electrofused-mullite-2026-08-12",
+            "mullite", "sintered", "mullite", "electrofused",
+            reference_source_id="formal-sintered-mullite",
+            quality_note="independent engineering evidence; not supplied by the energy-quota standard",
+            metadata={"reference_includes_process": "true"},
+        )
+        for parameter_id, name, value, unit in values
+    ] if include_scoped_parameters else []
+    return create_energy_database(
+        path,
+        database_name="refractory-energy-parameters.db",
+        dataset_version="t-chnrisc-0008-2025/v1",
+        source_standard_code="T/CHNRISC 0008-2025",
+        source_sha256=standard_sha,
+        source_locator=standard_locator,
+        quotas=quotas,
+        conversions=(conversion,),
+        process_parameters=process,
+    )
+
+
+@pytest.mark.asyncio
+async def test_sqlite_energy_database_uses_level_one_and_rebuilds_mullite(tmp_path):
+    database = tmp_path / "energy.db"
+    anchor = build_mullite_energy_database(database)
+    sintered = record(
+        "formal-sintered-mullite", "烧结莫来石", 3.431355,
+        product_form="grain", composition="mullite", production_process="sintered",
+        boundary="cradle-to-gate", declared_product="烧结莫来石",
+        boundary_modules=("A1", "A2", "A3"), metadata={},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sintered]),
+        process_parameters=SqliteEnergyProcessParameterRepository(
+            database, expected_database_sha256=anchor.database_sha256
+        ),
+    ).resolve(request(
+        material_name="电熔莫来石", product_form="grain", composition="mullite",
+        production_process="electrofused",
+    ))
+
+    candidate = result.candidates[0]
+    assert candidate.resolution_type == ResolutionType.PROCESS_ADJUSTED
+    assert candidate.factor_value == pytest.approx(2.701546778, abs=1e-9)
+    assert candidate.result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS
+    process_trace = result.trace.latest("process_variant_resolution").details
+    assert process_trace["parameter_databases"][0]["database_sha256"] == anchor.database_sha256
+    assert result.trace.explain()["parameter_databases"][0]["database_sha256"] == anchor.database_sha256
+    evidence = {item["name"]: item for item in process_trace["parameter_evidence"]}
+    assert evidence["reference_total_energy_kgce_per_t"]["value"] == 365
+    assert evidence["target_total_energy_kgce_per_t"]["value"] == 165
+    assert evidence["target_total_energy_kgce_per_t"]["metadata"]["quota_level"] == "1"
+
+
+@pytest.mark.asyncio
+async def test_energy_quota_database_does_not_invent_missing_route_mix(tmp_path):
+    database = tmp_path / "quota-only.db"
+    build_mullite_energy_database(database, include_scoped_parameters=False)
+    sintered = record(
+        "formal-sintered-mullite", "烧结莫来石", 3.431355,
+        product_form="grain", composition="mullite", production_process="sintered",
+        declared_product="烧结莫来石", boundary_modules=("A1", "A2", "A3"),
+        metadata={"includes_process": "true"},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sintered]),
+        process_parameters=SqliteEnergyProcessParameterRepository(database),
+    ).resolve(request(
+        material_name="电熔莫来石", product_form="grain", composition="mullite",
+        production_process="electrofused",
+    ))
+
+    assert result.candidates[0].resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY
+    evidence_names = {
+        item["name"] for item in result.trace.latest("process_variant_resolution").details["parameter_evidence"]
+    }
+    assert evidence_names == {
+        "reference_total_energy_kgce_per_t",
+        "target_total_energy_kgce_per_t",
+        "electricity_kgce_per_kwh",
+    }
+
+
+@pytest.mark.asyncio
+async def test_energy_quota_scope_never_applies_mullite_route_to_other_material(tmp_path):
+    database = tmp_path / "scoped.db"
+    build_mullite_energy_database(database)
+    other = record(
+        "ecoinvent-sintered-mullite-proxy", "烧结莫来石（高铝耐火材料生产代理）", 0.619377914,
+        product_form="packed refractory", composition="high aluminium oxide",
+        production_process="sintered", declared_product="高铝耐火材料",
+        boundary_modules=("A1", "A2", "A3"), metadata={"includes_process": "true"},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([other]),
+        process_parameters=SqliteEnergyProcessParameterRepository(database),
+    ).resolve(request(
+        material_name="电熔莫来石", product_form="grain", composition="mullite",
+        production_process="electrofused",
+    ))
+
+    assert all(candidate.factor_value != pytest.approx(2.701546778) for candidate in result.candidates)
+    assert all(candidate.resolution_type != ResolutionType.PROCESS_ADJUSTED for candidate in result.candidates)
+    process_trace = result.trace.latest("process_variant_resolution")
+    if process_trace:
+        evidence_names = {item["name"] for item in process_trace.details["parameter_evidence"]}
+        assert evidence_names == {
+            "reference_total_energy_kgce_per_t",
+            "target_total_energy_kgce_per_t",
+            "electricity_kgce_per_kwh",
+        }
 
 
 @pytest.mark.asyncio
@@ -758,10 +1009,9 @@ async def test_t06_form_only_related_hit_is_raw_observation_only():
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([alumina_limit])
     ).resolve(ResolutionRequest(material_name="steel fiber", quantity=1, product_form="fiber"))
-    observations = result.trace.explain()["raw_related_hits"]
-    assert observations and observations[-1]["eligible_for_candidate_pool"] is False
-    assert observations[-1]["primary_exclusion"] == "material_category_mismatch"
-    assert observations[-1]["retrieval_basis"] == ("product form matched: fiber",)
+    # Entity-resolved requests do not perform form-only lexical recall.
+    assert result.trace.explain()["raw_related_hits"] == ()
+    assert result.trace.explain()["local_retrieval"]["record_count"] == 0
     assert result.candidates == ()
 
 
@@ -1351,6 +1601,43 @@ async def test_http_catalog_preserves_original_document_locator_when_supplied():
     assert source.catalog_locator.endswith("#documented-factor")
     assert source.provenance.source_document_sha256 == "e" * 64
     assert (source.page, source.table, source.row) == ("12", "A1-A3", "4")
+
+
+@pytest.mark.asyncio
+async def test_http_catalog_preserves_live_source_path_and_sha_aliases():
+    digest = "f" * 64
+    payload = {
+        "catalog_version": "v-live-aliases",
+        "database": {"name": "catalog.db", "sha256": digest},
+        "records": [{
+            "record_id": "live-source-aliases",
+            "name": "steel coil",
+            "primary_value": 1.2,
+            "primary_unit": "kgCO2e/kg",
+            "category": "lifecycle_factor",
+            "indicator": "GWP-total",
+            "boundary": "cradle-to-gate",
+            "source_path": r"D:\evidence\standard.pdf",
+            "source_sha256": "a" * 64,
+            "primary_label": "产品碳足迹因子",
+            "scope": "raw_material",
+            "source_version": "draft-v1",
+            "upstream_source_status": "AGGREGATED",
+            "includes_process": True,
+        }],
+    }
+    result = await A1FactorResolutionEngine(
+        local_retrieval=HttpCatalogFactorRepository(
+            expected_sha256=digest,
+            fetch_json=lambda _: payload,
+        )
+    ).resolve(request())
+
+    source = result.candidates[0].source
+    assert source.locator == r"D:\evidence\standard.pdf"
+    assert source.provenance.source_document_sha256 == "a" * 64
+    assert source.metadata["primary_label"] == "产品碳足迹因子"
+    assert source.metadata["includes_process"] == "True"
 
 
 @pytest.mark.asyncio

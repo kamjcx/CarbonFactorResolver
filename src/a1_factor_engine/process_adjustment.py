@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .derived_factor import derive_candidate
 from .models import (
     Candidate,
@@ -48,6 +50,30 @@ def _by_name(evidence: tuple[ParameterEvidence, ...]) -> dict[str, ParameterEvid
     return result
 
 
+def _mark_process_dimension_resolved(candidate: Candidate) -> Candidate:
+    """Re-score only the process dimension proven by a successful deterministic transformation."""
+
+    dimensions = dict(candidate.dimensions)
+    previous = dimensions.get("process", 0.0)
+    dimensions["process"] = 1.0
+    process_weight = 0.25 if candidate.origin.value == "proxy" else 0.20
+    score = round(min(1.0, candidate.score + process_weight * (1.0 - previous)), 6)
+    return replace(candidate, dimensions=dimensions, score=score)
+
+
+def _reference_includes_process(
+    candidate: Candidate, evidence: tuple[ParameterEvidence, ...]
+) -> bool:
+    declared = candidate.source.metadata.get("includes_process")
+    if declared is not None and declared.casefold() in {"true", "1", "yes"}:
+        return True
+    return any(
+        str(item.metadata.get("reference_includes_process", "")).casefold()
+        in {"true", "1", "yes"}
+        for item in evidence
+    )
+
+
 def resolve_process_variant(
     candidate: Candidate,
     evidence: tuple[ParameterEvidence, ...],
@@ -78,9 +104,10 @@ def resolve_process_variant(
             raise ValueError("reference process energy shares must sum to one")
         if abs(values["target_electricity_share"] + values["target_natural_gas_share"] - 1.0) > 1e-6:
             raise ValueError("target process energy shares must sum to one; target energy cannot silently disappear")
-        inclusion = candidate.source.metadata.get("includes_process")
-        if inclusion is None or inclusion.casefold() not in {"true", "1", "yes"}:
-            raise ValueError("reference factor must explicitly confirm that it includes the removed process")
+        if not _reference_includes_process(candidate, evidence):
+            raise ValueError(
+                "reference factor or scoped evidence must explicitly confirm that it includes the removed process"
+            )
 
         ref_electricity = (
             values["reference_total_energy_kgce_per_t"]
@@ -148,7 +175,7 @@ def resolve_process_variant(
             output_unit=candidate.factor_unit,
             assumptions=assumptions,
         )
-        return derive_candidate(
+        return _mark_process_dimension_resolved(derive_candidate(
             candidate,
             candidate_id=f"{candidate.candidate_id}:process-adjusted",
             resolution_type=ResolutionType.PROCESS_ADJUSTED,
@@ -157,7 +184,7 @@ def resolve_process_variant(
             parameter_ids=step.parameter_ids,
             reasons=("replaced evidence-backed reference process energy with target process energy",),
             assumptions=assumptions,
-        ), ProcessResolutionMode.DECOMPOSE_AND_REBUILD
+        )), ProcessResolutionMode.DECOMPOSE_AND_REBUILD
 
     delta_required = {"removed_process_factor", "added_process_factor"}
     if delta_required <= parameters.keys():
@@ -165,8 +192,7 @@ def resolve_process_variant(
             unit = parameters[name].unit.casefold().replace(" ", "")
             if unit not in {"kgco2e/kg", "tco2e/t"}:
                 raise ValueError(f"{name} unit must be kgCO2e/kg or tCO2e/t")
-        inclusion = candidate.source.metadata.get("includes_process")
-        if inclusion is None or inclusion.casefold() not in {"true", "1", "yes"}:
+        if not _reference_includes_process(candidate, evidence):
             raise ValueError("cannot subtract a process without explicit evidence that the reference factor includes it")
         removed = parameters["removed_process_factor"].value
         added = parameters["added_process_factor"].value
@@ -200,7 +226,7 @@ def resolve_process_variant(
             output_unit=candidate.factor_unit,
             assumptions=("unadjusted contributions are shared between process variants",),
         )
-        return derive_candidate(
+        return _mark_process_dimension_resolved(derive_candidate(
             candidate,
             candidate_id=f"{candidate.candidate_id}:process-delta",
             resolution_type=ResolutionType.PROCESS_ADJUSTED,
@@ -209,7 +235,7 @@ def resolve_process_variant(
             parameter_ids=used,
             reasons=("applied an evidence-backed process delta adjustment",),
             assumptions=step.assumptions,
-        ), ProcessResolutionMode.DELTA_ADJUST
+        )), ProcessResolutionMode.DELTA_ADJUST
 
     return derive_candidate(
         candidate,

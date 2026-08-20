@@ -15,6 +15,7 @@ from .models import (
     ReferenceFlowRecord,
     ResolutionRequest,
     ResolutionTrace,
+    RetrievalIntent,
     RetrievalResult,
     SemanticAssessment,
     SourceRecord,
@@ -36,7 +37,7 @@ class MaterialUnderstandingPort(Protocol):
 
 
 class FactorRepositoryPort(Protocol):
-    async def search(self, activity: NormalizedActivity) -> RetrievalResult: ...
+    async def search(self, intent: RetrievalIntent) -> RetrievalResult: ...
 
 
 class ProxyRepositoryPort(Protocol):

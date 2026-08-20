@@ -24,6 +24,7 @@ from .material_registry import (
 )
 from .models import (
     Candidate,
+    CandidateAdmission,
     CandidateExclusion,
     CandidateOrigin,
     CandidateQualification,
@@ -34,6 +35,7 @@ from .models import (
     MaterialCategory,
     MaterialClass,
     NormalizedActivity,
+    ParameterEvidence,
     ProvisionalOption,
     QualificationPolicy,
     RecallObservation,
@@ -71,6 +73,23 @@ from .units import convert_factor, convert_mass, is_mass_unit
 
 def _text(value: str | None) -> str:
     return normalize_text(value).value
+
+
+def _parameter_database_anchors(evidence: Sequence[ParameterEvidence]) -> tuple[dict[str, str], ...]:
+    anchors: dict[str, dict[str, str]] = {}
+    for item in evidence:
+        metadata = item.metadata
+        digest = metadata.get("evidence_database_sha256")
+        if not digest:
+            continue
+        anchors.setdefault(digest, {
+            "database_name": metadata.get("evidence_database_name", "unknown"),
+            "dataset_version": metadata.get("evidence_database_version", "unknown"),
+            "database_sha256": digest,
+            "locator": metadata.get("evidence_database_locator", "unknown"),
+            "schema_version": metadata.get("evidence_database_schema_version", "unknown"),
+        })
+    return tuple(anchors[key] for key in sorted(anchors))
 
 
 def _canonical_product_form(value: str | None) -> str | None:
@@ -293,6 +312,7 @@ async def evaluate_records(
     understanding: MaterialUnderstandingPort,
     material_class: MaterialClass | None = None,
     qualification_sink: list[CandidateQualification] | None = None,
+    admission_sink: list[CandidateAdmission] | None = None,
     observation_sink: list[RecallObservation] | None = None,
     registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY,
 ) -> tuple[tuple[Candidate, ...], tuple[CandidateExclusion, ...]]:
@@ -300,11 +320,35 @@ async def evaluate_records(
     exclusions: list[CandidateExclusion] = []
     for raw_source in records:
         source = registry.enrich_source(raw_source)
-        policy = QualificationPolicy.PROXY if origin == CandidateOrigin.PROXY else QualificationPolicy.DIRECT
+        strategy = source.metadata.get("match_strategy", LinkStrategy.EXACT.value)
+        policy = (
+            QualificationPolicy.PROXY
+            if origin == CandidateOrigin.PROXY
+            else QualificationPolicy.RELATED
+            if strategy == LinkStrategy.RELATED.value
+            else QualificationPolicy.DIRECT
+        )
         qualification = qualify_record(activity, source, policy, registry=registry)
         if qualification_sink is not None:
             qualification_sink.append(qualification)
-        strategy = source.metadata.get("match_strategy", LinkStrategy.EXACT.value)
+        if admission_sink is not None:
+            admission_exclusions = tuple(filter(None, (
+                qualification.primary_exclusion, *qualification.additional_exclusions,
+            )))
+            admission_sink.append(CandidateAdmission(
+                source_id=source.source_id,
+                retrieval_strategy=LinkStrategy(strategy),
+                admitted=qualification.eligible,
+                observation_only=not qualification.eligible,
+                identity_proof_ids=(
+                    activity.identity_resolution.evidence_ids
+                    if activity.identity_resolution else ()
+                ),
+                source_identity_rule_ids=tuple(filter(None,
+                    source.metadata.get("material_rule_ids", "").split(",")
+                )),
+                hard_exclusions=admission_exclusions,
+            ))
         if not qualification.eligible:
             if strategy == LinkStrategy.RELATED.value and observation_sink is not None:
                 target_identity = activity.material_identity or _material_identity(
@@ -450,6 +494,9 @@ class NormalizeNode(Node[GraphState]):
             form_rule_ids=registry_resolution.form_rule_ids,
             relation_ids=registry_resolution.relation_ids,
             registry_suggestion=registry_suggestion,
+            material_mention=registry_resolution.mention,
+            identity_resolution=registry_resolution.identity_resolution,
+            retrieval_intent=registry_resolution.retrieval_intent,
         )
         state.trace.normalized_business_fingerprint = normalized_business_fingerprint(state.normalized)
         state.request_gaps = request_gaps
@@ -474,8 +521,20 @@ class NormalizeNode(Node[GraphState]):
             "target_factor_unit": state.normalized.target_factor_unit,
             "normalization_rule_ids": state.normalized.normalization_rule_ids,
             "material_identity": identity.to_dict(),
+            "material_mention": (
+                registry_resolution.mention.to_dict() if registry_resolution.mention else None
+            ),
+            "identity_resolution": (
+                registry_resolution.identity_resolution.to_dict()
+                if registry_resolution.identity_resolution else None
+            ),
+            "retrieval_intent": (
+                registry_resolution.retrieval_intent.to_dict()
+                if registry_resolution.retrieval_intent else None
+            ),
             "semantic_registry": {
                 "version": registry_resolution.registry_version,
+                "sha256": registry_resolution.registry_sha256,
                 "material_rule_ids": registry_resolution.material_rule_ids,
                 "process_rule_ids": registry_resolution.process_rule_ids,
                 "form_rule_ids": registry_resolution.form_rule_ids,
@@ -505,16 +564,21 @@ class LocalRetrievalNode(Node[GraphState]):
         state.stage = Stage.LOCAL_RETRIEVAL
         if state.normalized is None:
             return state
-        result = await self.repository.search(state.normalized)
+        if state.normalized.retrieval_intent is None:
+            raise ValueError("normalized activity lacks RetrievalIntent")
+        result = await self.repository.search(state.normalized.retrieval_intent)
         state.local_records = result.records
         state.link_attempts.extend(result.attempts)
         state.trace.set_database_anchor(result.database_anchor)
-        # Qualification is the authoritative observation writer.  Adapter
-        # observations may be coarse (the repository cannot know request
-        # identity); keep raw hits and attach the final eligibility below.
-        state.recall_observations = ()
+        state.semantic_index_anchor = result.semantic_index_anchor
+        # Semantic-index observations already carry resolved entity evidence;
+        # qualification may append exclusions without changing their source.
+        state.recall_observations = result.observations
         state.event(Stage.LOCAL_RETRIEVAL, f"retrieved {len(state.local_records)} local source records", {
             "database_anchor": result.database_anchor.to_dict(),
+            "semantic_index_anchor": (
+                result.semantic_index_anchor.to_dict() if result.semantic_index_anchor else None
+            ),
             "record_count": len(state.local_records),
             "records": tuple({
                 "source_id": record.source_id,
@@ -545,6 +609,7 @@ class LocalEvaluateNode(Node[GraphState]):
         state.stage = Stage.LOCAL_EVALUATE
         if state.normalized is not None:
             qualifications: list[CandidateQualification] = []
+            admissions: list[CandidateAdmission] = []
             observations: list[RecallObservation] = list(state.recall_observations)
             exclusions: tuple[CandidateExclusion, ...] = ()
             selected: tuple[Candidate, ...] = ()
@@ -561,6 +626,7 @@ class LocalEvaluateNode(Node[GraphState]):
                     CandidateOrigin.LOCAL,
                     self.understanding,
                     qualification_sink=qualifications,
+                    admission_sink=admissions,
                     observation_sink=observations,
                     registry=self.registry,
                 )
@@ -570,13 +636,45 @@ class LocalEvaluateNode(Node[GraphState]):
                     break
             state.local_candidates = selected
             state.qualifications = tuple(qualifications)
+            state.candidate_admissions = tuple(admissions)
             state.recall_observations = tuple(observations)
             state.excluded_candidates.extend(exclusions)
             state.resolution_candidates = state.local_candidates
+            identity_resolution = state.normalized.identity_resolution
+            if (
+                identity_resolution
+                and identity_resolution.sufficiently_resolved
+                and identity_resolution.selected_product_entity_id is None
+            ):
+                variants = tuple(dict.fromkeys(
+                    candidate.source.metadata.get("product_entity_id", "")
+                    for candidate in selected
+                    if candidate.source.metadata.get("product_entity_id", "")
+                ))
+                if len(variants) > 1:
+                    route_gap = RequestGap(
+                        gap_id=f"{state.request.request_id}:route",
+                        gap_type=RequestGapType.INPUT_SPECIFICATION,
+                        field="route",
+                        reason=(
+                            "the generic material identity has multiple product-route variants; "
+                            "select a route before choosing a factor"
+                        ),
+                        required=True,
+                        options=variants + ("unknown",),
+                    )
+                    state.request_gaps = tuple((*state.request_gaps, route_gap))
+                    state.request_resolution_plan = RequestResolutionPlan(
+                        request_id=state.request.request_id,
+                        gaps=state.request_gaps,
+                        next_question=state.request_gaps[0],
+                        provisional_options=state.provisional_options,
+                    )
         state.event(Stage.LOCAL_EVALUATE, f"evaluated {len(state.local_candidates)} local candidates", {
             "candidate_ids": tuple(candidate.candidate_id for candidate in state.local_candidates),
             "excluded": tuple({"source_id": item.source_id, "reasons": item.reasons} for item in state.excluded_candidates),
             "record_qualifications": tuple(item.to_dict() for item in state.qualifications),
+            "candidate_admissions": tuple(item.to_dict() for item in state.candidate_admissions),
             "raw_related_hits": tuple(item.to_dict() for item in state.recall_observations),
         })
         return state
@@ -709,6 +807,7 @@ class ProcessVariantResolutionNode(Node[GraphState]):
             return state
         output: list[Candidate] = []
         modes: list[dict[str, str]] = []
+        current_evidence: list[ParameterEvidence] = []
         for candidate in state.resolution_candidates:
             needs = any(gap.gap_type == GapType.PROCESS_VARIANT for gap in candidate.gaps)
             if not needs:
@@ -716,6 +815,7 @@ class ProcessVariantResolutionNode(Node[GraphState]):
                 continue
             evidence = tuple(await self.repository.search(state.normalized, candidate.source))
             state.parameter_evidence.extend(evidence)
+            current_evidence.extend(evidence)
             try:
                 resolved, mode = resolve_process_variant(candidate, evidence)
             except ValueError as exc:
@@ -731,7 +831,9 @@ class ProcessVariantResolutionNode(Node[GraphState]):
         state.resolution_candidates = tuple(output)
         state.event(Stage.PROCESS_VARIANT_RESOLUTION, "process variants resolved with sourced parameters", {
             "modes": tuple(modes),
-            "parameter_ids": tuple(item.parameter_id for item in state.parameter_evidence),
+            "parameter_ids": tuple(item.parameter_id for item in current_evidence),
+            "parameter_evidence": tuple(item.to_dict() for item in current_evidence),
+            "parameter_databases": _parameter_database_anchors(current_evidence),
             "warnings": tuple(state.warnings),
         })
         return state
@@ -859,13 +961,16 @@ class ProxyEvaluateNode(Node[GraphState]):
         state.stage = Stage.PROXY_EVALUATE
         if state.normalized is not None:
             qualifications: list[CandidateQualification] = []
+            admissions: list[CandidateAdmission] = []
             observations: list[RecallObservation] = list(state.recall_observations)
             state.proxy_candidates, exclusions = await evaluate_records(
                 state.normalized, state.proxy_records, CandidateOrigin.PROXY, self.understanding, state.material_class,
                 qualification_sink=qualifications, observation_sink=observations,
+                admission_sink=admissions,
                 registry=self.registry,
             )
             state.qualifications = tuple((*state.qualifications, *qualifications))
+            state.candidate_admissions = tuple((*state.candidate_admissions, *admissions))
             state.recall_observations = tuple(observations)
             state.proxy_candidates = tuple(
                 finalize_candidate(replace(
@@ -1066,6 +1171,7 @@ class TopKNode(Node[GraphState]):
             "request_resolution_plan": state.request_resolution_plan.to_dict() if state.request_resolution_plan else None,
             "raw_related_hits": tuple(observation.to_dict() for observation in state.recall_observations),
             "record_qualifications": tuple(item.to_dict() for item in state.qualifications),
+            "candidate_admissions": tuple(item.to_dict() for item in state.candidate_admissions),
             "transformation_steps": tuple(step.to_dict() for step in state.transformation_steps),
             "link_attempts": tuple(attempt.to_dict() for attempt in state.link_attempts),
             "excluded": tuple({
