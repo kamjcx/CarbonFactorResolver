@@ -114,13 +114,28 @@ For example, `电熔莫来石` resolves to base entity `mat.mineral.mullite` plu
 
 The complete Chinese implementation contract is in `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`.
 
+## Entity-scoped numeric purity grades
+
+Version 0.8 adds a deterministic numeric-token layer on top of entity-first resolution:
+
+- After the material entity is resolved, standalone `70`, `80` and `90` may bind to a reviewed entity-scoped `PurityGradeSchema`. For example, magnesia uses MgO as its organization-default basis and spinel uses Al2O3.
+- A bare grade is an `IMPLICIT_GRADE_CLASS`; it is not silently promoted to an exact or minimum chemical specification. Explicit inputs such as `MgO ≥ 95%` and `MgO 90` retain their operator and stronger `EXPLICIT_TEXT` evidence.
+- The deterministic priority is explicit chemistry → reviewed standard/supplier schema → organization business schema → unresolved input. Only genuinely ambiguous cases, such as a number attached to a multi-constituent composite, ask the user to choose the grade basis.
+- Numeric context is classified before grade binding. FEPA grit (`F80`, `P80`), product models (`T60`, `CT800`), alloy grades (`AISI 446`, `6061`), particle size, year, standard number and packaging cannot become purity grades.
+- Requests and factor records use the same parser and registry. A source with a missing, different or differently based grade produces a structured Grade Gap; it is never treated as an exact match and no unsupported factor interpolation is performed.
+- Grade schema/version, basis component, interpretation, evidence scope, parser rule IDs and rejected numeric roles remain visible in Trace. Grade identity is also part of the normalized business fingerprint.
+
+The Chinese contract and adversarial cases are documented in `docs/OFR_NUMERIC_PURITY_GRADE_V1_ZH.md`.
+
 ## Versioned energy-evidence database
 
-Version 0.6 adds a separate read-only SQLite evidence database for process-route energy resolution. It is deliberately not part of the emission-factor catalogue:
+Version 0.11 uses a separate read-only SQLite evidence database for process-route energy and additional-process resolution. It is deliberately not part of the emission-factor catalogue:
 
 - `energy_quota` stores all three published quota grades, while runtime policy explicitly selects `quota_level=1`;
 - `energy_conversion` stores exact values and ranges separately, so an ambiguous range cannot silently become a calculation input;
 - `process_parameter` stores independently sourced energy shares, emission factors and route assumptions with exact reference-source scope;
+- `enterprise_energy_profile` stores the 89-product workbook as 273 level-specific energy/allocation records, with exact sheet/row/cell and workbook-SHA provenance;
+- `enterprise_process_emission` stores level-specific non-energy process emissions, including the electrofused-spinel electrode oxidation term, with original cell, formula, value and review status;
 - `quota_modifier_rule` preserves conditional table notes without applying them unless their conditions are separately evidenced;
 - every returned `ParameterEvidence` carries the energy-database version/SHA, source standard, table, physical/printed page and evidence status.
 
@@ -134,8 +149,12 @@ python tools/import_refractory_energy_standard.py `
   path\to\T_CHNRISC_0008_2025.pdf `
   path\to\energy_parameters.db `
   --expected-source-sha256 <reviewed-pdf-sha256> `
-  --process-parameters-json path\to\reviewed-process-parameters.json
+  --process-parameters-json path\to\reviewed-process-parameters.json `
+  --enterprise-energy-workbook path\to\enterprise-energy-89.xlsx `
+  --expected-workbook-sha256 <reviewed-workbook-sha256>
 ```
+
+The workbook is evidence, not an emission-factor catalogue. Policy `process.database-priority-energy-replacement/v1` selects an exact enterprise product/route profile before the formal quota fallback. Closed exact profiles marked `NEEDS_REVIEW` may calculate with explicit assumptions and cell-level Trace provenance; ambiguous duplicate keys, standard-coal allocations and unresolved remainder carriers remain blocked. Exact route-scoped carrier parameters outrank a unique database-wide carrier fallback. When exact additional-process records exist, Formula `process.replace_energy_and_additional_process/v2` subtracts the reference-route term and adds the target-route term after energy replacement; values are never hard-coded in the Router.
 
 Connect both formal factor and energy evidence repositories at runtime:
 

@@ -1,9 +1,9 @@
 # OFR 完整技术文档
 
 > 文档对象：当前仓库中的 A1 Factor Resolution Engine V1（下文简称 OFR）  
-> 实现版本：`0.7.0`（在 `0.6.0` 基础上增加 Entity-first Semantic Resolution V2）
+> 实现版本：`0.11.0`（增加可追溯附加工艺排放与电极氧化项）
 > 技术基线：Python 3.11+  
-> 文档日期：2026-08-19  
+> 文档日期：2026-08-21
 > 文档性质：以当前代码为准的架构、接口、算法与运行说明
 
 ## 1. 文档目的
@@ -1156,15 +1156,21 @@ HTTP Catalog Adapter 已支持上述字段，正式目录仍由外部只读端�
 
 本地目录召回的两条镁铝尖晶石排放限额记录因 `factor_kind_mismatch` 等资格原因被排除；烧结尖晶石生命周期因子 `4.602431 kgCO2e/kg` 可进入候选池，但目标与来源存在 `PROCESS_VARIANT_GAP`。能耗库成功返回一级能耗证据：烧结镁铝尖晶石 `375 kgce/t`、电熔镁铝尖晶石 `185 kgce/t`，以及电力折标系数 `0.1229 kgce/kWh`。
 
-上述证据只证明两条工艺路线存在能耗差异，不能证明生命周期因子可按 `185/375` 整体缩放。当前缺少完整且闭合的参考/目标能源份额、各能源排放因子、精确折标参数，以及原始烧结因子明确包含被替换过程的作用域证据。因此 Process Router 保持：
+上述证据不能支持按 `185/375` 对生命周期因子整体缩放。`0.10.0` 已通过数据库优先策略接入企业表中的完整能源份额、唯一能源载体参数回退和显式过程包含假设；`0.11.0` 进一步将企业表 P:R 列的非能源过程排放解析为独立 `enterprise_process_emission` 记录。电熔尖晶石记录保存 `电极9kg`、`9×44/12` 和 `33 kgCO2/t`，烧结路线保存对应显式零值。
+
+Process Router 执行：
 
 ```text
-resolution_type = UNADJUSTED_PROCESS_PROXY
-result_tier      = REFERENCE_ONLY
-factor_value     = 4.602431 kgCO2e/kg（原值不变）
+EF_target = EF_reference
+          - EF_reference_energy
+          - EF_reference_additional_process
+          + EF_target_energy
+          + EF_target_additional_process
 ```
 
-后续工艺和能源占比通过 `process_parameter` 增量补充，不修改 Graph。每项参数必须保留来源、适用地域/年份/边界，并绑定参考因子 `source_id`、参考/目标材料和工艺；参考与目标能源份额分别必须闭合为 `1.0`，显式零值也必须提供。参数审核发布后形成新的能耗库版本锚点，相同规范化请求可重跑并解释更新前后的模式、数值和排名变化。
+在当前正式目录锚点下，一级结果为 `4.623698092 kgCO2e/kg`，二级为 `4.563588974`，三级为 `4.520099655`。Formula ID 为 `process.replace_energy_and_additional_process/v2`，Trace 保存 0.033 kgCO2e/kg 过程项、原始 33 kgCO2/t、P/Q/R 单元格、化学计量公式和数据库 SHA。结果仍因正式目录元数据与 Grade 资格局限被限制为 `REFERENCE_ONLY`，必须人工审批。
+
+后续工艺和能源占比通过 `process_parameter` 或同结构的企业证据记录增量补充，不修改 Graph。每项参数必须保留来源、适用地域/年份/边界，并绑定参考因子 `source_id`、参考/目标材料和工艺；参考与目标能源份额分别必须闭合为 `1.0`，显式零值也必须提供。参数审核发布后形成新的能耗库版本锚点，相同规范化请求可重跑并解释更新前后的模式、数值和排名变化。
 
 这项验证确立如下不变量：能耗限额是工程证据而非排放因子；不得跨材料复用未经证明的能源结构；不得用名称相似度补齐数值；参数不足时应返回有来源的未调整参考候选，而不是生成伪精确的派生因子。
 
@@ -1190,8 +1196,50 @@ Normalize Text
 
 完整契约、迁移边界和验收案例见 `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`。
 
-## 40. 结论
+## 40. Entity-scoped Numeric Purity Grade V1
+
+`0.8.0` 在实体优先语义层之后增加确定性的数字角色分类和材料实体作用域 Grade Schema。处理顺序是：
+
+```text
+Numeric Token Classification
+  → Explicit Chemistry
+  → Reviewed Supplier / Standard Grade Schema
+  → Organization Business Grade Schema
+  → Unresolved Grade Basis
+```
+
+材料身份先于数字解释。`70烧结镁砂`、`80烧结镁砂` 和 `烧结镁砂90` 在 `mat.compound.magnesia` 作用域内分别形成 MgO 70/80/90 级别；`尖晶石90` 在 `mat.engineered.spinel` 作用域内形成 Al2O3 90 级别。这些默认解释的类型是 `IMPLICIT_GRADE_CLASS`，不是对“精确含量”“最低含量”或某项国家标准的无证据声明。`MgO ≥ 95%`、`MgO 90` 等显式组成证据则保留 `MINIMUM` 或 `NOMINAL` 操作符，并优先覆盖名称中的隐式牌号。
+
+Parser 先识别反例上下文：`F80/P80` 为粒度号，`T60/CT800/CA...` 为型号，`AISI 446/6061` 为合金牌号，带 mm/µm/mesh 的数字为粒度，年份、标准号和包装规格也各有独立角色。这些数字不会被提升为纯度；同时其限定作用不会被通用材料 alias 擦除，因此 `F80碳化硅` 可以召回同实体资料，但不能把无粒度说明的通用碳化硅记录标为 Direct。
+
+请求和 `SourceRecord` 共用同一 Parser、Grade Schema 和注册表版本。检索意图携带 grade schema/value/basis；Semantic Index digest 包含来源 Grade 身份；Qualification 检查 Grade Anchor 的 schema 与 basis；Gap Analysis 将来源 Grade 缺失、schema/basis 不一致和值不同分别记录为结构化 Grade Gap。Grade Router 只对带正式来源和完整资格的锚点执行既有确定性规则，不因请求中的 70/80/90 自动发明因子、插值或能耗调整。
+
+多组分材料上的裸数字仍可能缺少唯一作用对象。例如 `莫来石-碳化硅砖90` 无法确定 90 指向 Al2O3、SiC 还是其他指标，此时才返回 `MORE_INPUT_NEEDED`，字段为 `numeric_grade_basis`。这保留了“减少追问”与“禁止错误确定化”的边界。
+
+Trace 保存 `numeric_tokens`、选中/拒绝角色、Grade Schema ID/版本、basis component、interpretation、evidence scope/evidence IDs、候选 Grade Gap、资格结果和最终排名。Registry SHA 与正式因子库 SHA 共同构成可更新 Trace 的版本锚点；Grade schema/value 进入规范化业务指纹，所以 70、80、90 是不同请求，而 `1 t` 与 `1000 kg` 的数量等价性仍保持不变。
+
+完整数据契约、默认规则、反例矩阵和验收结果见 `docs/OFR_NUMERIC_PURITY_GRADE_V1_ZH.md`。
+
+## 41. 89 品种企业能耗与能源分配导入
+
+`0.9.0` 将工作簿 `能碳转换碳排放核算--89个品种` 的当前数据行导入独立能耗证据库。导入器按完整产品/工艺身份解析 89 个序号中的 91 条产品路线，并将 1/2/3 级拆为 273 条 `enterprise_energy_profile` 记录。每条记录保存总能耗、电力占比、余量能源及占比、工作表、原始行号和单元格、来源说明、质量标记与工作簿 SHA。`0.11.0` 仅把 P:R 中具有明确工艺作用域的附加过程排放导入为 63 条参数证据；M:O 能源计算结果和 S:U 最终值仍只用于 QA，不作为独立生命周期因子导入。
+
+运行时默认采用一级能耗。273 条记录中有 193 条属于预审核可用集。`0.10.0` 的数据库优先策略允许 canonical key 唯一、份额闭合且能源为天然气/电力的精确 `NEEDS_REVIEW` profile 带假设计算；来源状态不会被改写，Trace 必须保留待核实说明、工作簿 SHA、行和单元格。标准煤余量、无法识别的余量能源和重复产品键仍不会进入计算。
+
+企业 profile 的精确数值优先于旧的同名路线参数，但不会删除来源链。若旧的受审路线证据明确证明参考生命周期因子包含待移除工艺，系统将该断言保存为独立的非数值 inclusion witness，避免企业份额覆盖后丢失工艺作用域，同时禁止旧份额重新进入计算。
+
+当前本地数据库为 schema `5`、dataset `t-chnrisc-0008-2025+enterprise-energy-89/v3`，SHA-256 为 `95d701826446a28861ee5142e5a8b335191b849b246f2b1615b415d56cf17317`。正式目录联调中，`烧结莫来石 → 电熔莫来石` 在能源替换后加入工作簿中的电极过程排放 `18 kgCO2/t`，输出 `3.940503304 kgCO2e/kg`；`烧结尖晶石 → 电熔尖晶石` 使用第64/61行的 `375 kgce/t, 2.1%电/97.9%气 → 185 kgce/t, 100%电`，再加入电极氧化 `33 kgCO2/t`，输出 `4.623698092 kgCO2e/kg`。
+
+## 42. Database-priority Energy Replacement V1
+
+`0.10.0` 固化公式 `EF_target = EF_reference - EF_reference_process + EF_target_process`。数值选择顺序是：精确企业 profile → 精确路线参数 → 唯一通用能源参数 → 正式精确折标/能耗后备。待核实的精确 profile 可以计算，但自动增加假设；通用参数必须在数据库内值和单位唯一；生命周期参考因子包含被扣除路线能源由版本化策略证据显式记录。TransformationStep 保存参考因子、烧结电/气排放、共同上游、电熔电/气排放、全部参数 ID、公式 ID、输出和假设。
+
+`0.11.0` 在存在精确附加工艺记录时选择 `process.replace_energy_and_additional_process/v2`，同时扣除参考路线附加工艺排放并加入目标路线附加工艺排放。缺少此类记录的材料继续使用 V1 能源公式，避免把空值解释为有证据的零值。
+
+电熔尖晶石实例：`4.602431 - (0.037016985 + 0.844321293) - 0 + 0.869605370 + 0.033 = 4.623698092 kgCO2e/kg`。0.033 来自数据库中的工作簿 P61 结构化记录，不是 Router 常量；结果按现有 Qualification/ResultTier 规则展示。
+
+## 43. 结论
 
 当前 OFR 已形成一个独立、可测试、可解释的 A1 因子解析内核。它的核心不是“让模型猜一个数”，而是识别候选与目标之间的差异，选择可追溯的工程解析策略，把 SourceRecord、ParameterEvidence、版本化公式、假设、Top-K 和人工决策组合成一个有界 Graph。
 
-V1 已经适合作为正式系统的领域内核和集成基线。`0.7.0` 在能耗证据层之上增加了实体优先的 Parser、Identity Resolution、Semantic Index 和候选准入审计；在持久化事务 Store、审核式 ProxyEdge Registry、生产级 Proxy Repository、受限 LLM Adapter、真实目录全字段治理和材料族 gold-set 验收完成前，仍不应把当前参考实现直接宣称为生产锁定服务。
+V1 已经适合作为正式系统的领域内核和集成基线。`0.11.0` 进一步固化了数据库优先、带假设、附加工艺排放和完整 Trace 的工艺替换策略；在候选终态 Policy、结构化 Error、持久化事务 Store、审核式 ProxyEdge Registry、生产级 Proxy Repository、受限 LLM Adapter、真实目录 Grade 字段治理和材料族 gold-set 验收完成前，仍不应把当前参考实现直接宣称为生产锁定服务。

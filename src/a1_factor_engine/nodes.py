@@ -448,18 +448,31 @@ class NormalizeNode(Node[GraphState]):
         resolved_process = production_process.value or (
             identity.manufacturing_route[0] if identity.manufacturing_route else None
         )
-        request_gaps = tuple(
-            RequestGap(
-                gap_id=f"{state.request.request_id}:{field}",
-                gap_type=RequestGapType.INPUT_SPECIFICATION,
-                field=field,
-                reason="steel fiber is a broad product family; subtype is required before selecting an EPD",
-                required=True,
-                options=("ordinary_uncoated_carbon_steel", "copper_plated_steel", "heat_resistant_stainless_steel", "unknown"),
-            )
-            for field in identity.unresolved_attributes[:1]
-            if field in {"steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"}
-        )
+        request_gap_items: list[RequestGap] = []
+        first_unresolved = identity.unresolved_attributes[:1]
+        for field in first_unresolved:
+            if field in {"steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"}:
+                request_gap_items.append(RequestGap(
+                    gap_id=f"{state.request.request_id}:{field}",
+                    gap_type=RequestGapType.INPUT_SPECIFICATION,
+                    field=field,
+                    reason="steel fiber is a broad product family; subtype is required before selecting an EPD",
+                    required=True,
+                    options=("ordinary_uncoated_carbon_steel", "copper_plated_steel", "heat_resistant_stainless_steel", "unknown"),
+                ))
+            elif field == "numeric_grade_basis":
+                request_gap_items.append(RequestGap(
+                    gap_id=f"{state.request.request_id}:{field}",
+                    gap_type=RequestGapType.INPUT_SPECIFICATION,
+                    field=field,
+                    reason=(
+                        "the numeric purity grade cannot be bound to one component of this "
+                        "composite or unregistered material"
+                    ),
+                    required=True,
+                    options=tuple((*identity.constituent_entity_ids, "unknown")),
+                ))
+        request_gaps = tuple(request_gap_items)
         boundary = normalize_text(state.request.boundary)
         input_name = normalize_text(state.request.material_name)
         normalized_fields = (input_name, canonical, *alias_fields, product_form, composition, production_process, boundary)
@@ -500,7 +513,7 @@ class NormalizeNode(Node[GraphState]):
         )
         state.trace.normalized_business_fingerprint = normalized_business_fingerprint(state.normalized)
         state.request_gaps = request_gaps
-        if request_gaps:
+        if request_gaps and request_gaps[0].field != "numeric_grade_basis":
             state.provisional_options = (
                 ProvisionalOption("ordinary_uncoated_reference", "steel subtype and coating are unknown"),
                 ProvisionalOption("copper_plated_reference", "surface coating is unknown"),
@@ -862,7 +875,8 @@ class GradeCompositionResolutionNode(Node[GraphState]):
                 continue
             recalled = (candidate.source, *tuple(await self.repository.search(state.normalized, candidate.source)))
             qualified: list[SourceRecord] = []
-            for anchor in recalled:
+            for raw_anchor in recalled:
+                anchor = self.registry.enrich_source(raw_anchor)
                 qualification = qualify_record(
                     state.normalized,
                     anchor,

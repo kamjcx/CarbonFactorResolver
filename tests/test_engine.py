@@ -11,6 +11,8 @@ from a1_factor_engine import (
     DatabaseVersionAnchor,
     EnergyConversionRecord,
     EnergyQuotaRecord,
+    EnterpriseEnergyProfileRecord,
+    EnterpriseProcessEmissionRecord,
     FactorKind,
     FactorSourceType,
     GapType,
@@ -19,6 +21,7 @@ from a1_factor_engine import (
     LinkStrategy,
     MaterialCategory,
     MaterialRule,
+    NumericTokenRole,
     ParameterEvidence,
     ParameterSourceType,
     ReferenceFlowRecord,
@@ -121,7 +124,7 @@ async def test_semantic_index_does_not_recall_silicon_or_alumina_for_metallic_al
     explanation = result.trace.explain()
     assert explanation["material_identity"]["base_entity_id"] == "mat.element.aluminium"
     assert explanation["local_retrieval"]["record_count"] == 0
-    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.0.0"
+    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.1.0"
 
 
 @pytest.mark.asyncio
@@ -150,6 +153,217 @@ async def test_generic_aluminium_requires_route_choice_when_primary_and_secondar
     assert all(item["retrieval_strategy"] == LinkStrategy.RELATED.value for item in admissions)
     assert all(item["admitted"] and not item["observation_only"] for item in admissions)
     assert all(item["identity_proof_ids"] for item in admissions)
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "entity_id", "basis"),
+    (
+        ("70烧结镁砂", 70.0, "mat.compound.magnesia", "component.MgO"),
+        ("80烧结镁砂", 80.0, "mat.compound.magnesia", "component.MgO"),
+        ("烧结镁砂90", 90.0, "mat.compound.magnesia", "component.MgO"),
+        ("尖晶石90", 90.0, "mat.engineered.spinel", "component.Al2O3"),
+        ("刚玉90", 90.0, "mat.mineral.corundum", "component.Al2O3"),
+    ),
+)
+def test_entity_scoped_numeric_grade_defaults_without_user_question(name, value, entity_id, basis):
+    resolved = DEFAULT_MATERIAL_REGISTRY.resolve(name)
+    grade = resolved.mention.numeric_grade
+
+    assert resolved.identity.base_entity_id == entity_id
+    assert grade is not None
+    assert grade.grade_value == value
+    assert grade.basis_component_id == basis
+    assert grade.evidence_scope.value == "ORGANIZATION_BUSINESS_RULE"
+    assert grade.specification_operator is None
+    assert "numeric_grade_basis" not in resolved.identity.unresolved_attributes
+
+
+def test_explicit_chemistry_overrides_name_grade_and_preserves_operator():
+    resolved = DEFAULT_MATERIAL_REGISTRY.resolve("烧结镁砂90", composition="MgO ≥ 95%")
+    grade = resolved.mention.numeric_grade
+
+    assert grade is not None
+    assert grade.grade_value == pytest.approx(95.0)
+    assert grade.basis_component_id == "component.MgO"
+    assert grade.interpretation_kind.value == "EXPLICIT_COMPOSITION"
+    assert grade.specification_operator.value == "MINIMUM"
+    assert grade.specification_min == pytest.approx(95.0)
+
+
+def test_explicit_formula_value_without_percent_is_not_an_implicit_grade_class():
+    resolved = DEFAULT_MATERIAL_REGISTRY.resolve("烧结镁砂", composition="MgO 90")
+    grade = resolved.mention.numeric_grade
+
+    assert grade is not None
+    assert grade.grade_value == pytest.approx(90.0)
+    assert grade.basis_component_id == "component.MgO"
+    assert grade.interpretation_kind.value == "EXPLICIT_COMPOSITION"
+    assert grade.evidence_scope.value == "EXPLICIT_TEXT"
+    assert grade.specification_operator.value == "NOMINAL"
+
+
+@pytest.mark.parametrize(
+    ("name", "role"),
+    (
+        ("F80碳化硅", NumericTokenRole.GRIT_SIZE),
+        ("P80白刚玉", NumericTokenRole.GRIT_SIZE),
+        ("T60板状刚玉", NumericTokenRole.MODEL_CODE),
+        ("CT800氧化铝", NumericTokenRole.MODEL_CODE),
+        ("AISI 446钢纤维", NumericTokenRole.ALLOY_GRADE),
+        ("6061铝合金", NumericTokenRole.ALLOY_GRADE),
+    ),
+)
+def test_numeric_negative_contexts_are_not_promoted_to_purity(name, role):
+    resolved = DEFAULT_MATERIAL_REGISTRY.resolve(name)
+
+    assert resolved.mention.numeric_grade is None
+    assert any(token.role == role for token in resolved.mention.numeric_tokens)
+    assert all(token.role != NumericTokenRole.PURITY_GRADE for token in resolved.mention.numeric_tokens)
+
+
+def test_grade_and_particle_size_are_classified_independently():
+    resolved = DEFAULT_MATERIAL_REGISTRY.resolve("90烧结镁砂 0-3mm")
+    roles = {token.role for token in resolved.mention.numeric_tokens}
+
+    assert resolved.mention.numeric_grade.grade_value == pytest.approx(90.0)
+    assert NumericTokenRole.PURITY_GRADE in roles
+    assert NumericTokenRole.PARTICLE_SIZE in roles
+
+
+def test_source_record_uses_the_same_numeric_grade_schema_as_the_request():
+    enriched = DEFAULT_MATERIAL_REGISTRY.enrich_source(record(
+        "source-magnesia-90", "90烧结镁砂", 1.0,
+        declared_product="90烧结镁砂", boundary_modules=("A1", "A2", "A3"),
+    ))
+
+    assert enriched.metadata["grade"] == "90"
+    assert enriched.metadata["grade_schema_id"] == (
+        "grade.magnesia.mgo.organization-default/v1"
+    )
+    assert enriched.metadata["grade_basis_component_id"] == "component.MgO"
+
+
+def test_multiple_grade_like_tokens_require_resolution_instead_of_picking_one():
+    resolved = DEFAULT_MATERIAL_REGISTRY.resolve("70烧结镁砂90")
+
+    assert resolved.mention.numeric_grade is None
+    assert sum(
+        token.role == NumericTokenRole.UNRESOLVED
+        for token in resolved.mention.numeric_tokens
+    ) == 2
+    assert "numeric_grade_basis" in resolved.identity.unresolved_attributes
+
+
+@pytest.mark.asyncio
+async def test_grit_qualifier_cannot_be_erased_by_a_generic_material_alias():
+    generic = record(
+        "generic-sic", "碳化硅", 2.0,
+        declared_product="碳化硅", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([generic])
+    ).resolve(ResolutionRequest(material_name="F80碳化硅", quantity=1))
+
+    assert result.candidates
+    assert result.candidates[0].resolution_type not in {
+        ResolutionType.DIRECT_EXACT,
+        ResolutionType.DIRECT_ALIAS,
+        ResolutionType.UNIT_CONVERTED,
+    }
+    admission = result.trace.explain()["candidate_admissions"][0]
+    assert admission["retrieval_strategy"] == LinkStrategy.RELATED.value
+
+
+@pytest.mark.asyncio
+async def test_same_entity_numeric_grade_difference_becomes_grade_gap_not_silent_match():
+    source = record(
+        "magnesia-80", "80烧结镁砂", 1.0,
+        product_form=None, composition=None, production_process="sintered",
+        declared_product="80烧结镁砂", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source])
+    ).resolve(ResolutionRequest(material_name="90烧结镁砂", quantity=1, geography="CN", year=2024))
+
+    assert result.status == ResolutionStatus.RECOMMENDATION_READY
+    assert result.trace.explain()["request_gaps"] == ()
+    assert result.candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    grade_gaps = tuple(
+        gap
+        for candidate in result.trace.explain()["candidate_gaps"]
+        for gap in candidate["gaps"]
+        if gap["gap_type"] == GapType.GRADE_COMPOSITION.value
+    )
+    assert grade_gaps
+    assert any("90" in str(gap["target_value"]) and "80" in str(gap["candidate_value"]) for gap in grade_gaps)
+
+
+@pytest.mark.asyncio
+async def test_same_entity_same_grade_exact_source_remains_direct():
+    source = record(
+        "magnesia-90-exact", "90烧结镁砂", 1.0,
+        product_form=None, composition=None, production_process="sintered",
+        declared_product="90烧结镁砂", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source])
+    ).resolve(ResolutionRequest(material_name="90烧结镁砂", quantity=1))
+
+    assert result.candidates[0].resolution_type == ResolutionType.DIRECT_EXACT
+    assert not any(
+        gap["gap_type"] == GapType.GRADE_COMPOSITION.value
+        for candidate in result.trace.explain()["candidate_gaps"]
+        for gap in candidate["gaps"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_explicit_composition_produces_one_structured_grade_gap_only():
+    source = record(
+        "magnesia-80-explicit", "80烧结镁砂", 1.0,
+        production_process="sintered", declared_product="80烧结镁砂",
+        boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source])
+    ).resolve(ResolutionRequest(
+        material_name="烧结镁砂", composition="MgO ≥ 95%", quantity=1,
+    ))
+
+    grade_gaps = tuple(
+        gap
+        for candidate in result.trace.explain()["candidate_gaps"]
+        for gap in candidate["gaps"]
+        if gap["gap_type"] == GapType.GRADE_COMPOSITION.value
+    )
+    assert len(grade_gaps) == 1
+    assert "95" in str(grade_gaps[0]["target_value"])
+
+
+@pytest.mark.asyncio
+async def test_numeric_grade_is_part_of_normalized_business_fingerprint():
+    engine = A1FactorResolutionEngine()
+    grade_70 = await engine.resolve(ResolutionRequest(
+        request_id="grade-fingerprint-70", material_name="70烧结镁砂", quantity=1,
+    ))
+    grade_90 = await engine.resolve(ResolutionRequest(
+        request_id="grade-fingerprint-90", material_name="90烧结镁砂", quantity=1,
+    ))
+
+    assert (
+        grade_70.trace.normalized_business_fingerprint
+        != grade_90.trace.normalized_business_fingerprint
+    )
+
+
+@pytest.mark.asyncio
+async def test_unbound_composite_grade_is_the_exception_that_requests_basis():
+    result = await A1FactorResolutionEngine().resolve(
+        ResolutionRequest(material_name="莫来石-碳化硅砖90", quantity=1)
+    )
+
+    assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.trace.explain()["required_choice"]["field"] == "numeric_grade_basis"
 
 
 def test_draft_registry_rule_cannot_affect_runtime_resolution():
@@ -656,7 +870,10 @@ async def test_process_router_rebuilds_electrofused_mullite_from_sintered_factor
     assert process_steps[0]["output_value"] == pytest.approx(2.701546778)
 
 
-def build_mullite_energy_database(path, *, include_scoped_parameters: bool = True):
+def build_mullite_energy_database(
+    path, *, include_scoped_parameters: bool = True, enterprise_profiles=(),
+    enterprise_process_emissions=(),
+):
     standard_locator = "standard:T/CHNRISC-0008-2025#table-1"
     standard_sha = "cde88c2a57249f8a8753955dcdfa8ba14b966266b6df56adc1ec06374b96323a"
     quotas = [
@@ -701,7 +918,10 @@ def build_mullite_energy_database(path, *, include_scoped_parameters: bool = Tru
             "mullite", "sintered", "mullite", "electrofused",
             reference_source_id="formal-sintered-mullite",
             quality_note="independent engineering evidence; not supplied by the energy-quota standard",
-            metadata={"reference_includes_process": "true"},
+            metadata=(
+                {"reference_includes_process": "true"}
+                if parameter_id == "ref-elec-share" else {}
+            ),
         )
         for parameter_id, name, value, unit in values
     ] if include_scoped_parameters else []
@@ -715,6 +935,90 @@ def build_mullite_energy_database(path, *, include_scoped_parameters: bool = Tru
         quotas=quotas,
         conversions=(conversion,),
         process_parameters=process,
+        enterprise_profiles=enterprise_profiles,
+        enterprise_process_emissions=enterprise_process_emissions,
+    )
+
+
+def enterprise_profile(
+    profile_id: str,
+    product_name: str,
+    canonical_product: str,
+    process: str,
+    total_energy: float,
+    electricity_share: float,
+    remainder_carrier: str,
+    *,
+    runtime_eligible: bool = True,
+    head_material: str = "mullite",
+    product_group: str = "莫来石",
+) -> EnterpriseEnergyProfileRecord:
+    return EnterpriseEnergyProfileRecord(
+        profile_id=profile_id,
+        sequence_id=profile_id,
+        product_name=product_name,
+        product_group=product_group,
+        head_material=head_material,
+        production_process=process,
+        quota_level=1,
+        total_energy_kgce_per_t=total_energy,
+        electricity_share=electricity_share,
+        remainder_carrier=remainder_carrier,
+        remainder_share=1 - electricity_share,
+        source_type=ParameterSourceType.USER_CONFIRMED_ENGINEERING_DATA,
+        provider="enterprise workbook",
+        locator="workbook:enterprise-energy.xlsx#Sheet1",
+        worksheet_name="Sheet1",
+        worksheet_row=5,
+        energy_cell="D5",
+        electricity_share_cell="J5",
+        formula_cell="M5",
+        canonical_product=canonical_product,
+        citation="enterprise workbook Sheet1 row 5",
+        quality_note="user-provided enterprise energy allocation",
+        allocation_status=(
+            "ALL_ELECTRIC" if remainder_carrier == "none"
+            else f"ELECTRICITY_{remainder_carrier.upper()}"
+        ),
+        source_sha256="a" * 64,
+        runtime_eligible=runtime_eligible,
+    )
+
+
+def enterprise_process_emission(
+    emission_id: str,
+    product_name: str,
+    canonical_product: str,
+    process: str,
+    value_kgco2e_per_t: float,
+    *,
+    head_material: str = "spinel",
+    runtime_eligible: bool = False,
+) -> EnterpriseProcessEmissionRecord:
+    return EnterpriseProcessEmissionRecord(
+        emission_id=emission_id,
+        sequence_id=emission_id,
+        product_name=product_name,
+        canonical_product=canonical_product,
+        head_material=head_material,
+        production_process=process,
+        quota_level=1,
+        emission_name=(
+            "direct_electrode_oxidation_co2"
+            if value_kgco2e_per_t else "additional_direct_process_co2"
+        ),
+        value_kgco2e_per_t=value_kgco2e_per_t,
+        source_type=ParameterSourceType.USER_CONFIRMED_ENGINEERING_DATA,
+        provider="enterprise workbook",
+        locator="workbook:enterprise-energy.xlsx#Sheet1",
+        worksheet_name="Sheet1",
+        worksheet_row=61 if process == "electrofused" else 64,
+        emission_cell="P61" if process == "electrofused" else "P64",
+        formula="9*44/12" if value_kgco2e_per_t else "",
+        citation="enterprise workbook process emission",
+        quality_note="electrode oxidation process emission",
+        source_sha256="a" * 64,
+        runtime_eligible=runtime_eligible,
     )
 
 
@@ -781,6 +1085,98 @@ async def test_energy_quota_database_does_not_invent_missing_route_mix(tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_enterprise_profiles_supply_exact_closed_route_shares(tmp_path):
+    database = tmp_path / "enterprise-profile.db"
+    profiles = (
+        enterprise_profile(
+            "enterprise-sintered", "烧结莫来石", "sintered mullite",
+            "sintered", 365, 0.24, "natural_gas",
+        ),
+        enterprise_profile(
+            "enterprise-electrofused", "电熔莫来石", "electrofused mullite",
+            "electrofused", 165, 1.0, "none",
+        ),
+    )
+    build_mullite_energy_database(
+        database, enterprise_profiles=profiles,
+    )
+    sintered = record(
+        "formal-sintered-mullite", "烧结莫来石", 3.431355,
+        product_form="grain", composition="mullite", production_process="sintered",
+        declared_product="烧结莫来石", boundary_modules=("A1", "A2", "A3"),
+        metadata={"includes_process": "true"},
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sintered]),
+        process_parameters=SqliteEnergyProcessParameterRepository(database),
+    ).resolve(request(
+        material_name="电熔莫来石", product_form="grain", composition="mullite",
+        production_process="electrofused",
+    ))
+
+    evidence = {
+        item["name"]: item
+        for item in result.trace.latest("process_variant_resolution").details["parameter_evidence"]
+    }
+    assert evidence["reference_electricity_share"]["value"] == pytest.approx(0.24)
+    assert evidence["reference_natural_gas_share"]["value"] == pytest.approx(0.76)
+    assert evidence["target_electricity_share"]["value"] == pytest.approx(1.0)
+    assert evidence["target_natural_gas_share"]["value"] == pytest.approx(0.0)
+    assert evidence["target_electricity_share"]["metadata"][
+        "enterprise_energy_profile_id"
+    ] == "enterprise-electrofused"
+    assert evidence["target_electricity_share"]["metadata"][
+        "source_workbook_sha256"
+    ] == "a" * 64
+    assert evidence["reference_process_inclusion"]["value"] == 1.0
+    assert result.candidates[0].resolution_type == ResolutionType.PROCESS_ADJUSTED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("carrier,runtime_eligible", (("standard_coal", True),))
+async def test_unsupported_enterprise_profile_cannot_activate_shares(
+    tmp_path, carrier, runtime_eligible,
+):
+    database = tmp_path / f"blocked-{carrier}.db"
+    profiles = (
+        enterprise_profile(
+            "enterprise-sintered", "烧结莫来石", "sintered mullite",
+            "sintered", 365, 0.76, "natural_gas",
+        ),
+        enterprise_profile(
+            "enterprise-electrofused", "电熔莫来石", "electrofused mullite",
+            "electrofused", 165, 0.8, carrier, runtime_eligible=runtime_eligible,
+        ),
+    )
+    build_mullite_energy_database(
+        database, include_scoped_parameters=False, enterprise_profiles=profiles,
+    )
+    sintered = record(
+        "formal-sintered-mullite", "烧结莫来石", 3.431355,
+        product_form="grain", composition="mullite", production_process="sintered",
+        declared_product="烧结莫来石", boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sintered]),
+        process_parameters=SqliteEnergyProcessParameterRepository(database),
+    ).resolve(request(
+        material_name="电熔莫来石", product_form="grain", composition="mullite",
+        production_process="electrofused",
+    ))
+
+    evidence_names = {
+        item["name"]
+        for item in result.trace.latest("process_variant_resolution").details["parameter_evidence"]
+    }
+    assert not evidence_names & {
+        "reference_electricity_share",
+        "reference_natural_gas_share",
+        "target_electricity_share",
+        "target_natural_gas_share",
+    }
+
+
+@pytest.mark.asyncio
 async def test_energy_quota_scope_never_applies_mullite_route_to_other_material(tmp_path):
     database = tmp_path / "scoped.db"
     build_mullite_energy_database(database)
@@ -803,11 +1199,125 @@ async def test_energy_quota_scope_never_applies_mullite_route_to_other_material(
     process_trace = result.trace.latest("process_variant_resolution")
     if process_trace:
         evidence_names = {item["name"] for item in process_trace.details["parameter_evidence"]}
-        assert evidence_names == {
+        assert {
             "reference_total_energy_kgce_per_t",
             "target_total_energy_kgce_per_t",
             "electricity_kgce_per_kwh",
-        }
+        } <= evidence_names
+
+
+@pytest.mark.asyncio
+async def test_database_priority_policy_rebuilds_electrofused_spinel_with_trace(
+    tmp_path,
+):
+    database = tmp_path / "spinel-database-priority.db"
+    profiles = (
+        enterprise_profile(
+            "enterprise-sintered-spinel", "烧结镁铝尖晶石", "sintered spinel",
+            "sintered", 375, 0.021, "natural_gas", runtime_eligible=False,
+            head_material="spinel", product_group="镁铝尖晶石",
+        ),
+        enterprise_profile(
+            "enterprise-electrofused-spinel", "电熔镁铝尖晶石", "electrofused spinel",
+            "electrofused", 185, 1.0, "none", runtime_eligible=False,
+            head_material="spinel", product_group="镁铝尖晶石",
+        ),
+    )
+    process_emissions = (
+        enterprise_process_emission(
+            "enterprise-sintered-spinel-process", "烧结镁铝尖晶石",
+            "sintered spinel", "sintered", 0,
+        ),
+        enterprise_process_emission(
+            "enterprise-electrofused-spinel-electrode", "电熔镁铝尖晶石",
+            "electrofused spinel", "electrofused", 33,
+        ),
+    )
+    build_mullite_energy_database(
+        database,
+        enterprise_profiles=profiles,
+        enterprise_process_emissions=process_emissions,
+    )
+    sintered = record(
+        "formal-sintered-spinel", "烧结尖晶石", 4.602431,
+        product_form="grain", composition="magnesia alumina spinel",
+        production_process="sintered", declared_product="烧结尖晶石",
+        boundary_modules=("A1", "A2", "A3"),
+    )
+    broad_proxy = record(
+        "ecoinvent-sintered-spinel-proxy",
+        "烧结尖晶石（高铝耐火材料生产代理）",
+        0.619377914,
+        product_form="packed refractory",
+        composition="high aluminium oxide",
+        production_process="sintered",
+        declared_product="高铝耐火材料",
+        boundary_modules=("A1", "A2", "A3"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([sintered, broad_proxy]),
+        process_parameters=SqliteEnergyProcessParameterRepository(database),
+    ).resolve(request(
+        material_name="电熔尖晶石", product_form="grain",
+        composition="magnesia alumina spinel", production_process="electrofused",
+    ))
+
+    candidate = next(
+        item for item in result.candidates
+        if item.source.source_id == "formal-sintered-spinel"
+    )
+    assert candidate.factor_value == pytest.approx(4.62369809236118)
+    assert any(
+        step.formula_id == "process.replace_energy_and_additional_process/v2"
+        for step in candidate.transformation_steps
+    )
+    assert any("marked for review" in item for item in candidate.assumptions)
+    assert any("reused across material routes" in item for item in candidate.assumptions)
+    assert any("assumed to include route energy" in item for item in candidate.assumptions)
+    process_entry = next(
+        entry for entry in result.trace.entries
+        if entry.stage == "process_variant_resolution"
+        and any(
+            item["metadata"].get("reference_source_id") == "formal-sintered-spinel"
+            for item in entry.details["parameter_evidence"]
+        )
+    )
+    evidence_items = process_entry.details["parameter_evidence"]
+    evidence = {
+        item["name"]: item
+        for item in evidence_items
+        if item["metadata"].get("reference_source_id") == "formal-sintered-spinel"
+    }
+    assert evidence["reference_total_energy_kgce_per_t"]["value"] == 375
+    assert evidence["reference_electricity_share"]["value"] == pytest.approx(0.021)
+    assert evidence["target_total_energy_kgce_per_t"]["value"] == 185
+    assert evidence["target_electricity_share"]["value"] == 1.0
+    assert evidence[
+        "reference_additional_process_emission_kgco2e_per_kg"
+    ]["value"] == 0.0
+    target_process_emission = evidence[
+        "target_additional_process_emission_kgco2e_per_kg"
+    ]
+    assert target_process_emission["value"] == pytest.approx(0.033)
+    assert target_process_emission["metadata"]["raw_value_kgco2e_per_t"] == "33"
+    assert "P61" in target_process_emission["metadata"]["emission_cells"]
+    process_step = next(
+        step for step in candidate.transformation_steps
+        if step.formula_id == "process.replace_energy_and_additional_process/v2"
+    )
+    assert process_step.input_values["target_additional_process"] == pytest.approx(0.033)
+    assert evidence["reference_process_inclusion"]["metadata"][
+        "process_inclusion_basis"
+    ] == "policy_assumption"
+    assert evidence["natural_gas_ef_kgco2e_per_nm3"]["metadata"][
+        "parameter_scope"
+    ] == "unique_generic_energy_carrier_fallback"
+    broad_result = next(
+        item for item in result.candidates
+        if item.source.source_id == "ecoinvent-sintered-spinel-proxy"
+    )
+    assert broad_result.resolution_type != ResolutionType.PROCESS_ADJUSTED
+    assert broad_result.factor_value == pytest.approx(0.619377914)
 
 
 @pytest.mark.asyncio

@@ -81,16 +81,60 @@ def analyze_candidate_gaps(
             GapType.PROCESS_VARIANT, activity.production_process, None, 0.5,
             "reference production route is unspecified", RouterType.PROCESS_VARIANT,
         )
-    if _different(activity.composition, source.composition):
-        add(
-            GapType.GRADE_COMPOSITION, activity.composition, source.composition, 0.7,
-            "target and reference grade or composition differ", RouterType.GRADE_COMPOSITION,
+    target_grade = (
+        activity.material_mention.numeric_grade
+        if activity.material_mention else None
+    )
+    # Structured grade analysis subsumes a composition string that produced the
+    # grade. Running both paths would emit duplicate GRADE_COMPOSITION gap IDs.
+    if not target_grade:
+        if _different(activity.composition, source.composition):
+            add(
+                GapType.GRADE_COMPOSITION, activity.composition, source.composition, 0.7,
+                "target and reference grade or composition differ", RouterType.GRADE_COMPOSITION,
+            )
+        elif activity.composition and not source.composition:
+            add(
+                GapType.GRADE_COMPOSITION, activity.composition, None, 0.5,
+                "reference grade or composition is unspecified", RouterType.GRADE_COMPOSITION,
+            )
+    source_grade_raw = source.metadata.get("grade", "")
+    try:
+        source_grade = float(source_grade_raw) if source_grade_raw else None
+    except (TypeError, ValueError):
+        source_grade = None
+    source_grade_schema = source.metadata.get("grade_schema_id", "")
+    source_grade_basis = source.metadata.get("grade_basis_component_id", "")
+    if target_grade:
+        target_grade_label = (
+            f"{target_grade.grade_value:g} [{target_grade.basis_component_id}; "
+            f"{target_grade.schema_id}]"
         )
-    elif activity.composition and not source.composition:
-        add(
-            GapType.GRADE_COMPOSITION, activity.composition, None, 0.5,
-            "reference grade or composition is unspecified", RouterType.GRADE_COMPOSITION,
+        source_grade_label = (
+            f"{source_grade:g} [{source_grade_basis}; {source_grade_schema}]"
+            if source_grade is not None else None
         )
+        if source_grade is None:
+            add(
+                GapType.GRADE_COMPOSITION, target_grade_label, None, 0.5,
+                "target has an entity-scoped purity grade but the source grade is unspecified",
+                RouterType.GRADE_COMPOSITION,
+            )
+        elif (
+            source_grade_schema != target_grade.schema_id
+            or source_grade_basis != target_grade.basis_component_id
+        ):
+            add(
+                GapType.GRADE_COMPOSITION, target_grade_label, source_grade_label, 0.8,
+                "request and source grades use different schema or chemical basis",
+                RouterType.GRADE_COMPOSITION,
+            )
+        elif abs(source_grade - target_grade.grade_value) > 1e-9:
+            add(
+                GapType.GRADE_COMPOSITION, target_grade_label, source_grade_label, 0.7,
+                "request and source purity grade classes differ",
+                RouterType.GRADE_COMPOSITION,
+            )
 
     strategy = source.metadata.get("match_strategy", "")
     if candidate.origin.value == "proxy" or strategy == LinkStrategy.RELATED.value:

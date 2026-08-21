@@ -16,12 +16,17 @@ from typing import Protocol, Sequence
 from .matching import normalize_text
 from .models import (
     EntityType,
+    GradeEvidenceScope,
+    GradeInterpretationKind,
     IdentityOutcome,
     IdentityProofType,
     IdentityResolution,
     MaterialCategory,
     MaterialIdentity,
     MaterialMention,
+    NumericTokenResolution,
+    NumericTokenRole,
+    PurityGrade,
     RegistryRuleStatus,
     RegistryRuleSuggestion,
     RetrievalIntent,
@@ -29,6 +34,7 @@ from .models import (
     SemanticRole,
     SemanticSpan,
     SourceRecord,
+    SpecificationOperator,
 )
 
 
@@ -124,6 +130,22 @@ class TypedRelation:
 
 
 @dataclass(frozen=True, slots=True)
+class PurityGradeSchema:
+    schema_id: str
+    version: str
+    entity_ids: tuple[str, ...]
+    basis_component_id: str
+    allowed_labels: tuple[float, ...]
+    evidence_scope: GradeEvidenceScope
+    evidence_ids: tuple[str, ...]
+    ordered: bool = False
+    label_prefixes: tuple[str, ...] = ()
+    interpretation_kind: GradeInterpretationKind = GradeInterpretationKind.IMPLICIT_GRADE_CLASS
+    priority: int = 0
+    status: RegistryRuleStatus = RegistryRuleStatus.ACTIVE
+
+
+@dataclass(frozen=True, slots=True)
 class RegistryResolution:
     identity: MaterialIdentity
     registry_version: str
@@ -174,6 +196,7 @@ class VersionedMaterialSemanticRegistry:
     process_rules: tuple[ProcessRule, ...]
     form_rules: tuple[FormRule, ...]
     relations: tuple[TypedRelation, ...] = ()
+    grade_schemas: tuple[PurityGradeSchema, ...] = ()
 
     @staticmethod
     def _active(values: Sequence[object]) -> tuple[object, ...]:
@@ -217,6 +240,23 @@ class VersionedMaterialSemanticRegistry:
                  relation.target_id, relation.status.value)
                 for relation in self.relations
             ],
+            "grade_schemas": [
+                {
+                    "schema_id": schema.schema_id,
+                    "version": schema.version,
+                    "entity_ids": schema.entity_ids,
+                    "basis": schema.basis_component_id,
+                    "allowed_labels": schema.allowed_labels,
+                    "evidence_scope": schema.evidence_scope.value,
+                    "evidence_ids": schema.evidence_ids,
+                    "ordered": schema.ordered,
+                    "label_prefixes": schema.label_prefixes,
+                    "interpretation_kind": schema.interpretation_kind.value,
+                    "priority": schema.priority,
+                    "status": schema.status.value,
+                }
+                for schema in self.grade_schemas
+            ],
         }
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -252,6 +292,274 @@ class VersionedMaterialSemanticRegistry:
                     matches.append((rule, alias, occurrence[0], occurrence[1]))
         matches.sort(key=lambda item: (-(item[3] - item[2]), item[0].rule_id))
         return matches[0] if matches else None
+
+    def _grade_schemas_for(self, entity_id: str | None) -> tuple[PurityGradeSchema, ...]:
+        if not entity_id:
+            return ()
+        schemas = tuple(
+            schema for schema in self._active(self.grade_schemas)
+            if entity_id in schema.entity_ids
+        )
+        return tuple(sorted(schemas, key=lambda schema: (-schema.priority, schema.schema_id)))
+
+    def _parse_numeric_grade(
+        self,
+        value: str,
+        entity_id: str | None,
+    ) -> tuple[PurityGrade | None, tuple[NumericTokenResolution, ...], float | None]:
+        """Classify numbers before binding one material-scoped purity grade."""
+
+        tokens: list[NumericTokenResolution] = []
+        occupied: list[tuple[int, int]] = []
+
+        def overlaps(start: int, end: int) -> bool:
+            return any(start < used_end and end > used_start for used_start, used_end in occupied)
+
+        def add_token(
+            raw: str,
+            start: int,
+            end: int,
+            role: NumericTokenRole,
+            evidence_id: str,
+            reason: str,
+            *,
+            rejected: tuple[NumericTokenRole, ...] = (),
+        ) -> None:
+            occupied.append((start, end))
+            tokens.append(NumericTokenResolution(
+                raw=raw,
+                start=start,
+                end=end,
+                role=role,
+                evidence_id=evidence_id,
+                rejected_roles=rejected,
+                reason=reason,
+            ))
+
+        # Strong negative contexts are classified before standalone numbers.
+        negative_patterns = (
+            (r"(?i)(?:^|[^a-z0-9])(?:f|p)\s*-?\s*\d{2,3}(?!\d)", NumericTokenRole.GRIT_SIZE, "numeric.fepa_grit/v1"),
+            (r"(?i)(?:^|[^a-z0-9])(?:t|ct|ca)\s*-?\s*\d{1,4}(?!\d)", NumericTokenRole.MODEL_CODE, "numeric.product_model/v1"),
+            (r"(?i)\baisi\s*\d{3,4}(?!\d)|\buns\s*[a-z]?\d+(?!\d)|\b\d{4}\s*铝合金", NumericTokenRole.ALLOY_GRADE, "numeric.alloy_grade/v1"),
+            (r"(?i)\bgb\s*/?\s*t?\s*\d+(?:\.\d+)?(?:-\d{4})?", NumericTokenRole.STANDARD_NUMBER, "numeric.standard_number/v1"),
+            (r"(?<!\d)20\d{2}(?:年)?(?!\d)", NumericTokenRole.YEAR, "numeric.year/v1"),
+            (r"(?i)\d+(?:\.\d+)?\s*(?:-|~|–|—)\s*\d+(?:\.\d+)?\s*(?:mm|cm|µm|um|mesh|目)", NumericTokenRole.PARTICLE_SIZE, "numeric.particle_range/v1"),
+            (r"(?i)\d+(?:\.\d+)?\s*(?:mm|cm|µm|um|mesh|目)\b", NumericTokenRole.PARTICLE_SIZE, "numeric.particle_size/v1"),
+            (r"(?i)\d+(?:\.\d+)?\s*kg(?:\s*/\s*袋)?", NumericTokenRole.PACKAGING, "numeric.packaging/v1"),
+            (r"型号\s*[-:]?\s*\d+", NumericTokenRole.MODEL_CODE, "numeric.model_label.zh/v1"),
+        )
+        for pattern, role, evidence_id in negative_patterns:
+            for match in re.finditer(pattern, value):
+                if not overlaps(match.start(), match.end()):
+                    add_token(
+                        match.group(0), match.start(), match.end(), role, evidence_id,
+                        "numeric context is not a material purity grade",
+                        rejected=(NumericTokenRole.PURITY_GRADE,),
+                    )
+
+        schemas = self._grade_schemas_for(entity_id)
+        bare_schemas = tuple(schema for schema in schemas if not schema.label_prefixes)
+        formula_basis = {
+            "mgo": "component.MgO",
+            "al2o3": "component.Al2O3",
+            "sic": "component.SiC",
+            "al": "element.Al",
+            "si": "element.Si",
+        }
+
+        # Explicit percentage or chemistry has precedence over every implicit grade.
+        explicit_pattern = re.compile(
+            r"(?i)(?:(mgo|al2o3|sic|al|si)\s*)?(>=|≤|<=|≥|>|=)?\s*(\d+(?:\.\d+)?)\s*%"
+        )
+        explicit = next((match for match in explicit_pattern.finditer(value) if not overlaps(match.start(), match.end())), None)
+        if explicit:
+            grade_value = float(explicit.group(3))
+            schema = bare_schemas[0] if len(bare_schemas) == 1 else None
+            basis = formula_basis.get((explicit.group(1) or "").casefold()) or (
+                schema.basis_component_id if schema else None
+            )
+            operator_text = explicit.group(2)
+            operator = {
+                ">=": SpecificationOperator.MINIMUM,
+                "≥": SpecificationOperator.MINIMUM,
+                ">": SpecificationOperator.MINIMUM_EXCLUSIVE,
+                "=": SpecificationOperator.EXACT,
+                "<=": SpecificationOperator.MAXIMUM,
+                "≤": SpecificationOperator.MAXIMUM,
+            }.get(operator_text or "", SpecificationOperator.NOMINAL)
+            if basis and 0 < grade_value <= 100:
+                schema_id = schema.schema_id if schema else f"explicit.{basis}/v1"
+                schema_version = schema.version if schema else "1.0.0"
+                evidence_ids = tuple(dict.fromkeys((
+                    "purity.explicit_percent/v2",
+                    *((schema.evidence_ids) if schema else ()),
+                )))
+                grade = PurityGrade(
+                    raw_label=explicit.group(0),
+                    grade_value=grade_value,
+                    basis_component_id=basis,
+                    interpretation_kind=GradeInterpretationKind.EXPLICIT_COMPOSITION,
+                    schema_id=schema_id,
+                    schema_version=schema_version,
+                    evidence_scope=GradeEvidenceScope.EXPLICIT_TEXT,
+                    evidence_ids=evidence_ids,
+                    parser_rule_ids=("numeric.explicit_percent/v2",),
+                    specification_operator=operator,
+                    nominal_value=grade_value if operator == SpecificationOperator.NOMINAL else None,
+                    specification_min=(
+                        grade_value
+                        if operator in {SpecificationOperator.MINIMUM, SpecificationOperator.MINIMUM_EXCLUSIVE}
+                        else None
+                    ),
+                    specification_max=grade_value if operator == SpecificationOperator.MAXIMUM else None,
+                    ordered=schema.ordered if schema else True,
+                )
+                add_token(
+                    explicit.group(0), explicit.start(), explicit.end(),
+                    NumericTokenRole.PURITY_GRADE, "numeric.explicit_percent/v2",
+                    "explicit percentage bound to material/component chemistry",
+                    rejected=(NumericTokenRole.PARTICLE_SIZE, NumericTokenRole.MODEL_CODE),
+                )
+                return grade, tuple(sorted(tokens, key=lambda token: (token.start, token.end))), grade_value
+
+        # A component formula immediately followed by a value is also explicit
+        # chemistry, even when the author omits the percent sign (for example,
+        # ``MgO 90``). Requiring the formula keeps unrelated bare numbers out.
+        formula_grade_pattern = re.compile(
+            r"(?i)(?<![a-z0-9])(mgo|al2o3|sic|al|si)\s*(>=|≤|<=|≥|>|=)?\s*(\d+(?:\.\d+)?)(?![a-z0-9.])"
+        )
+        formula_grade = next(
+            (
+                match for match in formula_grade_pattern.finditer(value)
+                if not overlaps(match.start(), match.end())
+            ),
+            None,
+        )
+        if formula_grade:
+            grade_value = float(formula_grade.group(3))
+            basis = formula_basis[formula_grade.group(1).casefold()]
+            schema = next(
+                (item for item in bare_schemas if item.basis_component_id == basis),
+                None,
+            )
+            operator_text = formula_grade.group(2)
+            operator = {
+                ">=": SpecificationOperator.MINIMUM,
+                "≥": SpecificationOperator.MINIMUM,
+                ">": SpecificationOperator.MINIMUM_EXCLUSIVE,
+                "=": SpecificationOperator.EXACT,
+                "<=": SpecificationOperator.MAXIMUM,
+                "≤": SpecificationOperator.MAXIMUM,
+            }.get(operator_text or "", SpecificationOperator.NOMINAL)
+            if 0 < grade_value <= 100:
+                grade = PurityGrade(
+                    raw_label=formula_grade.group(0),
+                    grade_value=grade_value,
+                    basis_component_id=basis,
+                    interpretation_kind=GradeInterpretationKind.EXPLICIT_COMPOSITION,
+                    schema_id=schema.schema_id if schema else f"explicit.{basis}/v1",
+                    schema_version=schema.version if schema else "1.0.0",
+                    evidence_scope=GradeEvidenceScope.EXPLICIT_TEXT,
+                    evidence_ids=tuple(dict.fromkeys((
+                        "purity.explicit_formula_value/v1",
+                        *((schema.evidence_ids) if schema else ()),
+                    ))),
+                    parser_rule_ids=("numeric.explicit_formula_value/v1",),
+                    specification_operator=operator,
+                    nominal_value=(
+                        grade_value if operator == SpecificationOperator.NOMINAL else None
+                    ),
+                    specification_min=(
+                        grade_value
+                        if operator in {
+                            SpecificationOperator.MINIMUM,
+                            SpecificationOperator.MINIMUM_EXCLUSIVE,
+                        }
+                        else None
+                    ),
+                    specification_max=(
+                        grade_value if operator == SpecificationOperator.MAXIMUM else None
+                    ),
+                    ordered=schema.ordered if schema else True,
+                )
+                add_token(
+                    formula_grade.group(0), formula_grade.start(), formula_grade.end(),
+                    NumericTokenRole.PURITY_GRADE, "numeric.explicit_formula_value/v1",
+                    "explicit component formula and value bound to material chemistry",
+                    rejected=(NumericTokenRole.PARTICLE_SIZE, NumericTokenRole.MODEL_CODE),
+                )
+                return (
+                    grade,
+                    tuple(sorted(tokens, key=lambda token: (token.start, token.end))),
+                    grade_value,
+                )
+
+        # Registered supplier/product prefixes outrank organization bare-number defaults.
+        for schema in schemas:
+            for prefix in schema.label_prefixes:
+                pattern = re.compile(rf"(?i)(?<![a-z0-9]){re.escape(prefix)}\s*-?\s*(\d{{2}}(?:\.\d+)?)(?!\d)")
+                match = next((item for item in pattern.finditer(value) if not overlaps(item.start(), item.end())), None)
+                if not match:
+                    continue
+                grade_value = float(match.group(1))
+                if grade_value not in schema.allowed_labels:
+                    continue
+                grade = PurityGrade(
+                    raw_label=match.group(0), grade_value=grade_value,
+                    basis_component_id=schema.basis_component_id,
+                    interpretation_kind=schema.interpretation_kind,
+                    schema_id=schema.schema_id, schema_version=schema.version,
+                    evidence_scope=schema.evidence_scope, evidence_ids=schema.evidence_ids,
+                    parser_rule_ids=("numeric.prefixed_grade/v1",), ordered=schema.ordered,
+                )
+                add_token(
+                    match.group(0), match.start(), match.end(), NumericTokenRole.PURITY_GRADE,
+                    "numeric.prefixed_grade/v1", "registered product-grade prefix bound to entity schema",
+                    rejected=(NumericTokenRole.MODEL_CODE, NumericTokenRole.GRIT_SIZE),
+                )
+                return grade, tuple(sorted(tokens, key=lambda token: (token.start, token.end))), None
+
+        candidates: list[tuple[PurityGrade, int, int]] = []
+        standalone_pattern = re.compile(r"(?<![a-z0-9.])(\d{2}(?:\.\d+)?)(?![a-z0-9.])", re.IGNORECASE)
+        for match in standalone_pattern.finditer(value):
+            if overlaps(match.start(), match.end()):
+                continue
+            grade_value = float(match.group(1))
+            matching = tuple(schema for schema in bare_schemas if grade_value in schema.allowed_labels)
+            if len(matching) == 1:
+                schema = matching[0]
+                candidates.append((PurityGrade(
+                    raw_label=match.group(0), grade_value=grade_value,
+                    basis_component_id=schema.basis_component_id,
+                    interpretation_kind=schema.interpretation_kind,
+                    schema_id=schema.schema_id, schema_version=schema.version,
+                    evidence_scope=schema.evidence_scope, evidence_ids=schema.evidence_ids,
+                    parser_rule_ids=("numeric.standalone_entity_grade/v1",), ordered=schema.ordered,
+                ), match.start(), match.end()))
+            elif grade_value in {70, 80, 90}:
+                add_token(
+                    match.group(0), match.start(), match.end(), NumericTokenRole.UNRESOLVED,
+                    "numeric.unbound_grade/v1", "standalone grade-like number has no unique entity schema",
+                    rejected=(NumericTokenRole.PURITY_GRADE,),
+                )
+
+        if len(candidates) == 1:
+            grade, start, end = candidates[0]
+            add_token(
+                grade.raw_label, start, end, NumericTokenRole.PURITY_GRADE,
+                "numeric.standalone_entity_grade/v1",
+                "standalone number automatically bound by the entity-scoped grade schema",
+                rejected=(NumericTokenRole.PARTICLE_SIZE, NumericTokenRole.MODEL_CODE, NumericTokenRole.YEAR),
+            )
+            return grade, tuple(sorted(tokens, key=lambda token: (token.start, token.end))), None
+        if len(candidates) > 1:
+            for grade, start, end in candidates:
+                add_token(
+                    grade.raw_label, start, end, NumericTokenRole.UNRESOLVED,
+                    "numeric.multiple_grade_tokens/v1", "multiple grade-class numbers conflict",
+                    rejected=(NumericTokenRole.PURITY_GRADE,),
+                )
+        return None, tuple(sorted(tokens, key=lambda token: (token.start, token.end))), None
 
     def resolve(
         self,
@@ -367,13 +675,30 @@ class VersionedMaterialSemanticRegistry:
                     entity_type_hint = hint
                 break
 
-        purity_match = re.search(r"(?<!\d)(\d+(?:\.\d+)?)\s*%", value)
-        purity = float(purity_match.group(1)) if purity_match else None
-        if purity_match:
+        name_grade, numeric_tokens, name_purity = self._parse_numeric_grade(value, base_entity_id)
+        composition_grade = None
+        composition_purity = None
+        if composition:
+            composition_grade, _, composition_purity = self._parse_numeric_grade(
+                _norm(composition), base_entity_id
+            )
+        # A structured composition field is stronger than a grade embedded in
+        # the display name. Numeric token offsets still refer only to `name`.
+        numeric_grade = composition_grade or name_grade
+        purity = composition_purity if composition_purity is not None else name_purity
+        grade_token = next(
+            (token for token in numeric_tokens if token.role == NumericTokenRole.PURITY_GRADE), None
+        )
+        if grade_token and numeric_grade:
             spans.append(SemanticSpan(
-                text=purity_match.group(0), normalized_text=purity_match.group(0),
-                role=SemanticRole.PURITY, start=purity_match.start(), end=purity_match.end(),
-                evidence_id="purity.percent/v1",
+                text=grade_token.raw, normalized_text=grade_token.raw,
+                role=(
+                    SemanticRole.PURITY
+                    if numeric_grade.interpretation_kind == GradeInterpretationKind.EXPLICIT_COMPOSITION
+                    else SemanticRole.GRADE
+                ),
+                start=grade_token.start, end=grade_token.end,
+                evidence_id=grade_token.evidence_id,
             ))
         grade_modifiers = tuple(
             modifier for modifier in ("高纯", "high purity") if _contains(value, modifier)
@@ -411,17 +736,29 @@ class VersionedMaterialSemanticRegistry:
             material_family=material_family,
             category=category,
             product_form=resolved_form,
+            grade=numeric_grade.canonical_label if numeric_grade else None,
             composition=_norm(composition) or None,
             manufacturing_route=tuple(filter(None, (resolved_process, route))),
             rationale=(
                 f"entity-first semantic registry {self.version}: "
                 f"materials={material_rule_ids or ('unmatched',)}, "
                 f"process={process_rule.rule_id if process_rule else 'unmatched'}, "
-                f"form={form_rule.rule_id if form_rule else 'unmatched'}"
+                f"form={form_rule.rule_id if form_rule else 'unmatched'}, "
+                f"grade={numeric_grade.schema_id if numeric_grade else 'unmatched'}"
             ),
             confidence=confidence,
         )
         identity = self._enrich_identity(identity, value, production_process)
+        unresolved_grade = any(token.role == NumericTokenRole.UNRESOLVED for token in numeric_tokens)
+        if numeric_grade:
+            identity = replace(identity, grade=numeric_grade.canonical_label)
+        elif unresolved_grade:
+            identity = replace(
+                identity,
+                unresolved_attributes=tuple(dict.fromkeys((
+                    *identity.unresolved_attributes, "numeric_grade_basis",
+                ))),
+            )
         mention = MaterialMention(
             raw_text=name,
             normalized_text=value,
@@ -441,6 +778,8 @@ class VersionedMaterialSemanticRegistry:
             coating=identity.surface_coating,
             application=identity.application,
             constituent_entity_ids=constituent_ids,
+            numeric_grade=numeric_grade,
+            numeric_tokens=numeric_tokens,
         )
         identity_resolution = IdentityResolution(
             outcome=IdentityOutcome.RESOLVED if base_entity_id else IdentityOutcome.UNKNOWN,
@@ -458,15 +797,17 @@ class VersionedMaterialSemanticRegistry:
             for alias in rule.aliases
             if _norm(alias) and _norm(alias) != value
         ))
-        # Base-entity aliases must not erase request qualifiers. For example,
-        # "莫来石" is not a full synonym for "电熔莫来石" when the source is
-        # explicitly sintered. Product-entity aliases remain safe because they
-        # preserve the reviewed route/product identity.
-        intent_aliases = (
-            aliases
-            if product_entity_id or not (resolved_process or resolved_form or purity is not None)
-            else ()
+        # Base aliases must not erase any request qualifier. This includes
+        # negative numeric roles: "碳化硅" is not a full synonym for "F80碳化硅",
+        # even though F80 was correctly classified as grit rather than purity.
+        has_request_qualifier = bool(
+            resolved_process
+            or resolved_form
+            or purity is not None
+            or numeric_grade is not None
+            or numeric_tokens
         )
+        intent_aliases = () if has_request_qualifier else aliases
         retrieval_intent = RetrievalIntent(
             canonical_name=value,
             base_entity_id=base_entity_id,
@@ -481,6 +822,7 @@ class VersionedMaterialSemanticRegistry:
             purity=purity,
             identity_outcome=identity_resolution.outcome,
             identity_proof_ids=identity_resolution.evidence_ids,
+            numeric_grade=numeric_grade,
         )
         return RegistryResolution(
             identity=identity,
@@ -550,6 +892,31 @@ class VersionedMaterialSemanticRegistry:
                 resolved.identity_resolution.outcome.value
                 if resolved.identity_resolution else IdentityOutcome.UNKNOWN.value
             ),
+            "grade": (
+                f"{resolved.mention.numeric_grade.grade_value:g}"
+                if resolved.mention and resolved.mention.numeric_grade
+                else source.metadata.get("grade", "")
+            ),
+            "grade_schema_id": (
+                resolved.mention.numeric_grade.schema_id
+                if resolved.mention and resolved.mention.numeric_grade else ""
+            ),
+            "grade_schema_version": (
+                resolved.mention.numeric_grade.schema_version
+                if resolved.mention and resolved.mention.numeric_grade else ""
+            ),
+            "grade_basis_component_id": (
+                resolved.mention.numeric_grade.basis_component_id
+                if resolved.mention and resolved.mention.numeric_grade else ""
+            ),
+            "grade_interpretation_kind": (
+                resolved.mention.numeric_grade.interpretation_kind.value
+                if resolved.mention and resolved.mention.numeric_grade else ""
+            ),
+            "grade_evidence_scope": (
+                resolved.mention.numeric_grade.evidence_scope.value
+                if resolved.mention and resolved.mention.numeric_grade else ""
+            ),
         }
         return replace(
             source,
@@ -566,7 +933,7 @@ class NullMaterialRuleSuggestion:
 
 
 DEFAULT_MATERIAL_REGISTRY = VersionedMaterialSemanticRegistry(
-    version="material-semantic-registry/2.0.0",
+    version="material-semantic-registry/2.1.0",
     material_rules=(
         MaterialRule("material.zircon_mullite/v2", "zircon_mullite", "composite_materials", MaterialCategory.MANUFACTURED_MINERAL, ("锆莫来石", "zircon mullite"), entity_id="mat.composite.zircon_mullite", entity_type=EntityType.COMPOSITE, product_family_id="family.composite_materials", constituent_entity_ids=("mat.compound.zirconia", "mat.mineral.mullite")),
         MaterialRule("material.primary_aluminium/v2", "aluminium", "aluminium_products", MaterialCategory.METAL, ("原铝", "电解铝", "primary aluminium", "primary aluminum"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_entity_id="mat.product.primary_aluminium", product_family_id="family.aluminium_products", route="primary"),
@@ -605,5 +972,64 @@ DEFAULT_MATERIAL_REGISTRY = VersionedMaterialSemanticRegistry(
         TypedRelation("relation.mullite-is-aluminosilicate/v2", "material.mullite/v2", SemanticRelationType.IS_A, "aluminosilicate_mineral"),
         TypedRelation("relation.spinel-is-engineered-oxide/v2", "material.spinel/v2", SemanticRelationType.IS_A, "engineered_mixed_oxide"),
         TypedRelation("relation.corundum-is-alumina/v2", "material.corundum/v2", SemanticRelationType.IS_A, "family.alumina_products"),
+    ),
+    grade_schemas=(
+        PurityGradeSchema(
+            "grade.spinel.almatis-ar-al2o3/v1", "1.0.0", ("mat.engineered.spinel",),
+            "component.Al2O3", (78, 90), GradeEvidenceScope.SUPPLIER_SPECIFIC_RULE,
+            ("almatis.magnesium-aluminate-spinel-ar-series/v1",), ordered=True,
+            label_prefixes=("ar",),
+            interpretation_kind=GradeInterpretationKind.PRODUCT_GRADE_CLASS, priority=100,
+        ),
+        PurityGradeSchema(
+            "grade.magnesia.mgo.organization-default/v1", "1.0.0", ("mat.compound.magnesia",),
+            "component.MgO", (70, 80, 85, 88, 90, 92, 94, 95, 96, 97, 98, 99),
+            GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.spinel.al2o3.organization-default/v1", "1.0.0", ("mat.engineered.spinel",),
+            "component.Al2O3", (70, 78, 80, 90), GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.corundum.al2o3.organization-default/v1", "1.0.0", ("mat.mineral.corundum",),
+            "component.Al2O3", (70, 80, 85, 88, 90, 95, 97, 98, 99),
+            GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.alumina.al2o3.organization-default/v1", "1.0.0", ("mat.compound.alumina",),
+            "component.Al2O3", (70, 80, 85, 88, 90, 95, 97, 98, 99),
+            GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.bauxite.al2o3.organization-default/v1", "1.0.0", ("mat.mineral.bauxite",),
+            "component.Al2O3", (70, 75, 80, 82, 85, 88, 90),
+            GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.mullite.al2o3.organization-default/v1", "1.0.0", ("mat.mineral.mullite",),
+            "component.Al2O3", (70, 80, 90), GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.silicon-carbide.sic.organization-default/v1", "1.0.0",
+            ("mat.compound.silicon_carbide",), "component.SiC", (70, 80, 85, 88, 90, 95, 97, 98, 99),
+            GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.refractory-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.aluminium.al.organization-default/v1", "1.0.0", ("mat.element.aluminium",),
+            "element.Al", (70, 80, 90, 95, 97, 98, 99), GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.material-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
+        PurityGradeSchema(
+            "grade.silicon.si.organization-default/v1", "1.0.0", ("mat.element.silicon",),
+            "element.Si", (70, 80, 90, 95, 97, 98, 99), GradeEvidenceScope.ORGANIZATION_BUSINESS_RULE,
+            ("policy.material-numeric-grade-is-purity/v1",), ordered=True, priority=10,
+        ),
     ),
 )

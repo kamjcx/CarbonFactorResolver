@@ -283,6 +283,18 @@ def qualify_record(
             and text(source.production_process) == text(reference.production_process)
             else _dimension(QualificationStatus.MISMATCH, "grade anchor process is missing or incompatible")
         )
+        reference_grade_schema = text(reference.metadata.get("grade_schema_id"))
+        reference_grade_basis = text(reference.metadata.get("grade_basis_component_id"))
+        if reference_grade_schema or reference_grade_basis:
+            policy_checks["grade_schema"] = (
+                _dimension(QualificationStatus.PASS)
+                if text(source.metadata.get("grade_schema_id")) == reference_grade_schema
+                and text(source.metadata.get("grade_basis_component_id")) == reference_grade_basis
+                else _dimension(
+                    QualificationStatus.MISMATCH,
+                    "grade anchor schema or chemical basis differs from the reference",
+                )
+            )
         try:
             convert_factor(1.0, source.factor_unit, reference.factor_unit)
             policy_checks["reference_unit"] = _dimension(QualificationStatus.PASS)

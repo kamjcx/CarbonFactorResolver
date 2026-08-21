@@ -69,12 +69,14 @@ class SemanticFactorIndex:
         self.records = enriched
         digest_payload = "|".join(
             f"{record.source_id}:{record.metadata.get('base_entity_id', '')}:"
-            f"{record.metadata.get('product_entity_id', '')}"
+            f"{record.metadata.get('product_entity_id', '')}:"
+            f"{record.metadata.get('grade_schema_id', '')}:"
+            f"{record.metadata.get('grade', '')}"
             for record in sorted(enriched, key=lambda item: item.source_id)
         )
         content_digest = hashlib.sha256(digest_payload.encode("utf-8")).hexdigest()[:16]
         self.anchor = SemanticIndexAnchor(
-            index_version=f"semantic-factor-index/1.0.0+{content_digest}",
+            index_version=f"semantic-factor-index/1.1.0+{content_digest}",
             catalog_database_sha256=self.database_anchor.database_sha256,
             registry_version=self.registry.version,
             registry_sha256=self.registry.sha256,

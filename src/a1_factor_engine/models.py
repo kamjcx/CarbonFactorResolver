@@ -168,6 +168,40 @@ class SemanticRole(str, Enum):
     CONSTITUENT = "CONSTITUENT"
 
 
+class NumericTokenRole(str, Enum):
+    PURITY_GRADE = "PURITY_GRADE"
+    PARTICLE_SIZE = "PARTICLE_SIZE"
+    GRIT_SIZE = "GRIT_SIZE"
+    MODEL_CODE = "MODEL_CODE"
+    ALLOY_GRADE = "ALLOY_GRADE"
+    STANDARD_NUMBER = "STANDARD_NUMBER"
+    YEAR = "YEAR"
+    PACKAGING = "PACKAGING"
+    UNRESOLVED = "UNRESOLVED"
+
+
+class GradeInterpretationKind(str, Enum):
+    EXPLICIT_COMPOSITION = "EXPLICIT_COMPOSITION"
+    IMPLICIT_GRADE_CLASS = "IMPLICIT_GRADE_CLASS"
+    PRODUCT_GRADE_CLASS = "PRODUCT_GRADE_CLASS"
+
+
+class GradeEvidenceScope(str, Enum):
+    EXPLICIT_TEXT = "EXPLICIT_TEXT"
+    REVIEWED_STANDARD_RULE = "REVIEWED_STANDARD_RULE"
+    SUPPLIER_SPECIFIC_RULE = "SUPPLIER_SPECIFIC_RULE"
+    ORGANIZATION_BUSINESS_RULE = "ORGANIZATION_BUSINESS_RULE"
+
+
+class SpecificationOperator(str, Enum):
+    EXACT = "EXACT"
+    NOMINAL = "NOMINAL"
+    MINIMUM = "MINIMUM"
+    MINIMUM_EXCLUSIVE = "MINIMUM_EXCLUSIVE"
+    MAXIMUM = "MAXIMUM"
+    RANGE = "RANGE"
+
+
 class EntityType(str, Enum):
     ELEMENTAL_METAL = "ELEMENTAL_METAL"
     ELEMENT = "ELEMENT"
@@ -409,6 +443,91 @@ class SemanticSpan:
 
 
 @dataclass(frozen=True, slots=True)
+class NumericTokenResolution:
+    raw: str
+    start: int
+    end: int
+    role: NumericTokenRole
+    evidence_id: str
+    rejected_roles: tuple[NumericTokenRole, ...] = ()
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.raw or not self.evidence_id or not self.reason:
+            raise ValueError("numeric token resolution requires raw text, evidence and reason")
+        if self.start < 0 or self.end <= self.start:
+            raise ValueError("numeric token resolution offsets are invalid")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "raw": self.raw,
+            "span": (self.start, self.end),
+            "role": self.role.value,
+            "evidence_id": self.evidence_id,
+            "rejected_roles": tuple(role.value for role in self.rejected_roles),
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PurityGrade:
+    raw_label: str
+    grade_value: float
+    basis_component_id: str
+    interpretation_kind: GradeInterpretationKind
+    schema_id: str
+    schema_version: str
+    evidence_scope: GradeEvidenceScope
+    evidence_ids: tuple[str, ...]
+    parser_rule_ids: tuple[str, ...]
+    specification_operator: SpecificationOperator | None = None
+    nominal_value: float | None = None
+    specification_min: float | None = None
+    specification_max: float | None = None
+    ordered: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.raw_label.strip() or not self.schema_id.strip() or not self.schema_version.strip():
+            raise ValueError("purity grade requires label and schema identity")
+        if (
+            not self.basis_component_id.strip()
+            or not isfinite(self.grade_value)
+            or not 0 < self.grade_value <= 100
+        ):
+            raise ValueError("purity grade requires a basis component and value in (0, 100]")
+        specification_values = (
+            self.nominal_value, self.specification_min, self.specification_max,
+        )
+        if any(value is not None and not isfinite(value) for value in specification_values):
+            raise ValueError("purity grade specification values must be finite")
+
+    @property
+    def canonical_label(self) -> str:
+        return f"{self.schema_id}:{self.grade_value:g}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "raw_label": self.raw_label,
+            "grade_value": self.grade_value,
+            "basis_component_id": self.basis_component_id,
+            "interpretation_kind": self.interpretation_kind.value,
+            "schema_id": self.schema_id,
+            "schema_version": self.schema_version,
+            "evidence_scope": self.evidence_scope.value,
+            "evidence_ids": self.evidence_ids,
+            "parser_rule_ids": self.parser_rule_ids,
+            "specification_operator": (
+                self.specification_operator.value if self.specification_operator else None
+            ),
+            "nominal_value": self.nominal_value,
+            "specification_min": self.specification_min,
+            "specification_max": self.specification_max,
+            "ordered": self.ordered,
+            "canonical_label": self.canonical_label,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class MaterialMention:
     raw_text: str
     normalized_text: str
@@ -425,6 +544,8 @@ class MaterialMention:
     coating: str | None = None
     application: str | None = None
     constituent_entity_ids: tuple[str, ...] = ()
+    numeric_grade: PurityGrade | None = None
+    numeric_tokens: tuple[NumericTokenResolution, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -443,6 +564,8 @@ class MaterialMention:
             "coating": self.coating,
             "application": self.application,
             "constituent_entity_ids": self.constituent_entity_ids,
+            "numeric_grade": self.numeric_grade.to_dict() if self.numeric_grade else None,
+            "numeric_tokens": tuple(token.to_dict() for token in self.numeric_tokens),
         }
 
 
@@ -494,6 +617,7 @@ class RetrievalIntent:
     purity: float | None = None
     identity_outcome: IdentityOutcome = IdentityOutcome.UNKNOWN
     identity_proof_ids: tuple[str, ...] = ()
+    numeric_grade: PurityGrade | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -512,6 +636,7 @@ class RetrievalIntent:
             "purity": self.purity,
             "identity_outcome": self.identity_outcome.value,
             "identity_proof_ids": self.identity_proof_ids,
+            "numeric_grade": self.numeric_grade.to_dict() if self.numeric_grade else None,
         }
 
 
@@ -1029,6 +1154,14 @@ def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
         "product_form": normalized(activity.product_form),
         "composition": normalized(activity.composition),
         "production_process": normalized(activity.production_process),
+        "numeric_grade": (
+            {
+                "schema_id": activity.material_mention.numeric_grade.schema_id,
+                "grade_value": activity.material_mention.numeric_grade.grade_value,
+                "basis": activity.material_mention.numeric_grade.basis_component_id,
+            }
+            if activity.material_mention and activity.material_mention.numeric_grade else None
+        ),
         "boundary": normalized(activity.boundary),
         "target_factor_unit": normalized(activity.target_factor_unit),
     }

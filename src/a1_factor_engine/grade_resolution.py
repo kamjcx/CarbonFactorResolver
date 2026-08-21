@@ -42,7 +42,14 @@ def resolve_grade(
     candidate: Candidate,
     series: tuple[SourceRecord, ...],
 ) -> Candidate:
-    target = extract_grade(activity.composition) or extract_grade(activity.canonical_name)
+    structured_grade = (
+        activity.material_mention.numeric_grade
+        if activity.material_mention else None
+    )
+    target = (
+        structured_grade.grade_value
+        if structured_grade else extract_grade(activity.composition) or extract_grade(activity.canonical_name)
+    )
     anchors: list[tuple[float, SourceRecord]] = []
     seen: set[str] = set()
     for record in series:
@@ -127,7 +134,7 @@ def resolve_grade(
             factor_value=convert_factor(source.factor_value, source.factor_unit, candidate.factor_unit),
             base_source_ids=(source.source_id,),
         )
-    difference = "unknown"
+    difference = f"source grade unavailable for target {target:g}" if target is not None else "unknown"
     if target is not None and source_grade is not None:
         difference = f"{target - source_grade:+g} percentage points"
     return derive_candidate(

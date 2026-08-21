@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 try:
@@ -18,10 +19,19 @@ try:
 except ImportError as exc:  # pragma: no cover - operator environment guard
     raise SystemExit("pdfplumber is required to import the standard PDF") from exc
 
+try:
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+except ImportError:  # pragma: no cover - optional workbook import guard
+    openpyxl = None
+    get_column_letter = None
+
 from a1_factor_engine import (
     EnergyConversionRecord,
     EnergyQuotaModifierRule,
     EnergyQuotaRecord,
+    EnterpriseEnergyProfileRecord,
+    EnterpriseProcessEmissionRecord,
     ParameterSourceType,
     ScopedProcessParameterRecord,
     create_energy_database,
@@ -31,6 +41,12 @@ from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 STANDARD_CODE = "T/CHNRISC 0008-2025"
 PUBLISHER = "河南省耐火材料行业协会"
 WATERMARK_PARTS = frozenset("平台信息标准团体全国")
+ENTERPRISE_SHEET_NAME = "能碳转换碳排放核算--89个品种"
+ENTERPRISE_PROVIDER = "企业能耗核算数据汇编（用户提供）"
+REVIEW_MARKERS = re.compile(
+    r"(?:需要核实|核实|没有企业数据|无企业数据|征求意见|参考|是否|合并|"
+    r"类比|\?|？|待确认|同上)"
+)
 
 
 def sha256(path: Path) -> str:
@@ -65,6 +81,292 @@ def canonical_product_key(product_name: str) -> str:
         "电熔镁铝尖晶石": "electrofused spinel",
         "烧结镁铝尖晶石": "sintered spinel",
     }.get(product_name, product_name)
+
+
+def _workbook_number(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _workbook_text(value: object) -> str:
+    return " ".join(str(value or "").replace("\r", "\n").split())
+
+
+def extract_enterprise_profiles(
+    workbook_path: Path,
+    source_sha: str,
+) -> list[EnterpriseEnergyProfileRecord]:
+    """Extract current-data rows and preserve level-specific allocation provenance."""
+
+    if openpyxl is None or get_column_letter is None:
+        raise SystemExit("openpyxl is required for --enterprise-energy-workbook")
+    formulas_book = openpyxl.load_workbook(workbook_path, data_only=False, read_only=False)
+    values_book = openpyxl.load_workbook(workbook_path, data_only=True, read_only=False)
+    try:
+        if ENTERPRISE_SHEET_NAME not in formulas_book.sheetnames:
+            raise ValueError(f"enterprise workbook is missing sheet {ENTERPRISE_SHEET_NAME}")
+        formula_sheet = formulas_book[ENTERPRISE_SHEET_NAME]
+        value_sheet = values_book[ENTERPRISE_SHEET_NAME]
+
+        def is_primary(row_number: int) -> bool:
+            values = tuple(
+                _workbook_number(value_sheet.cell(row_number, column).value)
+                for column in range(4, 8)
+            )
+            has_label = bool(
+                _workbook_text(value_sheet.cell(row_number, 2).value)
+                or _workbook_text(value_sheet.cell(row_number, 3).value)
+            )
+            return bool(
+                has_label
+                and all(value is not None for value in values)
+                and abs(values[3] - 0.5306) <= 1e-9
+            )
+
+        primary_rows = [
+            row_number for row_number in range(5, value_sheet.max_row + 1)
+            if is_primary(row_number)
+        ]
+        output: list[EnterpriseEnergyProfileRecord] = []
+        product_group = ""
+        sequence_id = ""
+        for position, row_number in enumerate(primary_rows):
+            raw_sequence = _workbook_number(value_sheet.cell(row_number, 1).value)
+            if raw_sequence is not None:
+                sequence_id = f"{raw_sequence:g}"
+            observed_group = _workbook_text(value_sheet.cell(row_number, 2).value)
+            if observed_group:
+                product_group = observed_group
+            variant = _workbook_text(value_sheet.cell(row_number, 3).value)
+            product_name = variant or product_group
+            if not sequence_id or not product_name:
+                raise ValueError(f"enterprise profile row {row_number} has incomplete identity")
+            combined_name = " ".join(dict.fromkeys(filter(None, (product_group, variant))))
+            mapped_product = canonical_product_key(product_name)
+            canonical_product = (
+                mapped_product if mapped_product != product_name else combined_name
+            )
+            resolved = DEFAULT_MATERIAL_REGISTRY.resolve(combined_name or product_name)
+            identity = resolved.identity
+            head_material = identity.head_material or product_name
+            process = identity.manufacturing_route[0] if identity.manufacturing_route else ""
+
+            next_row = primary_rows[position + 1] if position + 1 < len(primary_rows) else value_sheet.max_row + 1
+            context: list[str] = []
+            for context_row in range(row_number + 1, next_row):
+                for column in (2, 3, 22, 23):
+                    text = _workbook_text(value_sheet.cell(context_row, column).value)
+                    if not text or text in {"0005能耗团标", "0006碳排放团标", "无，新增"}:
+                        continue
+                    if text.startswith("能耗标准修订后"):
+                        continue
+                    context.append(f"{get_column_letter(column)}{context_row}: {text}")
+            primary_note = _workbook_text(value_sheet.cell(row_number, 22).value)
+            note_parts = tuple(filter(None, (primary_note, *context)))
+            quality_note = " | ".join(note_parts) or "workbook allocation; no additional row note"
+            needs_review = bool(REVIEW_MARKERS.search(quality_note))
+
+            for level, (energy_column, share_column, formula_column) in enumerate(
+                ((4, 10, 13), (5, 11, 14), (6, 12, 15)),
+                1,
+            ):
+                total_energy = _workbook_number(value_sheet.cell(row_number, energy_column).value)
+                electricity_share = _workbook_number(value_sheet.cell(row_number, share_column).value)
+                if total_energy is None or electricity_share is None:
+                    raise ValueError(
+                        f"enterprise profile row {row_number} level {level} lacks energy/share"
+                    )
+                formula = _workbook_text(formula_sheet.cell(row_number, formula_column).value)
+                remainder_share = 1.0 - electricity_share
+                if abs(remainder_share) <= 1e-12:
+                    remainder_share = 0.0
+                    remainder_carrier = "none"
+                    allocation_status = "ALL_ELECTRIC"
+                elif (
+                    re.search(rf"\bI{row_number}\b", formula, re.IGNORECASE)
+                    and _workbook_number(value_sheet.cell(row_number, 9).value) is not None
+                ):
+                    remainder_carrier = "standard_coal"
+                    allocation_status = "ELECTRICITY_STANDARD_COAL"
+                elif (
+                    re.search(rf"\bH{row_number}\b", formula, re.IGNORECASE)
+                    and _workbook_number(value_sheet.cell(row_number, 8).value) is not None
+                ):
+                    remainder_carrier = "natural_gas"
+                    allocation_status = "ELECTRICITY_NATURAL_GAS"
+                else:
+                    remainder_carrier = "unresolved"
+                    allocation_status = "UNRESOLVED_REMAINDER"
+                supported_carrier = remainder_carrier in {"none", "natural_gas"}
+                runtime_eligible = supported_carrier and not needs_review
+                if needs_review:
+                    allocation_status += "_NEEDS_REVIEW"
+                energy_cell = f"{get_column_letter(energy_column)}{row_number}"
+                share_cell = f"{get_column_letter(share_column)}{row_number}"
+                formula_cell = f"{get_column_letter(formula_column)}{row_number}"
+                output.append(EnterpriseEnergyProfileRecord(
+                    profile_id=f"enterprise-energy-89:r{row_number:03d}:l{level}",
+                    sequence_id=sequence_id,
+                    product_name=product_name,
+                    product_group=product_group,
+                    head_material=head_material,
+                    production_process=process,
+                    product_form=identity.product_form or "",
+                    quota_level=level,
+                    total_energy_kgce_per_t=total_energy,
+                    electricity_share=electricity_share,
+                    remainder_carrier=remainder_carrier,
+                    remainder_share=remainder_share,
+                    source_type=ParameterSourceType.USER_CONFIRMED_ENGINEERING_DATA,
+                    provider=ENTERPRISE_PROVIDER,
+                    locator=(
+                        f"workbook:{workbook_path.name}#'{ENTERPRISE_SHEET_NAME}'!"
+                        f"{energy_cell}:{formula_cell}"
+                    ),
+                    worksheet_name=ENTERPRISE_SHEET_NAME,
+                    worksheet_row=row_number,
+                    energy_cell=energy_cell,
+                    electricity_share_cell=share_cell,
+                    formula_cell=formula_cell,
+                    canonical_product=canonical_product,
+                    citation=(
+                        f"{workbook_path.name}，{ENTERPRISE_SHEET_NAME}，"
+                        f"第{row_number}行，{level}级"
+                    ),
+                    quality_note=quality_note,
+                    allocation_status=allocation_status,
+                    source_sha256=source_sha,
+                    metadata={
+                        "combined_product_name": combined_name,
+                        "formula": formula,
+                        "primary_note": primary_note,
+                        "context_json": json.dumps(context, ensure_ascii=False),
+                        "electricity_factor_tco2_per_mwh": _workbook_text(
+                            value_sheet.cell(row_number, 7).value
+                        ),
+                        "natural_gas_factor_tco2_per_tce": _workbook_text(
+                            value_sheet.cell(row_number, 8).value
+                        ),
+                        "standard_coal_factor_tco2_per_tce": _workbook_text(
+                            value_sheet.cell(row_number, 9).value
+                        ),
+                    },
+                    runtime_eligible=runtime_eligible,
+                ))
+        if len(output) != 273:
+            raise ValueError(f"expected 273 level profiles, observed {len(output)}")
+        if len({item.sequence_id for item in output}) != 89:
+            raise ValueError("enterprise workbook does not contain exactly 89 sequence IDs")
+        key_counts: dict[tuple[str, int], int] = {}
+        for item in output:
+            key = (item.canonical_product.casefold(), item.quota_level)
+            key_counts[key] = key_counts.get(key, 0) + 1
+        return [
+            replace(
+                item,
+                runtime_eligible=False,
+                allocation_status=f"{item.allocation_status}_AMBIGUOUS_DUPLICATE",
+                quality_note=(
+                    f"{item.quality_note} | duplicate canonical product/level; "
+                    "runtime selection requires a distinguishing attribute"
+                ),
+            )
+            if key_counts[(item.canonical_product.casefold(), item.quota_level)] > 1
+            else item
+            for item in output
+        ]
+    finally:
+        formulas_book.close()
+        values_book.close()
+
+
+def extract_enterprise_process_emissions(
+    workbook_path: Path,
+    source_sha: str,
+    profiles: list[EnterpriseEnergyProfileRecord],
+) -> list[EnterpriseProcessEmissionRecord]:
+    """Extract level-specific non-energy process CO2 cells with exact workbook lineage."""
+
+    if openpyxl is None or get_column_letter is None:
+        raise SystemExit("openpyxl is required for --enterprise-energy-workbook")
+    formulas_book = openpyxl.load_workbook(workbook_path, data_only=False, read_only=False)
+    values_book = openpyxl.load_workbook(workbook_path, data_only=True, read_only=False)
+    try:
+        formula_sheet = formulas_book[ENTERPRISE_SHEET_NAME]
+        value_sheet = values_book[ENTERPRISE_SHEET_NAME]
+        output: list[EnterpriseProcessEmissionRecord] = []
+        for profile in profiles:
+            if not profile.production_process:
+                continue
+            emission_column = 15 + profile.quota_level
+            raw_value = _workbook_number(
+                value_sheet.cell(profile.worksheet_row, emission_column).value
+            )
+            if raw_value is None:
+                continue
+            emission_cell = f"{get_column_letter(emission_column)}{profile.worksheet_row}"
+            formula = _workbook_text(
+                formula_sheet.cell(profile.worksheet_row, emission_column).value
+            )
+            remark = _workbook_text(value_sheet.cell(profile.worksheet_row, 22).value)
+            is_electrode = "电极" in remark or bool(re.search(r"44\s*/\s*12", formula))
+            is_decomposition = "分解" in remark
+            if is_electrode and is_decomposition:
+                emission_name = "combined_electrode_and_decomposition_co2"
+            elif is_electrode:
+                emission_name = "direct_electrode_oxidation_co2"
+            elif is_decomposition:
+                emission_name = "decomposition_process_co2"
+            else:
+                emission_name = "additional_direct_process_co2"
+            metadata = {
+                "enterprise_energy_profile_id": profile.profile_id,
+                "process_emission_kind": emission_name,
+                "remark": remark,
+                "raw_unit": "kgCO2e/t product",
+                "stoichiometric_formula": formula,
+            }
+            output.append(EnterpriseProcessEmissionRecord(
+                emission_id=(
+                    f"enterprise-process-emission-89:r{profile.worksheet_row:03d}:"
+                    f"l{profile.quota_level}:{emission_name}"
+                ),
+                sequence_id=profile.sequence_id,
+                product_name=profile.product_name,
+                canonical_product=profile.canonical_product,
+                head_material=profile.head_material,
+                production_process=profile.production_process,
+                quota_level=profile.quota_level,
+                emission_name=emission_name,
+                value_kgco2e_per_t=raw_value,
+                source_type=ParameterSourceType.USER_CONFIRMED_ENGINEERING_DATA,
+                provider=ENTERPRISE_PROVIDER,
+                locator=(
+                    f"workbook:{workbook_path.name}#'{ENTERPRISE_SHEET_NAME}'!{emission_cell}"
+                ),
+                worksheet_name=ENTERPRISE_SHEET_NAME,
+                worksheet_row=profile.worksheet_row,
+                emission_cell=emission_cell,
+                formula=formula,
+                citation=(
+                    f"{workbook_path.name}，{ENTERPRISE_SHEET_NAME}，"
+                    f"{emission_cell}，{profile.quota_level}级"
+                ),
+                quality_note=(
+                    f"{profile.quality_note} | additional process emission; "
+                    f"remark: {remark or 'none'}"
+                ),
+                source_sha256=source_sha,
+                metadata=metadata,
+                runtime_eligible=profile.runtime_eligible,
+            ))
+        return output
+    finally:
+        formulas_book.close()
+        values_book.close()
 
 
 def extract_quotas(pdf: pdfplumber.PDF, source_sha: str) -> list[EnergyQuotaRecord]:
@@ -281,13 +583,52 @@ def load_process_parameters(path: Path | None) -> list[ScopedProcessParameterRec
     ) for item in values]
 
 
+def annotate_profile_quota_comparisons(
+    profiles: list[EnterpriseEnergyProfileRecord],
+    quotas: list[EnergyQuotaRecord],
+) -> list[EnterpriseEnergyProfileRecord]:
+    quota_groups: dict[tuple[str, int], list[EnergyQuotaRecord]] = {}
+    for quota in quotas:
+        key = (
+            _workbook_text(quota.canonical_product or quota.product_name).casefold(),
+            quota.quota_level,
+        )
+        quota_groups.setdefault(key, []).append(quota)
+    output: list[EnterpriseEnergyProfileRecord] = []
+    for profile in profiles:
+        key = (_workbook_text(profile.canonical_product).casefold(), profile.quota_level)
+        matches = quota_groups.get(key, [])
+        metadata = dict(profile.metadata)
+        if len(matches) == 1:
+            quota = matches[0]
+            difference = profile.total_energy_kgce_per_t - quota.value_kgce_per_t
+            metadata.update({
+                "formal_quota_record_id": quota.record_id,
+                "formal_quota_value_kgce_per_t": f"{quota.value_kgce_per_t:g}",
+                "workbook_minus_formal_quota_kgce_per_t": f"{difference:g}",
+            })
+            quality_note = profile.quality_note
+            if abs(difference) > 1e-9:
+                quality_note += (
+                    f" | workbook energy differs from formal quota {quota.value_kgce_per_t:g} "
+                    f"kgce/t by {difference:g} kgce/t"
+                )
+            output.append(replace(profile, metadata=metadata, quality_note=quality_note))
+        else:
+            metadata["formal_quota_match"] = "none" if not matches else "ambiguous"
+            output.append(replace(profile, metadata=metadata))
+    return output
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("pdf", type=Path)
     parser.add_argument("database", type=Path)
     parser.add_argument("--expected-source-sha256", required=True)
-    parser.add_argument("--dataset-version", default="t-chnrisc-0008-2025/v1")
+    parser.add_argument("--dataset-version")
     parser.add_argument("--process-parameters-json", type=Path)
+    parser.add_argument("--enterprise-energy-workbook", type=Path)
+    parser.add_argument("--expected-workbook-sha256")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
     observed_sha = sha256(args.pdf)
@@ -302,17 +643,62 @@ def main() -> None:
         quotas = extract_quotas(pdf, observed_sha)
         conversions = extract_conversions(pdf)
         modifier_rules = extract_modifier_rules(pdf)
+    enterprise_profiles: list[EnterpriseEnergyProfileRecord] = []
+    enterprise_process_emissions: list[EnterpriseProcessEmissionRecord] = []
+    workbook_sha = ""
+    if args.enterprise_energy_workbook:
+        if not args.expected_workbook_sha256:
+            raise SystemExit(
+                "--expected-workbook-sha256 is required with --enterprise-energy-workbook"
+            )
+        workbook_sha = sha256(args.enterprise_energy_workbook)
+        if workbook_sha != args.expected_workbook_sha256.casefold():
+            raise SystemExit(
+                "source workbook SHA-256 mismatch: "
+                f"expected {args.expected_workbook_sha256}, observed {workbook_sha}"
+            )
+        enterprise_profiles = extract_enterprise_profiles(
+            args.enterprise_energy_workbook, workbook_sha
+        )
+        enterprise_profiles = annotate_profile_quota_comparisons(
+            enterprise_profiles, quotas
+        )
+        enterprise_process_emissions = extract_enterprise_process_emissions(
+            args.enterprise_energy_workbook, workbook_sha, enterprise_profiles
+        )
+    dataset_version = args.dataset_version or (
+        "t-chnrisc-0008-2025+enterprise-energy-89/v3"
+        if enterprise_profiles else "t-chnrisc-0008-2025/v1"
+    )
     anchor = create_energy_database(
         args.database,
         database_name="refractory-energy-parameters.db",
-        dataset_version=args.dataset_version,
+        dataset_version=dataset_version,
         source_standard_code=STANDARD_CODE,
         source_sha256=observed_sha,
         source_locator=f"standard:{STANDARD_CODE.replace(' ', '-')}",
         quotas=quotas,
         conversions=conversions,
         process_parameters=load_process_parameters(args.process_parameters_json),
+        enterprise_profiles=enterprise_profiles,
+        enterprise_process_emissions=enterprise_process_emissions,
         modifier_rules=modifier_rules,
+        additional_metadata=(
+            {
+                "enterprise_workbook_name": args.enterprise_energy_workbook.name,
+                "enterprise_workbook_sha256": workbook_sha,
+                "enterprise_workbook_sheet": ENTERPRISE_SHEET_NAME,
+                "enterprise_workbook_range": "A1:W274",
+                "enterprise_profile_records": str(len(enterprise_profiles)),
+                "enterprise_process_emission_records": str(
+                    len(enterprise_process_emissions)
+                ),
+                "energy_selection_policy_id": (
+                    "process.database-priority-energy-replacement/v1"
+                ),
+            }
+            if enterprise_profiles else {}
+        ),
         overwrite=args.overwrite,
     )
     print(json.dumps({
@@ -320,6 +706,11 @@ def main() -> None:
         "quota_records": len(quotas),
         "conversion_records": len(conversions),
         "modifier_rules": len(modifier_rules),
+        "enterprise_profile_records": len(enterprise_profiles),
+        "enterprise_process_emission_records": len(enterprise_process_emissions),
+        "enterprise_runtime_eligible_records": sum(
+            item.runtime_eligible for item in enterprise_profiles
+        ),
     }, ensure_ascii=False, indent=2))
 
 

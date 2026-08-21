@@ -38,6 +38,8 @@ EXPECTED_UNITS = {
     "natural_gas_kgce_per_nm3": "kgce/nm3",
     "electricity_ef_kgco2e_per_kwh": "kgco2e/kwh",
     "natural_gas_ef_kgco2e_per_nm3": "kgco2e/nm3",
+    "reference_additional_process_emission_kgco2e_per_kg": "kgco2e/kg",
+    "target_additional_process_emission_kgco2e_per_kg": "kgco2e/kg",
 }
 
 
@@ -74,6 +76,38 @@ def _reference_includes_process(
     )
 
 
+def _policy_assumptions(
+    evidence: tuple[ParameterEvidence, ...],
+) -> tuple[str, ...]:
+    assumptions: list[str] = []
+    if any(
+        str(item.metadata.get("runtime_eligible", "")).casefold() == "false"
+        for item in evidence
+        if item.metadata.get("enterprise_energy_profile_id")
+    ):
+        assumptions.append(
+            "exact enterprise energy profiles marked for review are used under the "
+            "database-priority energy-replacement policy"
+        )
+    if any(
+        item.metadata.get("parameter_scope")
+        == "unique_generic_energy_carrier_fallback"
+        for item in evidence
+    ):
+        assumptions.append(
+            "unique database energy-carrier parameters are reused across material routes"
+        )
+    if any(
+        item.metadata.get("process_inclusion_basis") == "policy_assumption"
+        for item in evidence
+    ):
+        assumptions.append(
+            "the lifecycle reference is assumed to include route energy under the "
+            "database-priority policy"
+        )
+    return tuple(assumptions)
+
+
 def resolve_process_variant(
     candidate: Candidate,
     evidence: tuple[ParameterEvidence, ...],
@@ -89,6 +123,18 @@ def resolve_process_variant(
         values = {name: parameters[name].value for name in FULL_REQUIRED}
         target_gas_share = parameters.get("target_natural_gas_share")
         values["target_natural_gas_share"] = target_gas_share.value if target_gas_share else 0.0
+        reference_additional = parameters.get(
+            "reference_additional_process_emission_kgco2e_per_kg"
+        )
+        target_additional = parameters.get(
+            "target_additional_process_emission_kgco2e_per_kg"
+        )
+        values["reference_additional_process"] = (
+            reference_additional.value if reference_additional else 0.0
+        )
+        values["target_additional_process"] = (
+            target_additional.value if target_additional else 0.0
+        )
         for share in (
             "reference_electricity_share",
             "reference_natural_gas_share",
@@ -98,7 +144,11 @@ def resolve_process_variant(
             if not 0 <= values[share] <= 1:
                 raise ValueError(f"{share} must be between zero and one")
         for name, value in values.items():
-            if value <= 0 and "share" not in name:
+            if (
+                value <= 0
+                and "share" not in name
+                and "additional_process" not in name
+            ):
                 raise ValueError(f"{name} must be positive")
         if abs(values["reference_electricity_share"] + values["reference_natural_gas_share"] - 1.0) > 1e-6:
             raise ValueError("reference process energy shares must sum to one")
@@ -137,39 +187,78 @@ def resolve_process_variant(
             * values["natural_gas_ef_kgco2e_per_nm3"]
             / 1000
         )
-        reference_process = ref_electricity + ref_gas
+        if (
+            values["reference_additional_process"] < 0
+            or values["target_additional_process"] < 0
+        ):
+            raise ValueError("additional process emissions must be non-negative")
+        reference_process = (
+            ref_electricity + ref_gas + values["reference_additional_process"]
+        )
         base_factor = convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
         common_upstream = base_factor - reference_process
         if common_upstream < -1e-12:
             raise ValueError("process decomposition produced a negative common upstream factor")
         common_upstream = max(0.0, common_upstream)
-        output_kg = common_upstream + target_electricity + target_gas
+        output_kg = (
+            common_upstream
+            + target_electricity
+            + target_gas
+            + values["target_additional_process"]
+        )
         output = convert_factor(output_kg, "kgCO2e/kg", candidate.factor_unit)
+        inclusion_evidence = next((
+            item for item in evidence
+            if str(item.metadata.get("reference_includes_process", "")).casefold()
+            in {"true", "1", "yes"}
+        ), None)
+        used_parameter_ids = tuple(
+            parameters[name].parameter_id
+            for name in sorted(
+                FULL_REQUIRED
+                | ({"target_natural_gas_share"} if target_gas_share else set())
+                | ({reference_additional.name} if reference_additional else set())
+                | ({target_additional.name} if target_additional else set())
+            )
+        ) + ((inclusion_evidence.parameter_id,) if inclusion_evidence else ())
         assumptions = (
             "common raw-material upstream is equivalent between reference and target routes",
             "raw-material losses and product yield are equivalent",
             "the reference factor includes the removed process energy",
             "target and reference process-energy boundaries are compatible",
             "m3 and Nm3 are treated as the same quantity basis for this proxy",
+            *_policy_assumptions(evidence),
+        )
+        includes_additional_process = bool(reference_additional or target_additional)
+        formula_id = (
+            "process.replace_energy_and_additional_process/v2"
+            if includes_additional_process
+            else "process.replace_energy_components/v1"
+        )
+        formula_expression = (
+            "EF_target = EF_reference - EF_reference_energy "
+            "- EF_reference_additional_process + EF_target_energy "
+            "+ EF_target_additional_process"
+            if includes_additional_process
+            else "EF_target = EF_reference - EF_reference_process + EF_target_process"
         )
         step = TransformationStep(
             step_id=f"process:{candidate.candidate_id}:replace-energy",
             router_type=RouterType.PROCESS_VARIANT,
             method=ProcessResolutionMode.DECOMPOSE_AND_REBUILD.value,
             input_source_ids=(candidate.source.source_id,),
-            parameter_ids=tuple(
-                parameters[name].parameter_id
-                for name in sorted(FULL_REQUIRED | ({"target_natural_gas_share"} if target_gas_share else set()))
-            ),
-            formula_id="process.replace_energy_components/v1",
-            formula_expression="EF_target = EF_reference - EF_reference_process + EF_target_process",
+            parameter_ids=used_parameter_ids,
+            formula_id=formula_id,
+            formula_expression=formula_expression,
             input_values={
                 "ef_reference": base_factor,
                 "reference_electricity": ref_electricity,
                 "reference_natural_gas": ref_gas,
+                "reference_additional_process": values["reference_additional_process"],
                 "common_upstream": common_upstream,
                 "target_electricity": target_electricity,
                 "target_natural_gas": target_gas,
+                "target_additional_process": values["target_additional_process"],
             },
             output_value=output,
             output_unit=candidate.factor_unit,

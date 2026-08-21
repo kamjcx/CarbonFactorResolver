@@ -36,6 +36,7 @@ tmp/
 
 # Locally supplied/licensed standards used only as import evidence
 docs/*--平台.pdf
+docs/5.19--89个品种材料碳排放核算数据*.xlsx
 
 # Internal implementation-session notes
 task_plan.md
