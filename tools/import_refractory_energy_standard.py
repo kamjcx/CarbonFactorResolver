@@ -35,6 +35,7 @@ from a1_factor_engine import (
     ParameterSourceType,
     ScopedProcessParameterRecord,
     create_energy_database,
+    interpret_process_emission_observation,
 )
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 
@@ -302,16 +303,21 @@ def extract_enterprise_process_emissions(
             if not profile.production_process:
                 continue
             emission_column = 15 + profile.quota_level
-            raw_value = _workbook_number(
-                value_sheet.cell(profile.worksheet_row, emission_column).value
-            )
-            if raw_value is None:
-                continue
             emission_cell = f"{get_column_letter(emission_column)}{profile.worksheet_row}"
             formula = _workbook_text(
                 formula_sheet.cell(profile.worksheet_row, emission_column).value
             )
             remark = _workbook_text(value_sheet.cell(profile.worksheet_row, 22).value)
+            source_cell_value = value_sheet.cell(profile.worksheet_row, emission_column).value
+            observation = interpret_process_emission_observation(
+                _workbook_number(source_cell_value),
+                formula=formula,
+                remark=remark,
+                blank_means_zero=True,
+            )
+            if observation is None:
+                continue
+            raw_value = observation.value_kgco2e_per_t
             is_electrode = "电极" in remark or bool(re.search(r"44\s*/\s*12", formula))
             is_decomposition = "分解" in remark
             if is_electrode and is_decomposition:
@@ -328,6 +334,17 @@ def extract_enterprise_process_emissions(
                 "remark": remark,
                 "raw_unit": "kgCO2e/t product",
                 "stoichiometric_formula": formula,
+                "source_cell_was_blank": str(source_cell_value is None).lower(),
+                "process_emission_observation_kind": observation.evidence_kind,
+                "requires_process_emission_calculation": str(
+                    observation.requires_calculation
+                ).lower(),
+                "process_emission_trigger_terms": json.dumps(
+                    observation.trigger_terms, ensure_ascii=False
+                ),
+                "blank_zero_policy_id": (
+                    "enterprise-energy-89.blank-zero-unless-process-trigger/v1"
+                ),
             }
             output.append(EnterpriseProcessEmissionRecord(
                 emission_id=(
@@ -667,7 +684,7 @@ def main() -> None:
             args.enterprise_energy_workbook, workbook_sha, enterprise_profiles
         )
     dataset_version = args.dataset_version or (
-        "t-chnrisc-0008-2025+enterprise-energy-89/v3"
+        "t-chnrisc-0008-2025+enterprise-energy-89/v4"
         if enterprise_profiles else "t-chnrisc-0008-2025/v1"
     )
     anchor = create_energy_database(
@@ -695,6 +712,9 @@ def main() -> None:
                 ),
                 "energy_selection_policy_id": (
                     "process.database-priority-energy-replacement/v1"
+                ),
+                "blank_process_emission_policy": (
+                    "enterprise-energy-89.blank-zero-unless-process-trigger/v1"
                 ),
             }
             if enterprise_profiles else {}

@@ -33,6 +33,7 @@ from .models import (
     ReferenceFlowRecord,
     ResolutionRequest,
     ResolutionTrace,
+    ResultTier,
     RetrievalIntent,
     RetrievalResult,
     SemanticAssessment,
@@ -161,6 +162,59 @@ class NullFactorRepository:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class CatalogDatasetPolicy:
+    """Reviewed defaults inherited by matching catalogue records only."""
+
+    policy_id: str
+    record_categories: tuple[str, ...] = ()
+    standards: tuple[str, ...] = ()
+    primary_labels: tuple[str, ...] = ()
+    indicator: str | None = None
+    boundary: str | None = None
+    boundary_modules: tuple[str, ...] = ()
+    geography: str | None = None
+    year: int | None = None
+    declared_product_from_name: bool = False
+    evidence_citation: str = ""
+    production_approval_id: str | None = None
+    source_priority_rank: int = 100
+
+    def __post_init__(self) -> None:
+        if not self.policy_id.strip():
+            raise ValueError("catalogue dataset policy requires a policy_id")
+
+    def applies(self, item: Mapping[str, Any]) -> bool:
+        def matches(field: str, allowed: tuple[str, ...]) -> bool:
+            if not allowed:
+                return True
+            observed = str(item.get(field) or "").strip().casefold()
+            return observed in {value.strip().casefold() for value in allowed}
+
+        return (
+            matches("category", self.record_categories)
+            and matches("standard", self.standards)
+            and matches("primary_label", self.primary_labels)
+        )
+
+
+REFRACTORY_A1_STANDARD_POLICY = CatalogDatasetPolicy(
+    policy_id="catalog.refractory-a1-product-carbon-footprint/v1",
+    record_categories=("lifecycle_factor",),
+    standards=("GB/T XXXX-202X 征求意见稿",),
+    primary_labels=("产品碳足迹因子",),
+    indicator="GWP-total",
+    boundary="cradle-to-gate",
+    declared_product_from_name=True,
+    evidence_citation=(
+        "《温室气体 产品碳足迹量化方法与要求 耐火材料》征求意见稿，"
+        "5.2声明单位、5.3.1系统边界、7.1全球变暖潜势"
+    ),
+    production_approval_id="customer.refractory-draft-first/v1",
+    source_priority_rank=0,
+)
+
+
 @dataclass(slots=True)
 class HttpCatalogFactorRepository:
     """Read-only adapter for the formal `/api/v2/factors/catalog` endpoint."""
@@ -170,6 +224,9 @@ class HttpCatalogFactorRepository:
     timeout_seconds: float = 10.0
     fetch_json: Callable[[str], Mapping[str, Any]] | None = None
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
+    dataset_policies: tuple[CatalogDatasetPolicy, ...] = (
+        REFRACTORY_A1_STANDARD_POLICY,
+    )
     _cached_index_key: str | None = field(default=None, init=False)
     _cached_index: SemanticFactorIndex | None = field(default=None, init=False)
 
@@ -190,12 +247,16 @@ class HttpCatalogFactorRepository:
         records = payload.get("records")
         if not isinstance(records, list):
             raise ValueError("factor catalog response lacks records")
-        cache_key = f"{anchor.identity}:{self.material_registry.sha256}"
+        policy_key = ",".join(
+            f"{policy.policy_id}:{policy.production_approval_id or ''}"
+            for policy in self.dataset_policies
+        )
+        cache_key = f"{anchor.identity}:{self.material_registry.sha256}:{policy_key}"
         if self._cached_index is None or self._cached_index_key != cache_key:
             converted = tuple(
                 record
                 for item in records if isinstance(item, Mapping)
-                for record in (self._to_source_record(item, anchor),)
+                for record in (self._to_source_record(item, anchor, self.dataset_policies),)
                 if record is not None
             )
             self._cached_index = SemanticFactorIndex(converted, anchor, self.material_registry)
@@ -235,7 +296,9 @@ class HttpCatalogFactorRepository:
 
     @staticmethod
     def _to_source_record(
-        item: Mapping[str, Any], anchor: DatabaseVersionAnchor
+        item: Mapping[str, Any],
+        anchor: DatabaseVersionAnchor,
+        dataset_policies: Sequence[CatalogDatasetPolicy] = (),
     ) -> SourceRecord | None:
         try:
             value = float(item.get("primary_value"))
@@ -248,7 +311,25 @@ class HttpCatalogFactorRepository:
         material_name = str(item.get("name") or "").strip()
         if not source_id or not material_name:
             return None
-        year_value = item.get("year")
+        applied_policies = tuple(
+            policy for policy in dataset_policies if policy.applies(item)
+        )
+
+        def inherited(field: str) -> object | None:
+            explicit = item.get(field)
+            if explicit not in (None, "", (), []):
+                return explicit
+            values = tuple(dict.fromkeys(
+                value
+                for policy in applied_policies
+                for value in (getattr(policy, field),)
+                if value not in (None, "", (), [])
+            ))
+            if len(values) > 1:
+                raise ValueError(f"conflicting catalogue dataset policies for {field}")
+            return values[0] if values else explicit
+
+        year_value = inherited("year")
         try:
             year = int(year_value) if year_value not in (None, "") else None
         except (TypeError, ValueError):
@@ -269,12 +350,70 @@ class HttpCatalogFactorRepository:
         page = str(item.get("page") or "").strip() or None
         table = str(item.get("table") or "").strip() or None
         row = str(item.get("row") or "").strip() or None
+        approved_dataset_ids = tuple(
+            policy.production_approval_id
+            for policy in applied_policies
+            if policy.production_approval_id
+        )
+        def inferred_source_priority_rank() -> int:
+            if applied_policies:
+                return min(policy.source_priority_rank for policy in applied_policies)
+            source_version = str(item.get("source_version") or "").casefold()
+            source_name = str(item.get("source_name") or item.get("source") or "").casefold()
+            source_identity = f"{source_name} {source_version}"
+            if "ecoinvent" in source_identity and "3.10" in source_identity:
+                return 10
+            if "ecoinvent" in source_identity and "3.12" in source_identity:
+                return 20
+            return 100
+
+        explicit_source_rank = item.get("source_priority_rank")
+        source_priority_issue = ""
+        if explicit_source_rank not in (None, ""):
+            if (
+                type(explicit_source_rank) is int
+                and 0 <= explicit_source_rank <= 1000
+            ):
+                source_priority_rank = explicit_source_rank
+            else:
+                source_priority_rank = inferred_source_priority_rank()
+                source_priority_issue = (
+                    f"invalid source_priority_rank={explicit_source_rank!r}; "
+                    f"fell back to inferred rank {source_priority_rank}"
+                )
+        else:
+            source_priority_rank = inferred_source_priority_rank()
+        governance_text = " ".join(str(item.get(field) or "") for field in (
+            "document_status",
+            "source_status",
+            "upstream_source_status",
+            "standard",
+            "source_version",
+        )).casefold()
+        governance_markers = {
+            "draft_or_consultation": ("draft", "consultation", "征求意见", "草案"),
+            "aggregated_source": ("aggregated", "aggregate", "聚合"),
+            "pending_review": ("pending review", "review-only", "待审核", "待审"),
+        }
+        governance_reasons = tuple(
+            reason
+            for reason, markers in governance_markers.items()
+            if any(marker in governance_text for marker in markers)
+        )
+        result_tier_cap = (
+            ResultTier.REFERENCE_ONLY.value
+            if governance_reasons and not approved_dataset_ids
+            else ""
+        )
         metadata = {
             "catalog_version": anchor.catalog_version,
             "database_sha256": anchor.database_sha256 or "",
             "record_category": str(item.get("category") or ""),
             "document_status": str(item.get("document_status") or ""),
             "source_priority": str(item.get("source_priority") or ""),
+            "source_priority_rank": str(source_priority_rank),
+            "source_priority_policy": "customer.draft-ecoinvent310-ecoinvent312/v1",
+            "source_priority_issue": source_priority_issue,
             "aliases": json.dumps(aliases, ensure_ascii=False) if isinstance(aliases, list) else "",
             "catalog_locator": catalog_locator,
             "source_document_locator": source_document_locator or "",
@@ -289,6 +428,36 @@ class HttpCatalogFactorRepository:
             "source_status": str(item.get("source_status") or ""),
             "upstream_source_status": str(item.get("upstream_source_status") or ""),
             "includes_process": str(item.get("includes_process") or ""),
+            "catalog_dataset_policy_ids": json.dumps(
+                tuple(policy.policy_id for policy in applied_policies), ensure_ascii=False
+            ),
+            "catalog_dataset_approval_ids": json.dumps(
+                approved_dataset_ids, ensure_ascii=False
+            ),
+            "result_tier_cap": result_tier_cap,
+            "result_tier_cap_reasons": json.dumps(
+                governance_reasons, ensure_ascii=False
+            ),
+            "catalog_dataset_policy_evidence": json.dumps(
+                tuple(policy.evidence_citation for policy in applied_policies),
+                ensure_ascii=False,
+            ),
+            "catalog_inherited_fields": json.dumps(
+                tuple(
+                    field
+                    for field in (
+                        "indicator", "boundary", "boundary_modules", "geography", "year"
+                    )
+                    if item.get(field) in (None, "", (), [])
+                    and inherited(field) not in (None, "", (), [])
+                ) + (
+                    ("declared_product",)
+                    if not item.get("declared_product")
+                    and any(policy.declared_product_from_name for policy in applied_policies)
+                    else ()
+                ),
+                ensure_ascii=False,
+            ),
         }
         kind_aliases = {
             "lifecycle": FactorKind.LIFECYCLE_FACTOR,
@@ -307,7 +476,7 @@ class HttpCatalogFactorRepository:
             "supplier": FactorSourceType.SUPPLIER,
             "external_database": FactorSourceType.EXTERNAL_DATABASE,
         }.get(raw_source_type, FactorSourceType.EPD if factor_kind == FactorKind.EPD_INDICATOR else FactorSourceType.LOCAL_DATABASE)
-        boundary_modules = item.get("boundary_modules")
+        boundary_modules = inherited("boundary_modules")
         if isinstance(boundary_modules, str):
             boundary_modules = tuple(part.strip() for part in boundary_modules.split(",") if part.strip())
         elif isinstance(boundary_modules, list):
@@ -322,18 +491,25 @@ class HttpCatalogFactorRepository:
             material_name=material_name,
             factor_value=value,
             factor_unit=unit,
-            geography=str(item.get("geography") or item.get("location") or "").strip() or None,
+            geography=str(inherited("geography") or item.get("location") or "").strip() or None,
             year=year,
             product_form=str(item.get("product_form") or "").strip() or None,
             composition=str(item.get("composition") or "").strip() or None,
             production_process=str(item.get("production_process") or item.get("process") or "").strip() or None,
-            boundary=str(item.get("boundary") or "").strip() or None,
+            boundary=str(inherited("boundary") or "").strip() or None,
             citation=str(item.get("source_citation") or item.get("source") or ""),
             excerpt=str(item.get("notes") or ""),
             metadata=metadata,
             factor_kind=factor_kind,
-            indicator=str(item.get("indicator") or "").strip() or None,
-            declared_product=str(item.get("declared_product") or "").strip() or None,
+            indicator=str(inherited("indicator") or "").strip() or None,
+            declared_product=(
+                str(item.get("declared_product") or "").strip()
+                or (
+                    material_name
+                    if any(policy.declared_product_from_name for policy in applied_policies)
+                    else None
+                )
+            ),
             boundary_modules=boundary_modules,
             catalog_locator=catalog_locator,
             source_document_sha256=source_document_sha256,

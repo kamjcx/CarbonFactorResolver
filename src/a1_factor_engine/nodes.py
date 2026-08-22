@@ -6,6 +6,10 @@ import re
 from dataclasses import replace
 from typing import Sequence
 
+from .accounting import (
+    resolve_accounting_assignment,
+    resolve_process_accounting_assignments,
+)
 from .derived_factor import TYPE_PRIORITY, finalize_candidate, to_derived
 from .gap_analysis import analyze_candidate_gaps
 from .grade_resolution import resolve_grade
@@ -13,6 +17,7 @@ from .graph import (
     GraphState,
     Node,
     Stage,
+    candidate_hard_rejection_reasons,
     candidate_is_sufficient,
     candidate_rejection_reasons,
 )
@@ -23,6 +28,7 @@ from .material_registry import (
     MaterialSemanticRegistryPort,
 )
 from .models import (
+    AccountingQuantificationStatus,
     Candidate,
     CandidateAdmission,
     CandidateExclusion,
@@ -43,6 +49,7 @@ from .models import (
     RequestGapType,
     RequestResolutionPlan,
     ResolutionType,
+    ResultTier,
     RouterType,
     SourceRecord,
     normalized_business_fingerprint,
@@ -90,6 +97,13 @@ def _parameter_database_anchors(evidence: Sequence[ParameterEvidence]) -> tuple[
             "schema_version": metadata.get("evidence_database_schema_version", "unknown"),
         })
     return tuple(anchors[key] for key in sorted(anchors))
+
+
+def _source_priority_rank(candidate: Candidate) -> int:
+    try:
+        return int(candidate.source.metadata.get("source_priority_rank", "100") or 100)
+    except (TypeError, ValueError):
+        return 100
 
 
 def _canonical_product_form(value: str | None) -> str | None:
@@ -151,6 +165,13 @@ def _material_dimension(activity: NormalizedActivity, source: SourceRecord, orig
         # A proxy may be explicitly provided by a process-compatible repository
         # without repeating the class in its title.
         return 0.5
+    target_entity_id = (
+        activity.material_identity.base_entity_id
+        if activity.material_identity else None
+    )
+    source_entity_id = source.metadata.get("base_entity_id")
+    if target_entity_id and source_entity_id and target_entity_id == source_entity_id:
+        return 1.0
     names = {_text(activity.canonical_name)} | {_text(x) for x in activity.aliases}
     observed = _text(source.material_name)
     if observed in names:
@@ -829,6 +850,11 @@ class ProcessVariantResolutionNode(Node[GraphState]):
             evidence = tuple(await self.repository.search(state.normalized, candidate.source))
             state.parameter_evidence.extend(evidence)
             current_evidence.extend(evidence)
+            for assignment in resolve_process_accounting_assignments(
+                state.normalized.canonical_name, evidence
+            ):
+                if assignment not in state.accounting_assignments:
+                    state.accounting_assignments.append(assignment)
             try:
                 resolved, mode = resolve_process_variant(candidate, evidence)
             except ValueError as exc:
@@ -848,6 +874,9 @@ class ProcessVariantResolutionNode(Node[GraphState]):
             "parameter_evidence": tuple(item.to_dict() for item in current_evidence),
             "parameter_databases": _parameter_database_anchors(current_evidence),
             "warnings": tuple(state.warnings),
+            "accounting_assignments": tuple(
+                item.to_dict() for item in state.accounting_assignments
+            ),
         })
         return state
 
@@ -1073,6 +1102,7 @@ class RankNode(Node[GraphState]):
         state.ranked_candidates = tuple(
             sorted(state.candidate_pool, key=lambda c: (
                 TYPE_PRIORITY[c.resolution_type],
+                _source_priority_rank(c),
                 -c.resolution_strength,
                 -c.score,
                 -c.evidence_coverage,
@@ -1093,6 +1123,10 @@ class RankNode(Node[GraphState]):
                 "result_tier": candidate.result_tier.value,
                 "resolution_strength": candidate.resolution_strength,
                 "assumption_count": len(candidate.assumptions),
+                "source_priority_rank": _source_priority_rank(candidate),
+                "source_priority_issue": candidate.source.metadata.get(
+                    "source_priority_issue", ""
+                ),
             } for index, candidate in enumerate(state.ranked_candidates, start=1)),
         })
         return state
@@ -1104,6 +1138,58 @@ class TopKNode(Node[GraphState]):
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.TOP_K
         eligible = tuple(c for c in state.ranked_candidates if candidate_is_sufficient(c, state))
+        reviewable = tuple(
+            candidate
+            for candidate in state.ranked_candidates
+            if not candidate_hard_rejection_reasons(candidate)
+            and candidate.result_tier == ResultTier.REFERENCE_ONLY
+        )
+        reviewable_reasons = {
+            candidate.candidate_id: candidate_rejection_reasons(candidate, state)
+            for candidate in reviewable[: state.request.top_k]
+        }
+        diagnostics = tuple(
+            candidate
+            for candidate in state.ranked_candidates
+            if candidate_hard_rejection_reasons(candidate)
+        )[: state.request.top_k]
+        if state.normalized is not None and not state.accounting_assignments:
+            state.accounting_assignments.append(resolve_accounting_assignment(
+                state.normalized.canonical_name,
+                quantified=bool(eligible or reviewable),
+            ))
+        diagnostic_gaps = tuple({
+            gap.gap_id: gap
+            for candidate in diagnostics
+            for gap in candidate.gaps
+        }.values())
+        assignment_by_role = {}
+        for item in state.accounting_assignments:
+            key = (item.subject, item.role, item.modules)
+            previous = assignment_by_role.get(key)
+            if (
+                previous is None
+                or item.quantification_status == AccountingQuantificationStatus.QUANTIFIED
+                and previous.quantification_status
+                != AccountingQuantificationStatus.QUANTIFIED
+            ):
+                assignment_by_role[key] = item
+        unique_assignments = tuple(assignment_by_role.values())
+        has_user_selectable_output = bool(eligible or reviewable)
+        unresolved_gaps = diagnostic_gaps if not has_user_selectable_output else ()
+        question_items: list[str] = []
+        if any(gap.gap_type == GapType.PROCESS_VARIANT for gap in unresolved_gaps):
+            question_items.extend((
+                "请补充目标工艺路线的综合能耗及能源分配。",
+                "请补充电极、焦炭或还原剂等含碳耗材的用量、含碳率与氧化率；没有则明确填零。",
+                "请确认参考因子是否包含需要被替换的原工艺过程。",
+            ))
+        if not has_user_selectable_output and any(
+            "process-emission" in warning or "stoichiometric" in warning
+            for warning in state.warnings
+        ):
+            question_items.append("现有证据触发了过程排放，但计算参数不完整，请补齐后再生成目标因子。")
+        questions = tuple(dict.fromkeys(question_items))
         known_exclusions = {(item.candidate_id, item.source_id) for item in state.excluded_candidates}
         for candidate in state.ranked_candidates:
             reasons = candidate_rejection_reasons(candidate, state)
@@ -1127,18 +1213,36 @@ class TopKNode(Node[GraphState]):
                 trace=state.trace,
                 confidence=calibrate_confidence(eligible),
                 resolution_strength=calibrate_confidence(eligible),
+                reviewable_candidates=reviewable[: state.request.top_k],
+                reviewable_candidate_reasons=reviewable_reasons,
+                diagnostic_candidates=diagnostics,
+                missing_gaps=unresolved_gaps,
+                questions=questions,
+                accounting_assignments=unique_assignments,
             )
         else:
             from .models import FollowUp, Recommendation, ResolutionStatus
 
-            # Preserve any diagnostic pool while returning an explicit follow-up.
-            top = state.ranked_candidates[: state.request.top_k]
+            # Soft-review candidates may be shown for explicit override. Hard
+            # diagnostics remain only in Trace/exclusions and are never returned.
+            reviewable_top = reviewable[: state.request.top_k]
+            top = ()
             if state.required_fields:
                 follow_up = FollowUp.MORE_INPUT
                 status = ResolutionStatus.MORE_INPUT_NEEDED
+                top = ()
+            elif reviewable_top:
+                follow_up = FollowUp.DATA_GOVERNANCE
+                status = ResolutionStatus.REFERENCE_REVIEW_REQUIRED
+            elif any(
+                candidate_hard_rejection_reasons(candidate)
+                for candidate in state.ranked_candidates
+            ):
+                follow_up = FollowUp.PROCESS_MODEL
+                status = ResolutionStatus.PROCESS_MODEL_REQUIRED
             else:
-                follow_up = FollowUp.SUPPLIER_DATA if not top else FollowUp.PROCESS_MODEL
-                status = ResolutionStatus.SUPPLIER_DATA_REQUIRED if not top else ResolutionStatus.PROCESS_MODEL_REQUIRED
+                follow_up = FollowUp.SUPPLIER_DATA
+                status = ResolutionStatus.SUPPLIER_DATA_REQUIRED
             state.recommendation = Recommendation(
                 request_id=state.request.request_id,
                 status=status,
@@ -1149,20 +1253,49 @@ class TopKNode(Node[GraphState]):
                     if state.request_gaps
                     else "mathematically required reference-flow evidence is missing"
                     if state.required_fields and not state.request_gaps
+                    else (
+                        f"found {len(reviewable_top)} traceable reference candidate(s); "
+                        "explicit reference override and review rationale are required"
+                    )
+                    if reviewable_top
+                    else (
+                        f"未找到可直接使用的目标工艺因子；已保留 {len(diagnostics)} 个"
+                        "参考候选及其排除原因，请补齐工艺 Gap 后重新计算"
+                    )
+                    if diagnostics
                     else "no traceable candidate could be resolved; continue with the indicated follow-up"
                 ),
                 trace=state.trace,
+                reviewable_candidates=reviewable_top,
+                reviewable_candidate_reasons=reviewable_reasons,
+                diagnostic_candidates=diagnostics,
+                missing_gaps=unresolved_gaps,
+                questions=questions,
+                accounting_assignments=unique_assignments,
             )
-            if not state.required_fields:
+            if not state.required_fields and not reviewable_top:
                 state.link_attempts.append(LinkAttempt(
                     LinkStrategy.UNRESOLVED,
                     LinkOutcome.NO_MATCH,
-                    tuple(candidate.source.source_id for candidate in top),
+                    tuple(candidate.source.source_id for candidate in state.ranked_candidates),
                     "all local and proxy strategies exhausted without a traceable resolvable candidate",
                 ))
         state.stage = Stage.TERMINAL
         state.event(Stage.TOP_K, f"returned {len(top)} top-k candidates with status {state.recommendation.status.value}", {
             "selected_candidate_ids": tuple(candidate.candidate_id for candidate in top),
+            "diagnostic_candidate_ids": tuple(
+                candidate.candidate_id for candidate in diagnostics
+            ),
+            "reviewable_candidate_ids": tuple(
+                candidate.candidate_id
+                for candidate in state.recommendation.reviewable_candidates
+            ),
+            "reviewable_candidate_reasons": reviewable_reasons,
+            "missing_gaps": tuple(gap.to_dict() for gap in unresolved_gaps),
+            "questions": questions,
+            "accounting_assignments": tuple(
+                item.to_dict() for item in unique_assignments
+            ),
             "status": state.recommendation.status.value,
             "confidence": state.recommendation.confidence.to_dict() if state.recommendation.confidence else None,
             "resolution_strength": (

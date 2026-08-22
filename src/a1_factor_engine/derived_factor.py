@@ -13,6 +13,7 @@ from .models import (
     ResultTier,
     TransformationStep,
 )
+from .units import convert_factor
 
 TYPE_PRIORITY = {
     ResolutionType.DIRECT_EXACT: 0,
@@ -102,8 +103,21 @@ def finalize_candidate(candidate: Candidate, *, min_score: float | None = None) 
     tier = tier_for(candidate)
     if min_score is not None and candidate.score < min_score:
         tier = ResultTier.REFERENCE_ONLY
+    tier_cap = str(candidate.source.metadata.get("result_tier_cap", "")).strip()
+    limitations = candidate.limitations
+    if tier_cap == ResultTier.REFERENCE_ONLY.value:
+        tier = ResultTier.REFERENCE_ONLY
+        limitations = tuple(dict.fromkeys((
+            *limitations,
+            "source governance caps this candidate at REFERENCE_ONLY",
+        )))
     strength = resolution_strength(candidate)
-    return replace(candidate, result_tier=tier, resolution_strength=strength)
+    return replace(
+        candidate,
+        result_tier=tier,
+        resolution_strength=strength,
+        limitations=limitations,
+    )
 
 
 def derive_candidate(
@@ -122,10 +136,25 @@ def derive_candidate(
     resolved_quantity_kg: float | None = None,
     total_emissions_kgco2e: float | None = None,
 ) -> Candidate:
+    effective_factor = base.factor_value if factor_value is None else factor_value
+    effective_quantity = (
+        resolved_quantity_kg
+        if resolved_quantity_kg is not None
+        else base.resolved_quantity_kg
+    )
+    if total_emissions_kgco2e is not None:
+        effective_total = total_emissions_kgco2e
+    elif effective_quantity is not None:
+        effective_total = (
+            convert_factor(effective_factor, base.factor_unit, "kgCO2e/kg")
+            * effective_quantity
+        )
+    else:
+        effective_total = None
     candidate = replace(
         base,
         candidate_id=candidate_id,
-        factor_value=base.factor_value if factor_value is None else factor_value,
+        factor_value=effective_factor,
         resolution_type=resolution_type,
         transformation_steps=base.transformation_steps + steps,
         parameter_evidence_ids=tuple(dict.fromkeys(base.parameter_evidence_ids + parameter_ids)),
@@ -134,12 +163,21 @@ def derive_candidate(
         limitations=tuple(dict.fromkeys(base.limitations + limitations)),
         assumptions=tuple(dict.fromkeys(base.assumptions + assumptions)),
         warnings=tuple(dict.fromkeys(base.warnings + warnings)),
-        resolved_quantity_kg=resolved_quantity_kg if resolved_quantity_kg is not None else base.resolved_quantity_kg,
-        total_emissions_kgco2e=(
-            total_emissions_kgco2e if total_emissions_kgco2e is not None else base.total_emissions_kgco2e
-        ),
+        resolved_quantity_kg=effective_quantity,
+        total_emissions_kgco2e=effective_total,
     )
     return finalize_candidate(candidate)
+
+
+def expected_total_emissions(candidate: Candidate) -> float | None:
+    """Return the total implied by a candidate's normalized factor and quantity."""
+
+    if candidate.resolved_quantity_kg is None:
+        return None
+    return (
+        convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
+        * candidate.resolved_quantity_kg
+    )
 
 
 def to_derived(candidate: Candidate) -> DerivedFactorCandidate:

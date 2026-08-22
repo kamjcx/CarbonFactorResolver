@@ -34,6 +34,64 @@ def _norm(value: object) -> str:
     return " ".join(str(value or "").strip().casefold().split())
 
 
+def explicit_process_emission_observation(value: float | None) -> float | None:
+    """Preserve explicit numeric zero while treating absence as missing evidence."""
+
+    if value is None:
+        return None
+    observed = float(value)
+    if not isfinite(observed) or observed < 0:
+        raise ValueError("process emission observation must be finite and non-negative")
+    return observed
+
+
+PROCESS_EMISSION_TRIGGER_TERMS = (
+    "电极", "焦炭", "石墨", "还原剂", "含碳", "氧化", "燃烧", "分解",
+    "electrode", "coke", "graphite", "reductant", "oxidation", "combustion",
+    "decomposition", "44/12",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessEmissionObservation:
+    value_kgco2e_per_t: float
+    evidence_kind: str
+    requires_calculation: bool
+    trigger_terms: tuple[str, ...] = ()
+
+
+def interpret_process_emission_observation(
+    value: float | None,
+    *,
+    formula: str = "",
+    remark: str = "",
+    blank_means_zero: bool = False,
+) -> ProcessEmissionObservation | None:
+    """Apply the reviewed dataset rule without confusing trigger conflicts with zero."""
+
+    trigger_text = f"{formula} {remark}".casefold().replace(" ", "")
+    triggers = tuple(term for term in PROCESS_EMISSION_TRIGGER_TERMS if term in trigger_text)
+    observed = explicit_process_emission_observation(value)
+    if observed is None and not blank_means_zero:
+        return None
+    numeric = 0.0 if observed is None else observed
+    requires_calculation = bool(triggers and numeric == 0.0)
+    if requires_calculation:
+        evidence_kind = "TRIGGER_CONFLICT_REQUIRES_CALCULATION"
+    elif observed is None:
+        evidence_kind = "DATASET_DEFAULT_ZERO"
+    elif numeric == 0:
+        evidence_kind = "EXPLICIT_ZERO"
+    else:
+        evidence_kind = "EXPLICIT_VALUE"
+    return ProcessEmissionObservation(
+        value_kgco2e_per_t=numeric,
+        evidence_kind=evidence_kind,
+        requires_calculation=requires_calculation,
+        trigger_terms=triggers,
+    )
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -660,9 +718,9 @@ class SqliteEnergyProcessParameterRepository:
     quota_level: int = 1
     expected_database_sha256: str | None = None
     registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
-    allow_review_profiles: bool = True
-    allow_generic_energy_parameters: bool = True
-    assume_lifecycle_process_inclusion: bool = True
+    allow_review_profiles: bool = False
+    allow_generic_energy_parameters: bool = False
+    assume_lifecycle_process_inclusion: bool = False
 
     def __post_init__(self) -> None:
         self.path = Path(self.path).resolve()
@@ -922,10 +980,7 @@ class SqliteEnergyProcessParameterRepository:
                             common_scope,
                         ),
                     ))
-            if any(
-                row["value_kgco2e_per_t"] > 0
-                for row in (*reference_process_emissions, *target_process_emissions)
-            ):
+            if reference_process_emissions or target_process_emissions:
                 if reference_process_emissions:
                     evidence.append(self._process_emission_evidence(
                         reference_process_emissions,
@@ -1103,6 +1158,12 @@ class SqliteEnergyProcessParameterRepository:
         emission_ids = tuple(row["emission_id"] for row in rows)
         raw_value = sum(row["value_kgco2e_per_t"] for row in rows)
         runtime_eligible = all(bool(row["runtime_eligible"]) for row in rows)
+        record_metadata = tuple(json.loads(row["metadata_json"]) for row in rows)
+        calculation_required = any(
+            str(item.get("requires_process_emission_calculation", "false")).casefold()
+            == "true"
+            for item in record_metadata
+        )
         metadata = {
             **common_scope,
             "enterprise_process_emission_ids": json.dumps(emission_ids, ensure_ascii=False),
@@ -1124,6 +1185,8 @@ class SqliteEnergyProcessParameterRepository:
             "calculation_with_assumption": str(not runtime_eligible).lower(),
             "selection_priority": "exact_enterprise_process_emission",
             "energy_selection_policy_id": DATABASE_PRIORITY_POLICY_ID,
+            "requires_process_emission_calculation": str(calculation_required).lower(),
+            "accounting_module": "A3_DIRECT_PROCESS",
         }
         for row in rows:
             metadata.update({

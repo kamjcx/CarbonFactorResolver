@@ -56,6 +56,7 @@ class ResolutionStatus(str, Enum):
     LOCKED = "locked"
     ERROR = "error"
     MORE_INPUT_NEEDED = "more_input_needed"
+    REFERENCE_REVIEW_REQUIRED = "reference_review_required"
 
 
 class FollowUp(str, Enum):
@@ -63,6 +64,7 @@ class FollowUp(str, Enum):
     PROCESS_MODEL = "process-model"
     SUPPLIER_DATA = "supplier-data"
     MORE_INPUT = "more-input"
+    DATA_GOVERNANCE = "data-governance"
 
 
 class ApprovalStatus(str, Enum):
@@ -94,6 +96,28 @@ class ParameterSourceType(str, Enum):
     FORMAL_STANDARD = "formal_standard"
     INTERNAL_CATALOG = "internal_catalog"
     LITERATURE_IMPORT = "literature_import"
+
+
+class AccountingModule(str, Enum):
+    A1_UPSTREAM_INPUT = "A1_UPSTREAM_INPUT"
+    A3_DIRECT_PROCESS = "A3_DIRECT_PROCESS"
+
+
+class AccountingRole(str, Enum):
+    TARGET_PRODUCT = "TARGET_PRODUCT"
+    PURCHASED_RAW_MATERIAL = "PURCHASED_RAW_MATERIAL"
+    CONSUMABLE_ELECTRODE = "CONSUMABLE_ELECTRODE"
+    REDUCTANT = "REDUCTANT"
+    PROCESS_FUEL = "PROCESS_FUEL"
+    DIRECT_PROCESS_EMISSION = "DIRECT_PROCESS_EMISSION"
+    RETAINED_CONSTITUENT = "RETAINED_CONSTITUENT"
+    UNKNOWN = "UNKNOWN"
+
+
+class AccountingQuantificationStatus(str, Enum):
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    IDENTIFIED_NOT_QUANTIFIED = "IDENTIFIED_NOT_QUANTIFIED"
+    QUANTIFIED = "QUANTIFIED"
 
 
 class GapType(str, Enum):
@@ -359,6 +383,30 @@ class ResolutionGap:
             "severity": self.severity,
             "reason": self.reason,
             "resolvable_by": tuple(router.value for router in self.resolvable_by),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AccountingAssignment:
+    subject: str
+    role: AccountingRole
+    modules: tuple[AccountingModule, ...]
+    rationale: str
+    evidence_ids: tuple[str, ...] = ()
+    quantification_status: AccountingQuantificationStatus = (
+        AccountingQuantificationStatus.IDENTIFIED_NOT_QUANTIFIED
+    )
+    missing_inputs: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "subject": self.subject,
+            "role": self.role.value,
+            "modules": tuple(module.value for module in self.modules),
+            "rationale": self.rationale,
+            "evidence_ids": self.evidence_ids,
+            "quantification_status": self.quantification_status.value,
+            "missing_inputs": self.missing_inputs,
         }
 
 
@@ -1449,7 +1497,22 @@ class Recommendation:
     trace: Optional[ResolutionTrace] = None
     confidence: Optional[RecommendationConfidence] = None
     resolution_strength: Optional[RecommendationConfidence] = None
+    reviewable_candidates: tuple[Candidate, ...] = ()
+    reviewable_candidate_reasons: Mapping[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )
+    diagnostic_candidates: tuple[Candidate, ...] = ()
+    missing_gaps: tuple[ResolutionGap, ...] = ()
+    questions: tuple[str, ...] = ()
+    accounting_assignments: tuple[AccountingAssignment, ...] = ()
     created_at: datetime = field(default_factory=_now)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "reviewable_candidate_reasons",
+            MappingProxyType(dict(self.reviewable_candidate_reasons)),
+        )
 
 
 @dataclass(frozen=True, slots=True)

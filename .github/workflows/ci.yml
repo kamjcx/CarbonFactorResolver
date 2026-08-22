@@ -19,8 +19,13 @@ jobs:
       - name: Verify lockfile
         run: uv lock --check
       - name: Run tests
-        run: uv run --extra test python -m pytest -q
+        run: >-
+          uv run --extra test python -m pytest -q
+          --cov=a1_factor_engine --cov-branch --cov-report=term-missing
+          --cov-fail-under=85
       - name: Compile sources
-        run: uv run --extra test python -m compileall -q src tests
+        run: uv run --extra energy-import python -m compileall -q src tests tools
       - name: Check imports and undefined names
-        run: uvx ruff check --select I,F src tests
+        run: uvx ruff check --select I,F src tests tools
+      - name: Build package
+        run: uv build

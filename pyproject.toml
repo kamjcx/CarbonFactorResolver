@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "a1-factor-resolution-engine"
-version = "0.11.0"
+version = "0.12.2"
 description = "Graph-based A1 raw-material emission-factor resolution engine"
 requires-python = ">=3.11"
 license = "MIT"
@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=8", "pytest-asyncio>=0.23"]
+test = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=6"]
 energy-import = ["pdfplumber>=0.11", "openpyxl>=3.1"]
 
 [tool.pytest.ini_options]

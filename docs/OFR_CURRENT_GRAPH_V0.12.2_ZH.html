@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OFR 0.5.0 当前系统 Graph Engineering</title>
+  <title>OFR 0.12.2 当前系统 Graph Engineering</title>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -159,14 +159,16 @@
   <main data-motion-root data-motion-mode="step" data-step-count="6" data-step-current="6" data-frame="static" data-static-frame="complete">
     <header>
       <p class="eyebrow">OFR · CURRENT STATE · GRAPH ENGINEERING</p>
-      <h1>A1 Factor Resolution Engine 0.5.0</h1>
-      <p class="lede">当前系统不是一条“LLM 猜因子”的流水线，而是一个有界、可解释、State 驱动的解析图。Node 只做单一职责，Router 只根据显式 State 守卫分流，数值只能来自可追溯记录与确定性公式。</p>
+      <h1>A1 Factor Resolution Engine 0.12.2</h1>
+      <p class="lede">材料实体语义严格先于正式检索；Material Class 只在本地与同实体解析耗尽后参与 Proxy。Node 只做单一职责，Router 根据显式 State 守卫分流。候选分为可审批、可审核和仅诊断三层；A1 耗材识别与数值量化分离，A3 只由受控工艺上下文触发。</p>
       <div class="meta">
         <span class="tag">GRAPH: BOUNDED</span>
         <span class="tag">STATE: TYPED</span>
         <span class="tag">TRACE: MUTABLE + VERSIONED</span>
         <span class="tag">LLM: SEMANTIC ONLY</span>
         <span class="tag">NUMERIC: DETERMINISTIC</span>
+        <span class="tag">ACCOUNTING: A1 / A3 EVIDENCE-GATED</span>
+        <span class="tag">ENERGY DB: SCHEMA 5 / DATASET V4</span>
       </div>
     </header>
 
@@ -175,8 +177,8 @@
       <p class="section-intro">点击节点可跳转到对应 State 说明。播放控件按 6 个语义阶段逐步展示；禁用 JavaScript、打印或减少动态效果时，完整图仍保持可读。</p>
       <div class="figure">
         <svg viewBox="0 0 1200 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ofr-main-title ofr-main-desc">
-          <title id="ofr-main-title">OFR 0.5.0 因子解析主图</title>
-          <desc id="ofr-main-desc">从输入校验和语义注册表标准化开始，经正式本地检索、资格评估、Gap Analysis、候选级有限解析、必要时的晚期材料 Proxy，最终汇总排序并进入明确终态。</desc>
+          <title id="ofr-main-title">OFR 0.12.2 因子解析主图</title>
+          <desc id="ofr-main-desc">从输入校验和语义注册表标准化开始，经正式本地检索、资格评估、Gap Analysis、候选级有限解析、必要时的晚期材料 Proxy，最终将候选分入可审批、可审核或诊断通道并进入明确终态。</desc>
           <defs>
             <marker id="ofr-main-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
             <marker id="ofr-main-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#eb6c36"/></marker>
@@ -215,7 +217,7 @@
 
           <g data-motion-item data-step="1" aria-label="步骤 1：接收结构化请求">
             <a href="#state-request" aria-label="查看 Input State">
-              <rect class="node-shape" x="40" y="96" width="160" height="80" rx="20" fill="#f5f5f5" stroke="#4f5d75"/>
+              <rect class="node-shape" x="40" y="96" width="160" height="80" rx="8" fill="#f5f5f5" stroke="#4f5d75"/>
               <text x="120" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">INPUT</text>
               <text x="120" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">ResolutionRequest</text>
             </a>
@@ -226,8 +228,8 @@
               <rect class="node-shape" x="240" y="88" width="200" height="96" rx="6" fill="#fff" stroke="#2d3142"/>
               <rect x="252" y="100" width="48" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,.4)"/>
               <text x="276" y="112" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">NODE 1–2</text>
-              <text x="340" y="136" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Validate + Normalize</text>
-              <text x="340" y="160" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">registry / units / fingerprint</text>
+              <text x="340" y="136" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">前置语义解析</text>
+              <text x="340" y="160" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">Mention → Entity → RetrievalIntent</text>
             </a>
           </g>
 
@@ -258,12 +260,12 @@
             <a href="#state-resolution" aria-label="查看候选守卫">
               <polygon class="node-shape" points="960,360 1024,424 960,488 896,424" fill="#f5f5f5" stroke="#2d3142"/>
               <text x="960" y="416" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">候选可解析?</text>
-              <text x="960" y="436" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">finite guard</text>
+              <text x="960" y="436" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">qualification + terminal guard</text>
             </a>
             <a href="#candidate-detail" aria-label="查看候选级有界解析子图">
               <rect class="node-shape" x="632" y="500" width="240" height="80" rx="6" fill="rgba(235,108,54,.08)" stroke="#eb6c36"/>
               <text x="752" y="532" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Bounded Technical Resolution</text>
-              <text x="752" y="556" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">unit / flow / process / grade · once</text>
+              <text x="752" y="556" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">unit / flow / process / grade · bounded</text>
             </a>
             <a href="#state-proxy" aria-label="查看 Material 与 Proxy State">
               <rect class="node-shape" x="960" y="500" width="256" height="80" rx="6" fill="#fff" stroke="#2d3142"/>
@@ -278,9 +280,9 @@
               <text x="912" y="672" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Re-Evaluate → Pool → Rank</text>
               <text x="912" y="696" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">Top-K + deterministic tier</text>
             </a>
-            <rect x="600" y="752" width="600" height="56" rx="20" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/>
+            <rect x="600" y="752" width="600" height="56" rx="8" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/>
             <text x="900" y="776" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">TERMINAL</text>
-            <text x="900" y="796" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">RECOMMENDATION_READY · MORE_INPUT · SUPPLIER_DATA · PROCESS_MODEL · ERROR</text>
+            <text x="900" y="796" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">READY · REFERENCE_REVIEW · MORE_INPUT · SUPPLIER_DATA · PROCESS_MODEL · ERROR</text>
           </g>
 
           <line x1="40" y1="828" x2="1160" y2="828" stroke="rgba(45,49,66,.12)"/>
@@ -355,7 +357,7 @@
             <text x="844" y="168" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">each router at most once</text>
           </g>
           <g>
-            <rect class="node-shape" x="1000" y="96" width="176" height="88" rx="20" fill="#f5f5f5" stroke="#4f5d75"/>
+            <rect class="node-shape" x="1000" y="96" width="176" height="88" rx="8" fill="#f5f5f5" stroke="#4f5d75"/>
             <text x="1088" y="128" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="16" font-weight="600">Resolved Candidate</text>
             <text x="1088" y="152" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">steps / assumptions / tier</text>
           </g>
@@ -368,8 +370,8 @@
           <g>
             <rect x="732" y="264" width="224" height="96" rx="6" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/>
             <text x="844" y="296" text-anchor="middle" fill="#2d3142" font-family="Geist,sans-serif" font-size="12" font-weight="600">ParameterEvidence / Anchors</text>
-            <text x="844" y="320" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">scope + source + formula inputs</text>
-            <text x="844" y="340" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">invalid math → hard block</text>
+            <text x="844" y="320" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">schema 5 · catalogue + energy anchors</text>
+            <text x="844" y="340" text-anchor="middle" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">A1 identified ≠ quantified · A3 context-gated</text>
           </g>
           <line x1="40" y1="396" x2="1160" y2="396" stroke="rgba(45,49,66,.12)"/>
           <text x="40" y="412" fill="#4f5d75" font-family="Geist Mono,monospace" font-size="8">NO LOOP BACK · NO LLM NUMERIC INPUT · SOURCE VALUE + EVIDENCE + VERSIONED FORMULA</text>
@@ -388,7 +390,7 @@
             <div class="detail-body" id="state-normalize">
               <code>request</code> → <code>normalized</code> → <code>material_identity</code>
               <ul>
-                <li>Normalize 写入数量、单位、地域、年份、边界、产品形态、组成和生产过程。</li>
+                <li>Validate 后先生成 MaterialMention、IdentityResolution 与 RetrievalIntent，再允许 Local Retrieval。</li>
                 <li>语义注册表写入 registry version、Material/Process/Form rule IDs 与 relation IDs。</li>
                 <li>未知材料的 LLM 建议只能进入 <code>registry_suggestion=DRAFT</code>，不能激活规则或产生因子。</li>
                 <li>同时计算 raw fingerprint 与 normalized business fingerprint。</li>
@@ -434,10 +436,14 @@
           <details id="state-resolution">
             <summary>5. Evidence / Derivation State</summary>
             <div class="detail-body">
-              <code>reference_flow_records</code> · <code>parameter_evidence</code> · <code>transformation_steps</code> · <code>derived_candidates</code>
+              <code>reference_flow_records</code> · <code>parameter_evidence</code> · <code>accounting_assignments</code> · <code>transformation_steps</code> · <code>derived_candidates</code>
               <ul>
                 <li>每个数值变换保留 formula ID、输入、输出、source IDs 和 parameter IDs。</li>
-                <li>过程计算验证共同上游非负、能源份额完整、includes_process 与参数作用域。</li>
+                <li>过程计算验证共同上游非负、能源份额闭合、includes_process 与参数作用域。</li>
+                <li>附加过程排放必须参考侧和目标侧同时有记录，数字 0 是证据，记录缺失不是零。</li>
+                <li>成品、购入耗材 A1 与现场直接排放 A3 是三个独立 subject；电极可为 <code>IDENTIFIED_NOT_QUANTIFIED</code>，并列出缺失用量和上游因子。</li>
+                <li>“氧化铝”等化学实体名不会触发 A3；只有显式 <code>use_context</code> 或受控目标工艺证据可触发现场氧化/燃烧/反应。</li>
+                <li>派生因子改变时按规范化数量重算总排放；锁定前再次校验一致性。</li>
                 <li>牌号只接受同 series 且资格完整的锚点；禁止按纯度比例缩放整个因子。</li>
               </ul>
             </div>
@@ -458,11 +464,12 @@
           <details id="state-output" open>
             <summary>7. Pool / Ranking / Output State</summary>
             <div class="detail-body">
-              <code>candidate_pool</code> · <code>ranked_candidates</code> · <code>recommendation</code>
+              <code>candidate_pool</code> · <code>ranked_candidates</code> · <code>recommendation</code> · <code>reviewable_candidates</code> · <code>diagnostic_candidates</code>
               <ul>
                 <li>按 Candidate ID 合并场景，不按 source ID 粗暴去重。</li>
-                <li>排序键：Resolution Type → Strength → Score → Evidence Coverage → Assumptions → Stable Lineage。</li>
-                <li>Result Tier：Primary、Usable with Assumptions、Reference Only。</li>
+                <li>排序键：Resolution Type → 受审来源优先级 → Strength → Score → Evidence Coverage → Assumptions → Stable Lineage。</li>
+                <li>显式来源优先级只接受 0–1000 的真正整数；bool、float、字符串和越界值逐记录回退并写入质量告警。</li>
+                <li>输出严格分层：<code>candidates</code> 可审批，<code>reviewable_candidates</code> 需 Override，<code>diagnostic_candidates</code> 不可审批。</li>
               </ul>
             </div>
           </details>
@@ -473,6 +480,7 @@
               <ul>
                 <li>每个 Node 通过 <code>state.event()</code> 追加 AuditEvent 和 TraceEntry。</li>
                 <li>Trace 可更新，不是不可变快照；锁定的候选结果保持不可变。</li>
+                <li>只有可审核候选时进入 <code>REFERENCE_REVIEW_REQUIRED</code>，不会追加虚假的 <code>UNRESOLVED</code> LinkAttempt。</li>
                 <li>可解释数据库更新前后的召回、排除和排名变化。</li>
               </ul>
             </div>
@@ -488,13 +496,13 @@
         <thead><tr><th>NODE GROUP</th><th>主要读取</th><th>主要写入</th><th>关键守卫 / 不变量</th></tr></thead>
         <tbody>
           <tr><td>Validate / Normalize</td><td><code>request</code></td><td><code>normalized</code>, identity, gaps, fingerprints</td><td>ACTIVE registry rules only；LLM suggestion stays DRAFT</td></tr>
-          <tr><td>Local Retrieval</td><td><code>normalized</code></td><td><code>local_records</code>, anchor, link attempts</td><td>Exact → Alias → Related；正式库只读</td></tr>
+          <tr><td>Local Retrieval</td><td><code>normalized</code></td><td><code>local_records</code>, anchor, link attempts</td><td>Exact → Alias → Related；正式库只读；脏优先级逐记录隔离</td></tr>
           <tr><td>Local Evaluate</td><td>records, identity</td><td>qualifications, exclusions, candidates</td><td>FactorKind / indicator / boundary / unit / provenance</td></tr>
           <tr><td>Gap / Planner</td><td>candidate + target</td><td>gaps, plans</td><td>差异先成为 Gap；计划有限且可审计</td></tr>
-          <tr><td>Technical Routers</td><td>plan + evidence</td><td>derived candidates, steps, assumptions</td><td>每候选每 Router 至多一次；无证据不生成数值</td></tr>
+          <tr><td>Technical Routers</td><td>plan + evidence</td><td>derived candidates, accounting assignments, steps</td><td>每候选每 Router 至多一次；A1 识别不等于量化；A3 仅由工艺证据触发</td></tr>
           <tr><td>Material / Proxy</td><td>late insufficiency guard</td><td>material_class, proxy candidates</td><td>目标材料优先；Proxy 是最后路径</td></tr>
           <tr><td>Re-Evaluate / Rank</td><td>all resolved candidates</td><td>pool, ranking, tiers</td><td>确定性排序；低质量最多 Reference Only</td></tr>
-          <tr><td>Top-K</td><td>ranked + required_fields</td><td>recommendation, terminal status</td><td>显式终止；不无限重试</td></tr>
+          <tr><td>Top-K</td><td>ranked + required_fields</td><td>eligible / reviewable / diagnostic, terminal status</td><td>Reviewable-only 不是 unresolved；诊断候选不可审批；不无限重试</td></tr>
         </tbody>
       </table>
     </section>
@@ -504,11 +512,16 @@
       <h2 id="governance-heading">五、人工审批与锁定支线</h2>
       <div class="governance">
         <div class="card accent-card">
-          <h3>Recommendation Ready → Human Approval → Lock</h3>
+          <h3>Recommendation Ready / Reference Review → Approval → Lock</h3>
           <ul>
             <li><code>PRIMARY_RECOMMENDATION</code> 可走标准审批。</li>
             <li><code>USABLE_WITH_ASSUMPTIONS</code> 必须显式接受假设。</li>
-            <li><code>REFERENCE_ONLY</code> 必须使用带理由的 Reference Override。</li>
+            <li><code>REFERENCE_ONLY</code> 仅在没有硬阻断时进入 <code>REFERENCE_REVIEW_REQUIRED</code>，只能使用带理由的 Reference Override。</li>
+            <li>Reference Review 是“已有可追溯值但需治理确认”，不会被 Trace 错记为所有策略耗尽。</li>
+            <li><code>UNADJUSTED_PROCESS_PROXY</code> 进入 <code>PROCESS_MODEL_REQUIRED</code>，只保留在 Trace/诊断区，不进入 Recommendation。</li>
+            <li>Approve 与 Lock 都会重新检查硬门禁；存储层异常也不能让工艺诊断候选被锁定。</li>
+            <li>草案、聚合和待审核目录来源封顶为 <code>REFERENCE_ONLY</code>，除非绑定受审 <code>production_approval_id</code>。</li>
+            <li>正式模式默认禁用待审核 Profile、跨材料通用参数和生命周期包含假设；工程试算需显式开启。</li>
             <li>锁定后 Factor Resolution 不可变；重复锁定同一 Candidate 幂等，改锁其他 Candidate 拒绝。</li>
           </ul>
         </div>
@@ -519,7 +532,7 @@
       </div>
     </section>
 
-    <footer>IMPLEMENTATION GROUNDING · engine.py / graph.py / nodes.py / models.py · package 0.5.0 · diagram generated 2026-08-20</footer>
+    <footer>IMPLEMENTATION GROUNDING · engine.py / graph.py / nodes.py / accounting.py / energy_database.py · package 0.12.2 · schema 5 / dataset v4 · updated 2026-08-22</footer>
   </main>
 
   <script data-diagram-controls>

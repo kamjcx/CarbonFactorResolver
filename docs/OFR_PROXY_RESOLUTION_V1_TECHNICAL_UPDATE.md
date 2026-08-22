@@ -394,7 +394,11 @@ different production route
 no supported process decomposition
 ```
 
-Mode C 仍可以进入 Top-K，作为参考候选，而不是直接消失。
+自 `0.12.0` 起，Mode C 仍不进入可审批的 Recommendation Top-K，也不能通过 Reference Override 审批或锁定；但通过独立的 `diagnostic_candidates`、`missing_gaps` 和 `questions` 合同向界面返回来源值、Gap、排除原因和最小补充问题。Trace/exclusions 保留完整审计记录。
+
+自 `0.12.1` 起，软治理限制但不存在技术硬阻断的 `REFERENCE_ONLY` 候选进入独立 `reviewable_candidates`，并携带 `reviewable_candidate_reasons`。它不占用普通 Top-K、不能普通审批，但可在有理由的 `reference_override` 治理流程中处理；技术硬阻断候选继续只进入 `diagnostic_candidates`。
+
+自 `0.12.2` 起，仅有 `reviewable_candidates` 的路径明确终止为 `REFERENCE_REVIEW_REQUIRED`，不再写入错误的 `UNRESOLVED` LinkAttempt。过程会计 Assignment 同时披露 `quantification_status` 与 `missing_inputs`：识别到电极/焦炭并不代表其购入 A1 已量化，现场 A3 也只能由受控工艺上下文和可计算证据触发。
 
 ### 6.4 技术案例：烧结莫来石推导电熔莫来石
 

@@ -129,7 +129,7 @@ The Chinese contract and adversarial cases are documented in `docs/OFR_NUMERIC_P
 
 ## Versioned energy-evidence database
 
-Version 0.11 uses a separate read-only SQLite evidence database for process-route energy and additional-process resolution. It is deliberately not part of the emission-factor catalogue:
+Version 0.12.0 uses a separate read-only SQLite evidence database for process-route energy and additional-process resolution. It is deliberately not part of the emission-factor catalogue:
 
 - `energy_quota` stores all three published quota grades, while runtime policy explicitly selects `quota_level=1`;
 - `energy_conversion` stores exact values and ranges separately, so an ambiguous range cannot silently become a calculation input;
@@ -154,7 +154,7 @@ python tools/import_refractory_energy_standard.py `
   --expected-workbook-sha256 <reviewed-workbook-sha256>
 ```
 
-The workbook is evidence, not an emission-factor catalogue. Policy `process.database-priority-energy-replacement/v1` selects an exact enterprise product/route profile before the formal quota fallback. Closed exact profiles marked `NEEDS_REVIEW` may calculate with explicit assumptions and cell-level Trace provenance; ambiguous duplicate keys, standard-coal allocations and unresolved remainder carriers remain blocked. Exact route-scoped carrier parameters outrank a unique database-wide carrier fallback. When exact additional-process records exist, Formula `process.replace_energy_and_additional_process/v2` subtracts the reference-route term and adds the target-route term after energy replacement; values are never hard-coded in the Router.
+The workbook is evidence, not an emission-factor catalogue. Formal-safe defaults reject `NEEDS_REVIEW` profiles, cross-material generic carrier parameters and assumed lifecycle-process inclusion. Engineering trial runs may enable these three switches explicitly and must retain the resulting assumptions. Formula `process.replace_energy_and_additional_process/v2` is enabled only when both reference and target routes have exact process-emission evidence. Under the reviewed enterprise-workbook policy, a blank cell is a dataset-default zero only when no carbon/process trigger exists; a conflicting blank or zero requires calculation evidence and cannot close the route.
 
 Connect both formal factor and energy evidence repositories at runtime:
 
@@ -171,9 +171,15 @@ engine = A1FactorResolutionEngine(
         "path/to/energy_parameters.db",
         quota_level=1,
         expected_database_sha256="<energy-database-sha256>",
+        # Engineering trial only; formal-safe defaults leave all three False.
+        allow_review_profiles=True,
+        allow_generic_energy_parameters=True,
+        assume_lifecycle_process_inclusion=True,
     ),
 )
 ```
+
+Every derived candidate recomputes `total_emissions_kgco2e` from its new factor and normalized quantity. Locking repeats this invariant check. An otherwise valid `REFERENCE_ONLY` result returns `reference_review_required` and requires a reasoned override. An unresolved process variant returns `process_model_required`; it remains visible only in Trace/exclusions and can never enter Recommendation, approval or locking. Draft, aggregated and pending-review catalogue sources are capped at `REFERENCE_ONLY` unless a reviewed `CatalogDatasetPolicy.production_approval_id` explicitly approves that dataset.
 
 The adapter first matches an exact canonical product, then permits only a unique material/process fallback. Scoped route parameters can additionally bind to an exact factor `source_id`; this prevents a high-alumina ecoinvent proxy whose display name contains “sintered mullite” from receiving the formal sintered-mullite subtraction bundle.
 
@@ -246,6 +252,18 @@ The refinement adopts selected ideas rather than copying any upstream runtime:
 - [Brightway2-io](https://github.com/brightway-lca/brightway2-io): sequential linking strategies and preserved unlinked state. V1 exposes the complete strategy ledger and terminates explicitly at unresolved instead of silently relinking.
 
 The dedicated External Retrieval/Evaluate graph lane remains intentionally absent. Formal database, EPD or literature provenance can still enter through repository ports; Proxy is a fallback after direct local retrieval, not a shortcut around it.
+
+## Version 0.12 diagnostic and process-accounting contract
+
+- Recommendation separates approvable `candidates` from unapprovable `diagnostic_candidates`. A process-mismatched reference remains visible with provenance, gaps, exclusion reasons and minimum follow-up questions, but cannot be approved or locked.
+- Eligible records follow the reviewed project order: refractory consultation draft, ecoinvent 3.10, then ecoinvent 3.12. Applicability gates run before this business preference, and Trace still discloses draft status and the approval policy ID.
+- The designated enterprise workbook uses a versioned blank-zero policy. A blank process-emission cell means zero only when no electrode, coke, reductant, oxidation, combustion or decomposition trigger exists.
+- Triggered carbon-process emissions can be calculated deterministically from consumable mass, carbon fraction and oxidation fraction using `m × C × oxidation × 44/12`. An incomplete bundle routes to `PROCESS_MODEL_REQUIRED`.
+- Purchased electrode/coke production is classified as A1 upstream input; evidenced on-site oxidation, combustion or reaction adds a distinct A3 direct-process contribution.
+
+Version 0.12.1 hardens that contract in three places. Accounting assignments now keep the target product, purchased consumable A1 input and on-site A3 emission event as separate subjects with target-scoped evidence only. Soft `REFERENCE_ONLY` alternatives are returned through `reviewable_candidates` with deterministic review reasons; they cannot enter ordinary approval but remain available to a reasoned `reference_override`. Malformed optional catalogue priority fields fall back to the reviewed inferred source rank and are disclosed through `source_priority_issue` instead of aborting the catalogue.
+
+Version 0.12.2 closes the remaining accounting and governance ambiguities. Chemical entity names such as `氧化铝` cannot trigger A3 without explicit controlled process context. An electrode or coke A1 input can be reported as `IDENTIFIED_NOT_QUANTIFIED` with its missing quantity/upstream-factor inputs, independently from a quantified on-site A3 oxidation event. Reviewable-only results no longer emit a false unresolved message or Trace attempt, and explicit catalogue priority accepts only a real integer from 0 through 1000—floats, booleans and strings fall back per record with a data-quality warning.
 
 Run tests with `pip install -e .[test]` and `pytest`.
 

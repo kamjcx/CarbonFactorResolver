@@ -14,7 +14,8 @@ from .adapters import (
     NullProxyRepository,
     NullReferenceFlowRepository,
 )
-from .graph import GraphState, Router, Stage
+from .derived_factor import expected_total_emissions
+from .graph import GraphState, Router, Stage, candidate_hard_rejection_reasons
 from .material_registry import (
     DEFAULT_MATERIAL_REGISTRY,
     MaterialRuleSuggestionPort,
@@ -264,12 +265,39 @@ class A1FactorResolutionEngine:
         recommendation = await self.store.get_recommendation(request_id)
         if recommendation is None:
             raise KeyError(f"unknown request: {request_id}")
-        if recommendation.status != ResolutionStatus.RECOMMENDATION_READY:
-            raise ValueError("only a recommendation-ready resolution can be approved")
-        candidate = next((c for c in recommendation.candidates if c.candidate_id == candidate_id), None)
+        if recommendation.status not in {
+            ResolutionStatus.RECOMMENDATION_READY,
+            ResolutionStatus.REFERENCE_REVIEW_REQUIRED,
+        }:
+            raise ValueError("only a recommendation-ready or reference-review resolution can be approved")
+        mode = ApprovalMode(mode)
+        candidate = next((
+            c for c in recommendation.candidates if c.candidate_id == candidate_id
+        ), None)
+        reviewable = next((
+            c for c in recommendation.reviewable_candidates
+            if c.candidate_id == candidate_id
+        ), None)
+        if candidate is None and reviewable is not None:
+            if mode != ApprovalMode.REFERENCE_OVERRIDE:
+                raise ValueError(
+                    "reviewable candidates require reference_override mode and cannot "
+                    "enter ordinary approval"
+                )
+            candidate = reviewable
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
-        mode = ApprovalMode(mode)
+        hard_rejections = candidate_hard_rejection_reasons(candidate)
+        if hard_rejections:
+            raise ValueError(
+                "candidate is hard-blocked and cannot be approved: "
+                + ", ".join(hard_rejections)
+            )
+        if (
+            recommendation.status == ResolutionStatus.REFERENCE_REVIEW_REQUIRED
+            and mode != ApprovalMode.REFERENCE_OVERRIDE
+        ):
+            raise ValueError("reference-review resolutions require reference_override mode")
         if candidate.result_tier == ResultTier.REFERENCE_ONLY:
             if mode != ApprovalMode.REFERENCE_OVERRIDE or not note.strip():
                 raise ValueError("REFERENCE_ONLY candidates require reference_override mode and a non-empty reason")
@@ -286,7 +314,12 @@ class A1FactorResolutionEngine:
         recommendation = await self.store.get_recommendation(request_id)
         if recommendation is None:
             raise KeyError(f"unknown request: {request_id}")
-        candidate = next((c for c in recommendation.candidates if c.candidate_id == candidate_id), None)
+        candidate = next((
+            c for c in (
+                *recommendation.candidates, *recommendation.reviewable_candidates
+            )
+            if c.candidate_id == candidate_id
+        ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
         approval = ApprovalRecord(request_id, candidate_id, reviewer, ApprovalStatus.REJECTED, note)
@@ -308,13 +341,32 @@ class A1FactorResolutionEngine:
         recommendation = await self.store.get_recommendation(request_id)
         if recommendation is None:
             raise KeyError(f"unknown request: {request_id}")
-        candidate = next((c for c in recommendation.candidates if c.candidate_id == candidate_id), None)
+        candidate = next((
+            c for c in (
+                *recommendation.candidates, *recommendation.reviewable_candidates
+            )
+            if c.candidate_id == candidate_id
+        ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        hard_rejections = candidate_hard_rejection_reasons(candidate)
+        if hard_rejections:
+            raise ValueError(
+                "candidate is hard-blocked and cannot be locked: "
+                + ", ".join(hard_rejections)
+            )
         if candidate.result_tier == ResultTier.REFERENCE_ONLY and approval.mode != ApprovalMode.REFERENCE_OVERRIDE:
             raise ValueError("REFERENCE_ONLY candidate requires reference_override approval")
         if candidate.result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS and approval.mode == ApprovalMode.STANDARD:
             raise ValueError("candidate assumptions must be explicitly accepted before locking")
+        expected_total = expected_total_emissions(candidate)
+        if expected_total is not None:
+            observed_total = candidate.total_emissions_kgco2e
+            tolerance = max(1e-9, abs(expected_total) * 1e-9)
+            if observed_total is None or abs(observed_total - expected_total) > tolerance:
+                raise ValueError(
+                    "candidate total emissions are inconsistent with factor value and resolved quantity"
+                )
         locked = LockedResolution(
             request_id=request_id,
             candidate=candidate,

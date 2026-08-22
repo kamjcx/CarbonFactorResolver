@@ -1,7 +1,7 @@
 # OFR 完整技术文档
 
 > 文档对象：当前仓库中的 A1 Factor Resolution Engine V1（下文简称 OFR）  
-> 实现版本：`0.11.0`（增加可追溯附加工艺排放与电极氧化项）
+> 实现版本：`0.12.2`（会计量化状态、Reviewable 终态语义与严格目录优先级类型）
 > 技术基线：Python 3.11+  
 > 文档日期：2026-08-21
 > 文档性质：以当前代码为准的架构、接口、算法与运行说明
@@ -653,14 +653,15 @@ display_strength = round(
 ### 18.1 有可追溯候选
 
 - 候选分为 `PRIMARY_RECOMMENDATION`、`USABLE_WITH_ASSUMPTIONS`、`REFERENCE_ONLY`；
-- 按类型与 strength 排名并截取 `request.top_k`；
-- 状态为 `recommendation_ready`，等待人工审批。
+- 普通 Top-K 只从通过全部门禁的 eligible 候选截取，不再用被排除候选填充剩余名额；
+- `PRIMARY_RECOMMENDATION` / `USABLE_WITH_ASSUMPTIONS` 返回 `recommendation_ready`；
+- 没有普通候选但存在非硬阻断的 `REFERENCE_ONLY` 时，返回 `reference_review_required`，只能通过带理由的 Reference Override 审批。
 
 ### 18.2 无可计算候选
 
 - Reference Flow 缺少必要质量依据：`more_input_needed` + 精确 required fields；
 - 无任何 traceable factor：`supplier_data_required`；
-- 有参考证据但需要更完整 foreground model：`process_model_required`；
+- `UNADJUSTED_PROCESS_PROXY` 或仍带 Process Variant Gap：`process_model_required`；候选只保留在 Trace/exclusions，不进入 Recommendation；
 - 所有有界路径结束后 Link ledger 追加 `unresolved/no_match`，不重试。
 
 ## 19. Trace 与数据库更新解释
@@ -714,7 +715,7 @@ stateDiagram-v2
 
 ### 20.1 approve
 
-仅 `recommendation_ready` 的候选可审批。候选必须存在于该 Recommendation 的 Top-K 中。
+`recommendation_ready` 可按结果层级审批；`reference_review_required` 只接受带理由的 `reference_override`。候选必须存在于 Recommendation 中。审批边界再次调用候选本地硬门禁，`UNADJUSTED_PROCESS_PROXY` 或未闭合 Process Variant Gap 即使因存储篡改重新出现也拒绝审批。
 
 ### 20.2 reject
 
@@ -722,7 +723,7 @@ stateDiagram-v2
 
 ### 20.3 lock
 
-锁定前必须存在 `APPROVED` 记录。锁定产生 frozen `LockedResolution`，并写入状态为 `LOCKED` 的 ApprovalRecord。
+锁定前必须存在 `APPROVED` 记录。锁定边界独立重查硬门禁、审批模式和“因子 × 规范化数量 = 总量”一致性，再产生 frozen `LockedResolution` 并写入状态为 `LOCKED` 的 ApprovalRecord。
 
 锁定语义：
 
@@ -1194,6 +1195,8 @@ Normalize Text
 
 正式目录不写回仓库。HTTP Adapter 在进程内把目录记录预解析成 Semantic Index；目录 SHA、注册表版本或注册表 SHA 变化时生成新的 index version。Trace 暴露 `material_mention`、`identity_resolution`、`retrieval_intent`、`semantic_index`、`candidate_admissions`、排除原因和最终排名，支持解释同一请求在目录或注册表更新前后的差异。
 
+`0.11.2` 的审核式 `CatalogDatasetPolicy` 只为同时匹配 category、standard 和 primary label 的记录补充来源文件已经明确规定、但目录未逐行重复的字段。当前耐火材料征求意见稿策略依据 5.2、5.3.1 和 7.1 继承 `declared_product=记录名称`、`boundary=cradle-to-gate` 和 `indicator=GWP-total`；年份与地域没有被凭空补齐。草案/征求意见、聚合和待审核来源确定性封顶为 `REFERENCE_ONLY`。只有代码侧受审 Policy 绑定非空 `production_approval_id`，才可解除该上限；应用的 policy、approval、继承字段、Tier 原因和证据章节都进入 SourceRecord metadata 与 Trace。
+
 完整契约、迁移边界和验收案例见 `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`。
 
 ## 40. Entity-scoped Numeric Purity Grade V1
@@ -1228,18 +1231,38 @@ Trace 保存 `numeric_tokens`、选中/拒绝角色、Grade Schema ID/版本、b
 
 企业 profile 的精确数值优先于旧的同名路线参数，但不会删除来源链。若旧的受审路线证据明确证明参考生命周期因子包含待移除工艺，系统将该断言保存为独立的非数值 inclusion witness，避免企业份额覆盖后丢失工艺作用域，同时禁止旧份额重新进入计算。
 
-当前本地数据库为 schema `5`、dataset `t-chnrisc-0008-2025+enterprise-energy-89/v3`，SHA-256 为 `95d701826446a28861ee5142e5a8b335191b849b246f2b1615b415d56cf17317`。正式目录联调中，`烧结莫来石 → 电熔莫来石` 在能源替换后加入工作簿中的电极过程排放 `18 kgCO2/t`，输出 `3.940503304 kgCO2e/kg`；`烧结尖晶石 → 电熔尖晶石` 使用第64/61行的 `375 kgce/t, 2.1%电/97.9%气 → 185 kgce/t, 100%电`，再加入电极氧化 `33 kgCO2/t`，输出 `4.623698092 kgCO2e/kg`。
+当前本地数据库为 schema `5`、dataset `t-chnrisc-0008-2025+enterprise-energy-89/v4`，SHA-256 为 `0d47d6eac30e6de3ef110638506ae370aa68d87c57811b1f35a9060cef1d005a`。正式目录联调中，`烧结莫来石 → 电熔莫来石` 在能源替换后加入工作簿中的电极过程排放 `18 kgCO2/t`，输出 `3.940503304 kgCO2e/kg`；`烧结尖晶石 → 电熔尖晶石` 使用第64/61行的 `375 kgce/t, 2.1%电/97.9%气 → 185 kgce/t, 100%电`，再加入电极氧化 `33 kgCO2/t`，输出 `4.623698092 kgCO2e/kg`。
 
 ## 42. Database-priority Energy Replacement V1
 
 `0.10.0` 固化公式 `EF_target = EF_reference - EF_reference_process + EF_target_process`。数值选择顺序是：精确企业 profile → 精确路线参数 → 唯一通用能源参数 → 正式精确折标/能耗后备。待核实的精确 profile 可以计算，但自动增加假设；通用参数必须在数据库内值和单位唯一；生命周期参考因子包含被扣除路线能源由版本化策略证据显式记录。TransformationStep 保存参考因子、烧结电/气排放、共同上游、电熔电/气排放、全部参数 ID、公式 ID、输出和假设。
 
-`0.11.0` 在存在精确附加工艺记录时选择 `process.replace_energy_and_additional_process/v2`，同时扣除参考路线附加工艺排放并加入目标路线附加工艺排放。缺少此类记录的材料继续使用 V1 能源公式，避免把空值解释为有证据的零值。
+`0.11.2` 仅在参考与目标两侧都存在精确附加工艺记录时选择 `process.replace_energy_and_additional_process/v2`；显式数字零是证据，空白或单侧记录缺失会阻止派生并进入 `PROCESS_MODEL_REQUIRED`。导入器采用 `blank-is-missing-skip-record/v2`，不会再把空白包装成零证据。两侧都没有过程记录时继续使用 V1 能源公式。派生因子变化后，总排放按规范化数量重新计算，锁定前再次校验一致性。
 
 电熔尖晶石实例：`4.602431 - (0.037016985 + 0.844321293) - 0 + 0.869605370 + 0.033 = 4.623698092 kgCO2e/kg`。0.033 来自数据库中的工作簿 P61 结构化记录，不是 Router 常量；结果按现有 Qualification/ResultTier 规则展示。
 
-## 43. 结论
+## 43. 0.12.x 诊断式 Process Gap 与会计角色
+
+`Recommendation.candidates` 继续只包含可审批候选；新增 `diagnostic_candidates`、`missing_gaps` 和 `questions`。例如查询电熔莫来石但只有烧结莫来石生命周期因子且工艺参数不闭合时，烧结因子的数值、来源和排除原因保留在诊断区，状态为 `PROCESS_MODEL_REQUIRED`，用户会收到综合能耗/能源分配、含碳耗材用量/含碳率/氧化率，以及参考因子工艺包含关系这三个最小问题。诊断候选仍无法审批或锁定。
+
+项目明确批准的合格候选来源顺序为：耐火材料征求意见稿、ecoinvent 3.10、ecoinvent 3.12。该顺序通过 `source_priority_rank=0/10/20` 在相同 Resolution Type 内确定性排序，只在实体、边界、工艺和资格门禁之后生效。征求意见状态、Policy ID 与客户批准锚点继续进入 SourceRecord metadata 和 Trace，不会伪装成正式发布标准。
+
+企业工作簿采用 `enterprise-energy-89.blank-zero-unless-process-trigger/v1`：空白过程排放在没有反证时解释为数据集默认零；若备注或公式出现电极、焦炭、石墨、还原剂、含碳、氧化、燃烧、分解或 `44/12`，空白/零值被标记为计算冲突，不能成为零证据。完整的含碳耗材参数按 `m_consumable × carbon_fraction × oxidation_fraction × 44/12 ÷ 1000` 计算 kgCO2e/kg；缺少任一参数即回到 `PROCESS_MODEL_REQUIRED`。
+
+会计角色 Router 区分同一耗材的两条贡献：购入电极或焦炭的生产因子属于 `A1_UPSTREAM_INPUT`；制造现场氧化、燃烧或反应产生的直接排放属于 `A3_DIRECT_PROCESS`。独立查询“焦炭”默认返回 A1 上游角色；只有存在明确过程用途证据时才另建 A3 直接过程事件，防止把上游因子当直接排放或重复计算。
+
+`0.12.2` 不再用一个 Assignment 同时表示成品、耗材和直接排放。目标产品以 `TARGET_PRODUCT`、空 modules 表示核算对象；电极/焦炭以独立 subject 表示 A1 购入投入；“电极现场氧化/反应”等事件以 `DIRECT_PROCESS_EMISSION / A3_DIRECT_PROCESS` 表示。每个 Assignment 新增 `quantification_status` 与 `missing_inputs`：工艺证据只证明“存在电极”时，A1 为 `IDENTIFIED_NOT_QUANTIFIED`，必须另有耗材用量和购入耗材上游因子才能成为 `QUANTIFIED`；现场氧化排放可由显式过程排放值或闭合化学计量独立量化。耗材与直接过程 Assignment 只引用 `target_*` 证据，参考烧结路线证据不会混入目标会计分项。
+
+化学实体名与工艺上下文已严格分离。“氧化铝”“氧化镁”“二氧化硅”中的“氧化”只属于材料名称，不会触发 A3；A3 仅允许显式 `use_context` 或受控目标工艺证据中的现场氧化、燃烧、分解或直接过程排放信号触发。
+
+Recommendation 采用三层候选合同：`candidates` 为普通审批候选，`reviewable_candidates` 为软治理限制的 `REFERENCE_ONLY` 备选，`diagnostic_candidates` 为存在工艺等硬阻断的诊断候选。软备选同时返回 `reviewable_candidate_reasons`、Candidate provenance、数值和局限；普通审批拒绝该通道，只有带非空理由的 `reference_override` 可以审核和锁定。硬诊断仍永远不可审批。
+
+目录显式 `source_priority_rank` 采用单记录容错：只接受 `type(value) is int` 且范围为 0–1000；bool、float、数字字符串、非法字符串、负数和越界值都回退到受审 Policy 或来源版本推导的顺序，并在 Source metadata 与 Rank Trace 中记录 `source_priority_issue`。排序字段污染不再中断其他候选检索，因子核心值、单位或 provenance 损坏仍按原规则排除记录。
+
+仅存在软审核候选时，终态为 `REFERENCE_REVIEW_REQUIRED`，消息明确说明已有可追溯候选但需要带理由的 Override。该路径不再追加 `UNRESOLVED` LinkAttempt；只有确实没有可追溯可审核候选且策略耗尽时才记录 unresolved。
+
+## 44. 结论
 
 当前 OFR 已形成一个独立、可测试、可解释的 A1 因子解析内核。它的核心不是“让模型猜一个数”，而是识别候选与目标之间的差异，选择可追溯的工程解析策略，把 SourceRecord、ParameterEvidence、版本化公式、假设、Top-K 和人工决策组合成一个有界 Graph。
 
-V1 已经适合作为正式系统的领域内核和集成基线。`0.11.0` 进一步固化了数据库优先、带假设、附加工艺排放和完整 Trace 的工艺替换策略；在候选终态 Policy、结构化 Error、持久化事务 Store、审核式 ProxyEdge Registry、生产级 Proxy Repository、受限 LLM Adapter、真实目录 Grade 字段治理和材料族 gold-set 验收完成前，仍不应把当前参考实现直接宣称为生产锁定服务。
+V1 已经适合作为正式系统的领域内核和集成基线。`0.12.2` 已补齐诊断/软审核/普通候选三层合同、会计主体/模块/量化状态隔离、最小 Process Gap 问题、客户来源优先级及严格脏字段容错、数据集作用域空白零规则和含碳耗材化学计量。结构化 Error、持久化事务 Store、审核式 ProxyEdge Registry、生产级 Proxy Repository、受限 LLM Adapter、真实目录 Grade 字段治理和材料族 gold-set 验收仍是生产化前置工作。

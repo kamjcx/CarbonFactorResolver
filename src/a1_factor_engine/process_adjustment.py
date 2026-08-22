@@ -42,6 +42,67 @@ EXPECTED_UNITS = {
     "target_additional_process_emission_kgco2e_per_kg": "kgco2e/kg",
 }
 
+STOICHIOMETRIC_SUFFIXES = {
+    "carbonaceous_consumable_kg_per_t": "kg/t",
+    "carbon_mass_fraction": "fraction",
+    "oxidation_fraction": "fraction",
+}
+
+
+def stoichiometric_carbon_emission_kgco2e_per_kg(
+    consumable_kg_per_t: float,
+    carbon_mass_fraction: float,
+    oxidation_fraction: float,
+) -> float:
+    """Calculate direct CO2 from carbon oxidation: m × C × oxidation × 44/12."""
+
+    if consumable_kg_per_t < 0:
+        raise ValueError("carbonaceous consumable mass must be non-negative")
+    if not 0 <= carbon_mass_fraction <= 1 or not 0 <= oxidation_fraction <= 1:
+        raise ValueError("carbon fraction and oxidation fraction must be between zero and one")
+    return consumable_kg_per_t * carbon_mass_fraction * oxidation_fraction * (44 / 12) / 1000
+
+
+def _additional_process_value(
+    parameters: dict[str, ParameterEvidence], side: str
+) -> tuple[float | None, tuple[str, ...], bool]:
+    explicit_name = f"{side}_additional_process_emission_kgco2e_per_kg"
+    explicit = parameters.get(explicit_name)
+    trigger = parameters.get(f"{side}_process_emission_calculation_required")
+    explicit_requires_calculation = bool(
+        explicit
+        and str(explicit.metadata.get("requires_process_emission_calculation", "false")).casefold()
+        == "true"
+    )
+    names = {
+        suffix: f"{side}_{suffix}"
+        for suffix in STOICHIOMETRIC_SUFFIXES
+    }
+    present = {suffix: parameters.get(name) for suffix, name in names.items()}
+    if all(present.values()):
+        for suffix, evidence in present.items():
+            assert evidence is not None
+            observed_unit = evidence.unit.casefold().replace(" ", "")
+            if observed_unit != STOICHIOMETRIC_SUFFIXES[suffix]:
+                raise ValueError(f"{names[suffix]} unit must be {STOICHIOMETRIC_SUFFIXES[suffix]}")
+        value = stoichiometric_carbon_emission_kgco2e_per_kg(
+            present["carbonaceous_consumable_kg_per_t"].value,  # type: ignore[union-attr]
+            present["carbon_mass_fraction"].value,  # type: ignore[union-attr]
+            present["oxidation_fraction"].value,  # type: ignore[union-attr]
+        )
+        return value, tuple(
+            present[suffix].parameter_id  # type: ignore[union-attr]
+            for suffix in STOICHIOMETRIC_SUFFIXES
+        ), True
+    if trigger or explicit_requires_calculation:
+        raise ValueError(
+            f"{side} process-emission trigger requires consumable kg/t, carbon mass "
+            "fraction and oxidation fraction before calculation"
+        )
+    if explicit:
+        return explicit.value, (explicit.parameter_id,), False
+    return None, (), False
+
 
 def _by_name(evidence: tuple[ParameterEvidence, ...]) -> dict[str, ParameterEvidence]:
     result: dict[str, ParameterEvidence] = {}
@@ -90,6 +151,15 @@ def _policy_assumptions(
             "database-priority energy-replacement policy"
         )
     if any(
+        str(item.metadata.get("runtime_eligible", "")).casefold() == "false"
+        for item in evidence
+        if item.metadata.get("enterprise_process_emission_ids")
+    ):
+        assumptions.append(
+            "exact enterprise process-emission records marked for review are used "
+            "under the database-priority process-replacement policy"
+        )
+    if any(
         item.metadata.get("parameter_scope")
         == "unique_generic_energy_carrier_fallback"
         for item in evidence
@@ -123,17 +193,22 @@ def resolve_process_variant(
         values = {name: parameters[name].value for name in FULL_REQUIRED}
         target_gas_share = parameters.get("target_natural_gas_share")
         values["target_natural_gas_share"] = target_gas_share.value if target_gas_share else 0.0
-        reference_additional = parameters.get(
-            "reference_additional_process_emission_kgco2e_per_kg"
+        reference_additional, reference_additional_ids, reference_stoichiometric = (
+            _additional_process_value(parameters, "reference")
         )
-        target_additional = parameters.get(
-            "target_additional_process_emission_kgco2e_per_kg"
+        target_additional, target_additional_ids, target_stoichiometric = (
+            _additional_process_value(parameters, "target")
         )
+        if (reference_additional is None) != (target_additional is None):
+            raise ValueError(
+                "additional process-emission replacement requires explicit records "
+                "for both reference and target routes, including explicit zero values"
+            )
         values["reference_additional_process"] = (
-            reference_additional.value if reference_additional else 0.0
+            reference_additional if reference_additional is not None else 0.0
         )
         values["target_additional_process"] = (
-            target_additional.value if target_additional else 0.0
+            target_additional if target_additional is not None else 0.0
         )
         for share in (
             "reference_electricity_share",
@@ -217,10 +292,10 @@ def resolve_process_variant(
             for name in sorted(
                 FULL_REQUIRED
                 | ({"target_natural_gas_share"} if target_gas_share else set())
-                | ({reference_additional.name} if reference_additional else set())
-                | ({target_additional.name} if target_additional else set())
             )
-        ) + ((inclusion_evidence.parameter_id,) if inclusion_evidence else ())
+        ) + reference_additional_ids + target_additional_ids + (
+            (inclusion_evidence.parameter_id,) if inclusion_evidence else ()
+        )
         assumptions = (
             "common raw-material upstream is equivalent between reference and target routes",
             "raw-material losses and product yield are equivalent",
@@ -229,7 +304,9 @@ def resolve_process_variant(
             "m3 and Nm3 are treated as the same quantity basis for this proxy",
             *_policy_assumptions(evidence),
         )
-        includes_additional_process = bool(reference_additional or target_additional)
+        includes_additional_process = (
+            reference_additional is not None and target_additional is not None
+        )
         formula_id = (
             "process.replace_energy_and_additional_process/v2"
             if includes_additional_process
@@ -259,6 +336,8 @@ def resolve_process_variant(
                 "target_electricity": target_electricity,
                 "target_natural_gas": target_gas,
                 "target_additional_process": values["target_additional_process"],
+                "reference_additional_stoichiometric": float(reference_stoichiometric),
+                "target_additional_stoichiometric": float(target_stoichiometric),
             },
             output_value=output,
             output_unit=candidate.factor_unit,

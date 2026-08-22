@@ -7,12 +7,14 @@ from enum import Enum
 from typing import Generic, TypeVar
 
 from .models import (
+    AccountingAssignment,
     AuditEvent,
     Candidate,
     CandidateAdmission,
     CandidateExclusion,
     CandidateQualification,
     DerivedFactorCandidate,
+    GapType,
     LinkAttempt,
     MaterialClass,
     NormalizedActivity,
@@ -27,6 +29,8 @@ from .models import (
     ResolutionPlan,
     ResolutionRequest,
     ResolutionTrace,
+    ResolutionType,
+    ResultTier,
     SemanticIndexAnchor,
     SourceRecord,
     TransformationStep,
@@ -34,9 +38,24 @@ from .models import (
 )
 
 
+def candidate_hard_rejection_reasons(candidate: Candidate) -> tuple[str, ...]:
+    """Return candidate-local reasons that can never be overridden by approval."""
+
+    reasons: list[str] = []
+    if candidate.resolution_type == ResolutionType.UNADJUSTED_PROCESS_PROXY or any(
+        gap.gap_type == GapType.PROCESS_VARIANT for gap in candidate.gaps
+    ):
+        reasons.append("unresolved_process_variant_requires_process_model")
+    return tuple(dict.fromkeys(reasons))
+
+
 def candidate_rejection_reasons(candidate: Candidate, state: "GraphState") -> tuple[str, ...]:
-    """Return only true V1 hard blocks; mismatches are handled as gaps."""
-    return ()
+    """Return hard blocks plus soft review gates for ordinary recommendation."""
+
+    reasons = list(candidate_hard_rejection_reasons(candidate))
+    if candidate.result_tier == ResultTier.REFERENCE_ONLY:
+        reasons.append("reference_only_candidate_requires_explicit_review")
+    return tuple(dict.fromkeys(reasons))
 
 
 def candidate_is_sufficient(candidate: Candidate, state: "GraphState") -> bool:
@@ -88,6 +107,7 @@ class GraphState:
     resolution_plans: dict[str, ResolutionPlan] = field(default_factory=dict)
     reference_flow_records: tuple[ReferenceFlowRecord, ...] = ()
     parameter_evidence: list[ParameterEvidence] = field(default_factory=list)
+    accounting_assignments: list[AccountingAssignment] = field(default_factory=list)
     transformation_steps: list[TransformationStep] = field(default_factory=list)
     derived_candidates: list[DerivedFactorCandidate] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)

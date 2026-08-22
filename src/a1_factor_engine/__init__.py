@@ -1,5 +1,10 @@
 """A1 Factor Resolution Engine V1 public API."""
 
+from .accounting import (
+    resolve_accounting_assignment,
+    resolve_process_accounting_assignments,
+)
+from .adapters import REFRACTORY_A1_STANDARD_POLICY, CatalogDatasetPolicy
 from .energy_database import (
     CompositeProcessParameterRepository,
     EnergyConversionRecord,
@@ -11,6 +16,8 @@ from .energy_database import (
     ScopedProcessParameterRecord,
     SqliteEnergyProcessParameterRepository,
     create_energy_database,
+    explicit_process_emission_observation,
+    interpret_process_emission_observation,
 )
 from .engine import A1FactorResolutionEngine
 from .material_registry import (
@@ -25,6 +32,10 @@ from .material_registry import (
     VersionedMaterialSemanticRegistry,
 )
 from .models import (
+    AccountingAssignment,
+    AccountingModule,
+    AccountingQuantificationStatus,
+    AccountingRole,
     ApprovalMode,
     ApprovalStatus,
     Candidate,
@@ -89,9 +100,12 @@ from .models import (
     SpecificationOperator,
     TransformationStep,
 )
+from .process_adjustment import stoichiometric_carbon_emission_kgco2e_per_kg
 
 __all__ = [
     "A1FactorResolutionEngine",
+    "CatalogDatasetPolicy",
+    "REFRACTORY_A1_STANDARD_POLICY",
     "CompositeProcessParameterRepository",
     "EnergyConversionRecord",
     "EnergyDatabaseAnchor",
@@ -102,6 +116,15 @@ __all__ = [
     "ScopedProcessParameterRecord",
     "SqliteEnergyProcessParameterRepository",
     "create_energy_database",
+    "explicit_process_emission_observation",
+    "interpret_process_emission_observation",
+    "resolve_accounting_assignment",
+    "resolve_process_accounting_assignments",
+    "AccountingAssignment",
+    "AccountingModule",
+    "AccountingQuantificationStatus",
+    "AccountingRole",
+    "stoichiometric_carbon_emission_kgco2e_per_kg",
     "ApprovalStatus",
     "ApprovalMode",
     "Candidate",

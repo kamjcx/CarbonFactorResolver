@@ -67,7 +67,7 @@ Stores the first worksheet of the reviewed 89-product enterprise workbook as one
 - total energy, electricity share, remainder carrier and remainder share;
 - allocation status, runtime-eligibility flag and formal-quota comparison metadata.
 
-The runtime adapter selects the configured quota level (Level 1 by default) and requires an exact canonical product/route match. Under `process.database-priority-energy-replacement/v1`, an exact enterprise profile outranks the formal quota. A closed exact profile marked `NEEDS_REVIEW` may supply totals and shares, but Trace records `calculation_with_assumption=true`, the review note, workbook SHA and cells. Standard-coal rows, unresolved remainder carriers and ambiguous duplicate keys remain non-calculable.
+The runtime adapter selects the configured quota level (Level 1 by default) and requires an exact canonical product/route match. Formal-safe defaults reject review-only profiles, generic cross-material carrier parameters and assumed lifecycle-process inclusion. Engineering trial runs may enable them explicitly; Trace then records `calculation_with_assumption=true`, review notes, workbook SHA and cells. Standard-coal rows, unresolved remainder carriers and ambiguous duplicate keys remain non-calculable.
 
 Carrier parameter precedence is exact route-scoped evidence, then one unique database-wide carrier value, then an exact formal conversion. Generic fallback is allowed only when all active database observations for the parameter agree on value and unit; its original parameter IDs and the cross-route assumption are preserved. When an exact profile pair is used with a lifecycle reference, the approved policy emits a separate non-numeric inclusion witness so the subtraction assumption is explicit in the transformation lineage.
 
@@ -78,6 +78,8 @@ An exact eligible enterprise profile supersedes older numeric route shares or to
 Stores level-specific non-energy process emissions only for product rows with an explicitly resolved production process. Each row retains canonical product, route, quota level, emission kind, `kgCO2e/t` source value, worksheet/cell/formula, remark, review status and workbook SHA. Runtime converts the selected exact record deterministically to `kgCO2e/kg`; it does not infer process emissions from names.
 
 For electrofused spinel, cells `P61/Q61/R61` contain `33 kgCO2/t` and the formula `9 × 44 / 12`, corresponding to direct oxidation of 9 kg carbon electrode per tonne of product. The sintered route cells `P64/Q64/R64` are explicit zeros. Because the source rows remain marked for review, Trace retains `calculation_with_assumption=true`.
+
+V2 replacement requires evidence on both sides. Numeric zero is valid evidence; an absent database row is not zero. For the designated enterprise workbook only, importer policy `enterprise-energy-89.blank-zero-unless-process-trigger/v1` turns a blank into a dataset-default zero when no process trigger is present. Electrode, coke, graphite, reductant, carbon, oxidation, combustion, decomposition or `44/12` evidence overrides that default: a blank/zero is marked `requires_process_emission_calculation` and cannot close the route until the process amount is calculated. If one side remains unresolved, the Router records an unadjusted diagnostic candidate and returns `process_model_required`; the diagnostic never enters approval. The current 63 imported observations are numeric cells (54 positive, 9 numeric zeros), so this policy change does not alter the current database contents or SHA until a controlled rebuild.
 
 ### `quota_modifier_rule`
 
@@ -170,10 +172,10 @@ This supports comparison when either the formal factor catalogue or energy datab
 
 ## Current local database anchor
 
-- dataset version: `t-chnrisc-0008-2025+enterprise-energy-89/v3`;
+- dataset version: `t-chnrisc-0008-2025+enterprise-energy-89/v4`;
 - schema version: `5`;
 - local path: `D:\carbon-data\energy_parameters.db`;
-- database SHA-256: `95d701826446a28861ee5142e5a8b335191b849b246f2b1615b415d56cf17317`;
+- database SHA-256: `0d47d6eac30e6de3ef110638506ae370aa68d87c57811b1f35a9060cef1d005a`;
 - records: 309 quotas, 31 conversions, 14 modifier rules, 273 enterprise profiles and 63 process-emission observations;
 - runtime-eligible enterprise records: 193.
 
