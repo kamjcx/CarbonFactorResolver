@@ -137,8 +137,7 @@ class SemanticFactorIndex:
                 and record.metadata.get("identity_outcome") == IdentityOutcome.RESOLVED.value
                 and record.metadata.get("base_entity_id") == intent.base_entity_id
                 and (
-                    not record.metadata.get("product_entity_id")
-                    or not intent.allowed_product_entity_ids
+                    not intent.allowed_product_entity_ids
                     or record.metadata.get("product_entity_id") in intent.allowed_product_entity_ids
                 )
             )

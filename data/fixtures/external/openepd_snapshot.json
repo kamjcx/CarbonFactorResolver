@@ -4,6 +4,9 @@
     {
       "source_id": "openepd-shape-aluminium-001",
       "document_kind": "openepd",
+      "subject_type": "raw_material",
+      "source_quality_status": "VERIFIED",
+      "admission_eligible": true,
       "source_type": "epd",
       "material_name": "primary aluminium",
       "aliases": ["primary aluminum"],

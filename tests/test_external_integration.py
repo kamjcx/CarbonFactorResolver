@@ -57,7 +57,6 @@ async def test_primary_aluminium_ingot_enters_external_lane_with_hash_provenance
 
 
 def test_default_api_reports_fixture_connector_health():
-    pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
     from a1_factor_engine.api import create_app
@@ -102,7 +101,6 @@ async def test_connector_discovery_failure_does_not_block_later_connector():
 
 
 def test_default_benchmark_api_rejects_paths_outside_configured_root(tmp_path):
-    pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
     from a1_factor_engine.api import create_app

@@ -88,6 +88,9 @@ async def test_public_snapshot_injected_fetcher_must_preserve_pinned_content():
         ({"declared_product": ""}, "declared_product"),
         ({"boundary_modules": []}, "boundary and boundary_modules"),
         ({"evidence_locator": ""}, "source and evidence locators"),
+        ({"subject_type": ""}, "subject_type"),
+        ({"source_quality_status": ""}, "source_quality_status"),
+        ({"admission_eligible": "yes"}, "admission_eligible"),
     ],
 )
 async def test_invalid_evidence_is_rejected_before_source_record(update, error):
@@ -102,6 +105,9 @@ async def test_invalid_evidence_is_rejected_before_source_record(update, error):
         "boundary_modules": ["A1"],
         "source_locator": "fixture://invalid",
         "evidence_locator": "fixture://invalid#GWP",
+        "subject_type": "raw_material",
+        "source_quality_status": "VERIFIED",
+        "admission_eligible": True,
     }
     item.update(update)
     content = json.dumps(item, sort_keys=True, separators=(",", ":"), allow_nan=True).encode()

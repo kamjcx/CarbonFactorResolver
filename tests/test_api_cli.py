@@ -3,14 +3,20 @@ from __future__ import annotations
 import io
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
+from pathlib import Path
 from types import MappingProxyType
 
 import pytest
 
 from a1_factor_engine.cli import main
-from a1_factor_engine.serialization import to_jsonable
+from a1_factor_engine.serialization import (
+    serialize_benchmark,
+    serialize_recommendation,
+    serialize_trace,
+    to_jsonable,
+)
 
 
 class Example(Enum):
@@ -36,6 +42,32 @@ def test_explicit_serializer_handles_domain_container_types():
         "at": "2026-01-02T03:04:00+00:00",
         "frozen": {"tuple": ["value"]},
     }
+
+
+def test_explicit_serializer_handles_paths_dates_sets_and_to_dict():
+    class DictValue:
+        def to_dict(self):
+            return {"path": Path("evidence/report.pdf"), "date": date(2026, 9, 1)}
+
+    assert to_jsonable({"items": {Example.VALUE}, "object": DictValue()}) == {
+        "items": ["value"],
+        "object": {"path": str(Path("evidence/report.pdf")), "date": "2026-09-01"},
+    }
+
+
+def test_delivery_serializers_require_object_payloads():
+    assert serialize_recommendation({"status": "resolved"}) == {"status": "resolved"}
+    assert serialize_benchmark({"run_id": "run-1"}) == {"run_id": "run-1"}
+    assert serialize_trace({"entries": []}) == {"entries": []}
+
+    with pytest.raises(TypeError, match="recommendation serializer"):
+        serialize_recommendation([])
+    with pytest.raises(TypeError, match="benchmark serializer"):
+        serialize_benchmark([])
+    with pytest.raises(TypeError, match="trace serializer"):
+        serialize_trace([])
+    with pytest.raises(TypeError, match="unsupported JSON value"):
+        to_jsonable(object())
 
 
 class FakeEngine:
@@ -83,8 +115,6 @@ def test_cli_benchmark_run_uses_injected_runner():
 
 
 def test_fastapi_endpoints_with_injected_services():
-    pytest.importorskip("fastapi")
-    pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 
     from a1_factor_engine.api import create_app
@@ -113,8 +143,6 @@ def test_fastapi_endpoints_with_injected_services():
 
 
 def test_fastapi_returns_not_found_for_unknown_resolution():
-    pytest.importorskip("fastapi")
-    pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 
     from a1_factor_engine.api import create_app

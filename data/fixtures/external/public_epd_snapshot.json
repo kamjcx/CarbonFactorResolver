@@ -4,6 +4,9 @@
     {
       "source_id": "public-epd-alumina-demo-001",
       "document_kind": "structured_epd",
+      "subject_type": "raw_material",
+      "source_quality_status": "VERIFIED",
+      "admission_eligible": true,
       "source_type": "epd",
       "material_name": "alumina",
       "aliases": ["aluminium oxide", "aluminum oxide"],

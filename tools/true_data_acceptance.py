@@ -13,7 +13,7 @@ import importlib.metadata
 import json
 import re
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -21,9 +21,12 @@ from typing import Any, Iterable, Mapping
 
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.engine import A1FactorResolutionEngine
+from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import ResolutionStatus
 
 EXPECTED_STAGES = ("A1", "A2", "A3", "TOTAL")
+PARSER_VERSION = "cfr.true-data-extractor/v0.13.1"
+REPORT_NAME_PATTERN = re.compile(r"^(?P<report_id>\d{2})--")
 
 
 def sha256_file(path: Path) -> str:
@@ -40,8 +43,8 @@ def canonical_json_bytes(value: object) -> bytes:
     ).encode("utf-8")
 
 
-def parse_number(value: str) -> float:
-    return float(value.replace(",", "").strip())
+def parse_number(value: str) -> Decimal:
+    return Decimal(value.replace(",", "").strip())
 
 
 def label_value(paragraphs: Iterable[str], label: str) -> str:
@@ -125,6 +128,18 @@ class ExtractedFactor:
     pdf_sha256: str
     pdf_evidence: str
     cross_format_verified: bool
+    product_name_en: str = ""
+    value_raw: str = ""
+    display_precision: int = 2
+    pdf_table_index: int = 0
+    pdf_row_index: int = 0
+    pdf_column_index: int = 4
+    pdf_cell_bbox: tuple[float, float, float, float] | None = None
+    parser_version: str = PARSER_VERSION
+    extraction_confidence: float = 1.0
+    license: str = "internal-read-only-source-document"
+    source_quality_status: str = "VERIFIED"
+    admission_eligible: bool = True
 
 
 @dataclass(frozen=True)
@@ -136,17 +151,31 @@ class QualityFinding:
     evidence: str
 
 
-def source_pairs(source_dir: Path) -> tuple[SourcePair, ...]:
-    docx_by_id = {path.name[:2]: path for path in source_dir.glob("*.docx")}
-    pdf_by_id = {path.name[:2]: path for path in source_dir.glob("*.pdf")}
+def _indexed_reports(paths: Iterable[Path], suffix: str) -> dict[str, Path]:
+    grouped: dict[str, list[Path]] = {}
+    for path in paths:
+        match = REPORT_NAME_PATTERN.match(path.name)
+        if not match:
+            raise ValueError(f"invalid {suffix} report filename (expected NN--...): {path.name}")
+        grouped.setdefault(match.group("report_id"), []).append(path)
+    duplicates = {key: values for key, values in grouped.items() if len(values) != 1}
+    if duplicates:
+        details = {key: sorted(path.name for path in values) for key, values in duplicates.items()}
+        raise ValueError(f"duplicate {suffix} report IDs: {details}")
+    return {key: values[0] for key, values in grouped.items()}
+
+
+def source_pairs(source_dir: Path, *, expected_pairs: int | None = None) -> tuple[SourcePair, ...]:
+    docx_by_id = _indexed_reports(source_dir.glob("*.docx"), "DOCX")
+    pdf_by_id = _indexed_reports(source_dir.glob("*.pdf"), "PDF")
     if set(docx_by_id) != set(pdf_by_id):
         raise ValueError(
             "DOCX/PDF report IDs differ: "
             f"docx_only={sorted(set(docx_by_id) - set(pdf_by_id))}, "
             f"pdf_only={sorted(set(pdf_by_id) - set(docx_by_id))}"
         )
-    if len(docx_by_id) != 18:
-        raise ValueError(f"expected 18 paired reports, found {len(docx_by_id)}")
+    if expected_pairs is not None and len(docx_by_id) != expected_pairs:
+        raise ValueError(f"expected {expected_pairs} paired reports, found {len(docx_by_id)}")
 
     return tuple(
         SourcePair(
@@ -161,6 +190,31 @@ def source_pairs(source_dir: Path) -> tuple[SourcePair, ...]:
         )
         for report_id in sorted(docx_by_id)
     )
+
+
+def _pdf_lifecycle_cells(page: object) -> dict[str, tuple[str, int, int, tuple[float, float, float, float] | None]]:
+    matches: dict[str, tuple[str, int, int, tuple[float, float, float, float] | None]] = {}
+    tables = page.find_tables()  # type: ignore[attr-defined]
+    for table_index, table in enumerate(tables):
+        rows = table.extract()
+        if not rows or len(rows[0]) < 5 or "carbonfootprint" not in normalized_token(str(rows[0][4])):
+            continue
+        for row_index, row in enumerate(rows[1:], 1):
+            if len(row) < 5:
+                continue
+            row_label = normalized_token(str(row[0] or ""))
+            stage = next((value for value in EXPECTED_STAGES[:-1] if value.casefold() in row_label), None)
+            if stage is None and "total" in row_label:
+                stage = "TOTAL"
+            if stage is None:
+                continue
+            bbox = None
+            try:
+                bbox = table.rows[row_index].cells[4]
+            except (AttributeError, IndexError):
+                pass
+            matches[stage] = (str(row[4] or "").strip(), table_index, row_index, bbox)
+    return matches
 
 
 def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[QualityFinding, ...]]:
@@ -202,6 +256,7 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
 
     with pdfplumber.open(pair.pdf_path) as pdf:
         pdf_pages = tuple(page.extract_text() or "" for page in pdf.pages)
+        pdf_cells = _pdf_lifecycle_cells(pdf.pages[1]) if len(pdf.pages) >= 2 else {}
     if len(pdf_pages) != 2:
         raise ValueError(f"{pair.report_id}: expected two PDF pages, found {len(pdf_pages)}")
     compact_pdf = normalized_token("\n".join(pdf_pages))
@@ -221,7 +276,7 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
         if stage == "TOTAL":
             category = "product_carbon_footprint"
             boundary = "cradle-to-gate"
-            modules = ("A1", "A2", "A3")
+            modules: tuple[str, ...] = ("A1", "A2", "A3")
             applicability = (
                 f"{product_en}; specification {specification}; per tonne of product; "
                 f"{boundary_text}; accounting period {accounting_period}"
@@ -239,7 +294,8 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
             )
             name_cn = f"{pair.product_name_cn} {stage}阶段碳足迹"
             name_en = f"{product_en} {stage} lifecycle-stage carbon footprint"
-        numeric_verified = normalized_token(f"{float(value):,.2f}") in compact_pdf
+        pdf_cell = pdf_cells.get(stage)
+        numeric_verified = bool(pdf_cell and parse_number(pdf_cell[0]) == value)
         factors.append(
             ExtractedFactor(
                 factor_id=f"TD-{pair.report_id}-{stage}",
@@ -259,7 +315,7 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
                 applicability=applicability,
                 certificate_no=certificate_no,
                 accounting_period=accounting_period,
-                docx_path=pair.docx_path,
+                docx_path=Path(pair.docx_path).name,
                 docx_sha256=pair.docx_sha256,
                 docx_evidence=(
                     "paragraph containing Product Carbon Footprint per Unit; "
@@ -267,14 +323,23 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
                     if stage == "TOTAL"
                     else f"Table 1 row {row_number}, Carbon Footprint column"
                 ),
-                pdf_path=pair.pdf_path,
+                pdf_path=Path(pair.pdf_path).name,
                 pdf_sha256=pair.pdf_sha256,
-                pdf_evidence=f"page {page}, lifecycle table row {stage}",
+                pdf_evidence=(
+                    f"page {page}, table {pdf_cell[1] if pdf_cell else 'missing'}, "
+                    f"row {pdf_cell[2] if pdf_cell else 'missing'}, Carbon Footprint column"
+                ),
                 cross_format_verified=bool(product_verified and numeric_verified),
+                product_name_en=product_en,
+                value_raw=row[4].replace(",", "").strip(),
+                display_precision=len(row[4].rsplit(".", 1)[1]) if "." in row[4] else 0,
+                pdf_table_index=pdf_cell[1] if pdf_cell else -1,
+                pdf_row_index=pdf_cell[2] if pdf_cell else -1,
+                pdf_cell_bbox=pdf_cell[3] if pdf_cell else None,
             )
         )
 
-    total_row_value = Decimal(str(factors[-1].value))
+    total_row_value = Decimal(factors[-1].value_raw)
     if abs(sum(stage_values) - total_row_value) > Decimal("0.02"):
         findings.append(
             QualityFinding(
@@ -296,7 +361,7 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
                 "DOCX Table 1 rows 2-5; PDF page 2 lifecycle table",
             )
         )
-    if abs(total_value - float(total_row_value)) > 0.02:
+    if abs(total_value - total_row_value) > Decimal("0.02"):
         findings.append(
             QualityFinding(
                 pair.report_id,
@@ -311,28 +376,35 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
             findings.append(
                 QualityFinding(
                     pair.report_id,
-                    "warning",
+                    "error",
                     "CROSS_FORMAT_TEXT_CHECK_FAILED",
                     f"DOCX factor {factor.factor_id} was not found verbatim in normalized PDF text",
                     factor.pdf_evidence,
                 )
             )
-    return tuple(factors), tuple(findings)
+    rejected = any(finding.severity == "error" for finding in findings)
+    status = "REJECTED" if rejected else "VERIFIED"
+    return (
+        tuple(replace(factor, source_quality_status=status, admission_eligible=not rejected) for factor in factors),
+        tuple(findings),
+    )
 
 
 def catalog_payload(factors: tuple[ExtractedFactor, ...]) -> dict[str, Any]:
     records = []
     for factor in factors:
-        base_name = factor.factor_name_en.split(" product carbon footprint", 1)[0]
-        base_name = base_name.split(" A", 1)[0]
+        base_name = factor.product_name_en
         records.append(
             {
                 "record_id": factor.factor_id,
                 "category": "epd_indicator",
+                "subject_type": "finished_product",
                 "code": factor.factor_id,
                 "name": base_name,
                 "aliases": [factor.material_name_cn],
                 "primary_value": factor.value,
+                "value_raw": factor.value_raw,
+                "display_precision": factor.display_precision,
                 "primary_unit": factor.unit,
                 "source": factor.source,
                 "source_id": factor.certificate_no,
@@ -344,12 +416,19 @@ def catalog_payload(factors: tuple[ExtractedFactor, ...]) -> dict[str, Any]:
                 "boundary_modules": list(factor.boundary_modules),
                 "indicator": "GWP-total",
                 "declared_product": base_name,
+                "source_quality_status": factor.source_quality_status,
+                "admission_eligible": factor.admission_eligible,
+                "cross_format_verified": factor.cross_format_verified,
+                "parser_version": factor.parser_version,
+                "extraction_confidence": factor.extraction_confidence,
+                "license": factor.license,
                 "scope": factor.applicability,
-                "source_document_locator": factor.pdf_path,
+                "source_document_locator": f"evidence://report/{factor.report_id}/pdf/{factor.pdf_sha256}",
                 "source_document_sha256": factor.pdf_sha256,
                 "page": "2",
                 "table": "Lifecycle Process",
                 "row": factor.stage,
+                "evidence_cell_bbox": factor.pdf_cell_bbox,
                 "notes": factor.pdf_evidence,
             }
         )
@@ -361,21 +440,29 @@ def catalog_payload(factors: tuple[ExtractedFactor, ...]) -> dict[str, Any]:
     }
 
 
-def blind_cases(factors: tuple[ExtractedFactor, ...]) -> list[dict[str, Any]]:
+def ingestion_cases(factors: tuple[ExtractedFactor, ...]) -> list[dict[str, Any]]:
     all_ids = {factor.factor_id for factor in factors}
     cases: list[dict[str, Any]] = []
     for factor in factors:
-        base_name = factor.factor_name_en.split(" product carbon footprint", 1)[0]
-        base_name = base_name.split(" A", 1)[0]
+        base_name = factor.product_name_en
+        product_variant_required = "product_variant" in (
+            DEFAULT_MATERIAL_REGISTRY.resolve(base_name).identity.unresolved_attributes
+        )
+        acceptable = [factor.factor_id] if factor.admission_eligible and not product_variant_required else []
         cases.append(
             {
                 "schema_version": "cfr-true-data-acceptance/v1",
                 "case_id": f"CASE-{factor.factor_id}",
-                "case_type": "extracted_factor",
+                "case_type": (
+                    "source_quality_control" if not factor.admission_eligible
+                    else "ambiguity_control" if product_variant_required
+                    else "extracted_factor"
+                ),
                 "factor_id": factor.factor_id,
                 "correct_material_entity": base_name,
                 "request": {
                     "material_name": base_name,
+                    "subject_type": "finished_product",
                     "quantity": 1.0,
                     "quantity_unit": "t",
                     "year": factor.source_year,
@@ -383,10 +470,10 @@ def blind_cases(factors: tuple[ExtractedFactor, ...]) -> list[dict[str, Any]]:
                     "target_factor_unit": factor.unit,
                     "top_k": 5,
                 },
-                "acceptable_candidates": [factor.factor_id],
-                "forbidden_candidates": sorted(all_ids - {factor.factor_id}),
-                "expected_more_input": False,
-                "expected_abstention": False,
+                "acceptable_candidates": acceptable,
+                "forbidden_candidates": sorted(all_ids - set(acceptable)),
+                "expected_more_input": product_variant_required,
+                "expected_abstention": not factor.admission_eligible,
                 "answer_basis": (
                     "Exact declared product, accounting year, lifecycle boundary, unit, "
                     "and paired DOCX/PDF evidence must agree."
@@ -414,6 +501,7 @@ def blind_cases(factors: tuple[ExtractedFactor, ...]) -> list[dict[str, Any]]:
                 "correct_material_entity": material_name,
                 "request": {
                     "material_name": material_name,
+                    "subject_type": "finished_product" if more_input else "raw_material",
                     "quantity": 1.0,
                     "quantity_unit": "t",
                     "boundary": "cradle-to-gate",
@@ -442,6 +530,16 @@ def write_jsonl(path: Path, values: Iterable[Mapping[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as stream:
         for value in values:
             stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def load_frozen_cases(path: Path) -> list[dict[str, Any]]:
+    cases = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not all(isinstance(case, dict) for case in cases):
+        raise ValueError("holdout manifest lines must be JSON objects")
+    case_ids = [str(case.get("case_id") or "") for case in cases]
+    if not all(case_ids) or len(case_ids) != len(set(case_ids)):
+        raise ValueError("holdout case_id values must be non-empty and unique")
+    return cases
 
 
 def write_factor_csvs(output_dir: Path, factors: tuple[ExtractedFactor, ...], cases: list[dict[str, Any]]) -> None:
@@ -478,7 +576,7 @@ def write_factor_csvs(output_dir: Path, factors: tuple[ExtractedFactor, ...], ca
             writer.writerows(rows)
 
 
-def evidence_coverage(candidate: object) -> float:
+def evidence_coverage(candidate: Any) -> float:
     source = candidate.source
     fields = (
         source.source_id,
@@ -493,6 +591,11 @@ def evidence_coverage(candidate: object) -> float:
         source.page,
         source.table,
         source.row,
+        source.metadata.get("cross_format_verified"),
+        source.metadata.get("parser_version"),
+        source.metadata.get("extraction_confidence"),
+        source.metadata.get("license"),
+        source.metadata.get("source_quality_status"),
     )
     return sum(value is not None and str(value).strip() != "" for value in fields) / len(fields)
 
@@ -511,9 +614,15 @@ def aggregate_acceptance_metrics(
     catalog_record_anchor: str,
 ) -> dict[str, Any]:
     retrieval = [result for result in results if result["recall_at_5"] is not None]
+    stage_retrieval = [
+        result for result in retrieval
+        if str(result.get("factor_id") or "").rsplit("-", 1)[-1] in {"A1", "A2", "A3"}
+    ]
     candidate_count = sum(int(result["candidate_count"]) for result in results)
     wrong_count = sum(int(result["wrong_candidate_count"]) for result in results)
     abstentions = [result for result in results if result["abstention_correct"] is not None]
+    positive_more_input = [result for result in results if result["expected_more_input"]]
+    negative_more_input = [result for result in results if not result["expected_more_input"]]
     evidence_sum = sum(float(result["evidence_coverage_sum"]) for result in results)
     evidence_count = sum(int(result["evidence_candidate_count"]) for result in results)
     return {
@@ -524,24 +633,157 @@ def aggregate_acceptance_metrics(
             if retrieval
             else None
         ),
+        "top_1_accuracy": (
+            sum(bool(result.get("recall_at_1", result["recall_at_5"])) for result in retrieval) / len(retrieval)
+            if retrieval else None
+        ),
         "wrong_candidate_rate": wrong_count / candidate_count if candidate_count else 0.0,
+        "qualified_candidate_precision": 1 - (wrong_count / candidate_count) if candidate_count else 1.0,
+        "exact_stage_wrong_candidate_rate": (
+            sum(int(result["wrong_candidate_count"]) for result in stage_retrieval)
+            / sum(int(result["candidate_count"]) for result in stage_retrieval)
+            if sum(int(result["candidate_count"]) for result in stage_retrieval) else 0.0
+        ),
         "correct_abstention_rate": (
             sum(bool(result["abstention_correct"]) for result in abstentions) / len(abstentions)
             if abstentions
             else None
         ),
+        "abstention_case_count": len(abstentions),
         "more_input_reasonableness_rate": (
             sum(bool(result["more_input_correct"]) for result in results) / len(results)
             if results
             else None
         ),
+        "more_input_positive_recall": (
+            sum(result["observed_status"] == ResolutionStatus.MORE_INPUT_NEEDED.value for result in positive_more_input)
+            / len(positive_more_input) if positive_more_input else None
+        ),
+        "more_input_positive_case_count": len(positive_more_input),
+        "more_input_negative_specificity": (
+            sum(result["observed_status"] != ResolutionStatus.MORE_INPUT_NEEDED.value for result in negative_more_input)
+            / len(negative_more_input) if negative_more_input else None
+        ),
+        "more_input_negative_case_count": len(negative_more_input),
+        "unnecessary_question_rate": (
+            sum(result["observed_status"] == ResolutionStatus.MORE_INPUT_NEEDED.value for result in negative_more_input)
+            / len(negative_more_input) if negative_more_input else None
+        ),
         "evidence_completeness_rate": evidence_sum / evidence_count if evidence_count else None,
+        "evidence_metadata_presence_rate": evidence_sum / evidence_count if evidence_count else None,
         "wrong_candidate_count": wrong_count,
         "returned_candidate_count": candidate_count,
+        "case_error_count": sum(result["observed_status"] == ResolutionStatus.ERROR.value for result in results),
         "preset_sha256_before": preset_sha_before,
         "preset_sha256_after": preset_sha_after,
         "catalog_snapshot_sha256": catalog_record_anchor,
     }
+
+
+def release_gate(metrics: Mapping[str, Any], holdout_metrics: Mapping[str, Any] | None) -> dict[str, Any]:
+    checks = {
+        "ingestion_recall_at_5": metrics.get("recall_at_5") == 1.0,
+        "ingestion_wrong_candidate_rate": float(metrics.get("wrong_candidate_rate", 1.0)) == 0.0,
+        "ingestion_correct_abstention": float(metrics.get("correct_abstention_rate", 0.0)) >= 0.95,
+        "ingestion_more_input_positive": float(metrics.get("more_input_positive_recall", 0.0)) >= 0.95,
+        "ingestion_more_input_negative": float(metrics.get("more_input_negative_specificity", 0.0)) >= 0.95,
+        "ingestion_evidence": metrics.get("evidence_completeness_rate") == 1.0,
+        "ingestion_no_errors": int(metrics.get("case_error_count", 1)) == 0,
+        "holdout_present": holdout_metrics is not None,
+    }
+    if holdout_metrics is not None:
+        checks.update({
+            "holdout_recall_at_5": holdout_metrics.get("recall_at_5") == 1.0,
+            "holdout_wrong_candidate_rate": float(holdout_metrics.get("wrong_candidate_rate", 1.0)) <= 0.05,
+            "holdout_correct_abstention": float(holdout_metrics.get("correct_abstention_rate", 0.0)) >= 0.95,
+            "holdout_negative_sample_size": int(holdout_metrics.get("abstention_case_count", 0)) >= 20,
+            "holdout_more_input_positive": float(holdout_metrics.get("more_input_positive_recall", 0.0)) >= 0.95,
+            "holdout_more_input_negative": float(holdout_metrics.get("more_input_negative_specificity", 0.0)) >= 0.95,
+            "holdout_evidence": holdout_metrics.get("evidence_completeness_rate") == 1.0,
+            "holdout_no_errors": int(holdout_metrics.get("case_error_count", 1)) == 0,
+        })
+    return {"passed": all(checks.values()), "checks": checks}
+
+
+def write_acceptance_report(
+    path: Path,
+    *,
+    pair_count: int,
+    factor_count: int,
+    case_count: int,
+    finding_count: int,
+    metrics: Mapping[str, Any],
+    holdout_metrics: Mapping[str, Any] | None,
+    gate: Mapping[str, Any],
+) -> None:
+    def percentage(value: Any) -> str:
+        if value is None:
+            return "N/A"
+        return f"{float(value):.1%}"
+
+    lines = [
+        "# CarbonFactorResolver 真实数据验收报告",
+        "",
+        "> 本报告区分闭环摄取一致性验收与独立真实查询 Holdout。提取结果未写入或批准至正式因子库。",
+        "",
+        "## 验收结论",
+        "",
+        f"- Release Gate：**{'PASS' if gate['passed'] else 'FAIL'}**",
+        f"- 源报告：{pair_count} 组 DOCX/PDF；提取因子：{factor_count} 条",
+        f"- 摄取一致性案例：{case_count} 条；来源质量发现：{finding_count} 条",
+        "- Error 级来源异常：保留在诊断快照中，`admission_eligible=false`，不得进入正式准入。",
+        "",
+        "## 闭环摄取一致性验收",
+        "",
+        "该部分使用同一批提取记录构造隔离 Catalog 与查询，用于验证抽取、证据、准入和闭环检索；不代表未知业务查询的泛化能力。",
+        "",
+        "| 指标 | 结果 |",
+        "|---|---:|",
+        f"| Recall@5 | {percentage(metrics.get('recall_at_5'))} |",
+        f"| Top-1 | {percentage(metrics.get('top_1_accuracy'))} |",
+        f"| 错误候选率 | {percentage(metrics.get('wrong_candidate_rate'))} |",
+        f"| 正确拒答率 | {percentage(metrics.get('correct_abstention_rate'))} |",
+        f"| MORE_INPUT 正例召回 | {percentage(metrics.get('more_input_positive_recall'))} |",
+        f"| MORE_INPUT 负例特异度 | {percentage(metrics.get('more_input_negative_specificity'))} |",
+        f"| 证据元数据存在率 | {percentage(metrics.get('evidence_metadata_presence_rate'))} |",
+        "",
+        "## 独立真实查询 Holdout",
+        "",
+    ]
+    if holdout_metrics is None:
+        lines.append("未提供独立 Holdout 清单；Release Gate 不得解释为真实查询能力已通过。")
+    else:
+        lines.extend([
+            "Holdout 查询由静态、人工冻结的业务表达构成，不从运行时 Catalog 名称自动生成。",
+            "",
+            "| 指标 | 结果 |",
+            "|---|---:|",
+            f"| 案例数 | {int(holdout_metrics.get('case_count', 0))} |",
+            f"| Recall@5 | {percentage(holdout_metrics.get('recall_at_5'))} |",
+            f"| Top-1 | {percentage(holdout_metrics.get('top_1_accuracy'))} |",
+            f"| 错误候选率 | {percentage(holdout_metrics.get('wrong_candidate_rate'))} |",
+            f"| 正确拒答率 | {percentage(holdout_metrics.get('correct_abstention_rate'))} |",
+            f"| 拒答负例数 | {int(holdout_metrics.get('abstention_case_count', 0))} |",
+            f"| MORE_INPUT 正例召回 | {percentage(holdout_metrics.get('more_input_positive_recall'))} |",
+            f"| MORE_INPUT 负例特异度 | {percentage(holdout_metrics.get('more_input_negative_specificity'))} |",
+            f"| 证据元数据存在率 | {percentage(holdout_metrics.get('evidence_metadata_presence_rate'))} |",
+        ])
+    lines.extend([
+        "",
+        "## Release Gate 明细",
+        "",
+        "| 检查项 | 结果 |",
+        "|---|---:|",
+        *(f"| `{name}` | {'PASS' if passed else 'FAIL'} |" for name, passed in gate["checks"].items()),
+        "",
+        "## 使用限制",
+        "",
+        "- 本次运行是只读隔离验收，不访问、不修改正式因子数据库或审批存储。",
+        "- Release Gate 仅证明当前代码与冻结数据集满足本报告门槛，不等同于因子业务审批。",
+        "- 原料与成品、A1/A2/A3/A1-A3、来源质量及准入状态均为硬资格门禁。",
+        "",
+    ])
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 async def run_cases(
@@ -577,7 +819,13 @@ async def run_cases(
             error = f"{type(exc).__name__}: {exc}"
             status = ResolutionStatus.ERROR.value
         acceptable = set(case["acceptable_candidates"])
-        forbidden = set(case["forbidden_candidates"])
+        forbidden = set(case.get("forbidden_candidates", ()))
+        observed_top = set(observed[:5])
+        wrong_candidates = (
+            observed_top - acceptable
+            if case.get("forbid_unlisted_candidates")
+            else forbidden & observed_top
+        )
         results.append(
             {
                 "case_id": case["case_id"],
@@ -588,7 +836,8 @@ async def run_cases(
                 "observed_status": status,
                 "observed_top_ids": observed[:5],
                 "recall_at_5": bool(acceptable & set(observed[:5])) if acceptable else None,
-                "wrong_candidate_count": len(forbidden & set(observed[:5])),
+                "recall_at_1": bool(acceptable & set(observed[:1])) if acceptable else None,
+                "wrong_candidate_count": len(wrong_candidates),
                 "candidate_count": len(observed[:5]),
                 "more_input_correct": more_input_is_correct(
                     status, bool(case["expected_more_input"])
@@ -615,7 +864,7 @@ async def run_cases(
         )
     after_sha = sha256_file(preset_path)
     if before_sha != after_sha:
-        raise RuntimeError("blind-test preset changed during execution")
+        raise RuntimeError("frozen acceptance preset changed during execution")
 
     metrics = aggregate_acceptance_metrics(
         results,
@@ -626,9 +875,21 @@ async def run_cases(
     return results, metrics
 
 
-def build_acceptance(source_dir: Path, output_dir: Path) -> dict[str, Any]:
+def build_acceptance(
+    source_dir: Path,
+    output_dir: Path,
+    *,
+    expected_pairs: int | None = None,
+    holdout_manifest: Path | None = None,
+) -> dict[str, Any]:
+    source_dir = source_dir.resolve()
+    output_dir = output_dir.resolve()
+    if output_dir == source_dir or source_dir in output_dir.parents:
+        raise ValueError("output directory must not equal or be inside the source directory")
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError("output directory must be new or empty")
     output_dir.mkdir(parents=True, exist_ok=True)
-    pairs = source_pairs(source_dir)
+    pairs = source_pairs(source_dir, expected_pairs=expected_pairs)
     all_factors: list[ExtractedFactor] = []
     all_findings: list[QualityFinding] = []
     for pair in pairs:
@@ -636,28 +897,65 @@ def build_acceptance(source_dir: Path, output_dir: Path) -> dict[str, Any]:
         all_factors.extend(factors)
         all_findings.extend(findings)
     factors_tuple = tuple(all_factors)
-    if len(factors_tuple) != 72:
-        raise ValueError(f"expected 72 extracted factors, found {len(factors_tuple)}")
+    expected_factor_count = len(pairs) * len(EXPECTED_STAGES)
+    if len(factors_tuple) != expected_factor_count:
+        raise ValueError(f"expected {expected_factor_count} extracted factors, found {len(factors_tuple)}")
 
     catalog = catalog_payload(factors_tuple)
-    cases = blind_cases(factors_tuple)
-    manifest_path = output_dir / "blind_test_manifest.jsonl"
-    write_json(output_dir / "source_manifest.json", [asdict(pair) for pair in pairs])
+    cases = ingestion_cases(factors_tuple)
+    manifest_path = output_dir / "ingestion_acceptance_manifest.jsonl"
+    write_json(output_dir / "source_manifest.json", [
+        {
+            "report_id": pair.report_id,
+            "product_name_cn": pair.product_name_cn,
+            "docx_evidence_id": f"report:{pair.report_id}:docx:{pair.docx_sha256}",
+            "pdf_evidence_id": f"report:{pair.report_id}:pdf:{pair.pdf_sha256}",
+            "docx_sha256": pair.docx_sha256,
+            "pdf_sha256": pair.pdf_sha256,
+            "docx_size": pair.docx_size,
+            "pdf_size": pair.pdf_size,
+        }
+        for pair in pairs
+    ])
     write_json(output_dir / "extracted_factors.json", [asdict(factor) for factor in factors_tuple])
     write_json(output_dir / "source_quality_findings.json", [asdict(item) for item in all_findings])
     write_json(output_dir / "isolated_catalog_snapshot.json", catalog)
     write_jsonl(manifest_path, cases)
     write_factor_csvs(output_dir, factors_tuple, cases)
     frozen_sha = sha256_file(manifest_path)
-    (output_dir / "blind_test_manifest.sha256").write_text(
+    (output_dir / "ingestion_acceptance_manifest.sha256").write_text(
         f"{frozen_sha}  {manifest_path.name}\n", encoding="ascii"
     )
     results, metrics = asyncio.run(run_cases(catalog, cases, manifest_path))
     write_json(output_dir / "cfr_results.json", results)
     write_json(output_dir / "metrics.json", metrics)
+    holdout_metrics = None
+    holdout_sha = None
+    if holdout_manifest is not None:
+        holdout_manifest = holdout_manifest.resolve()
+        holdout_cases = load_frozen_cases(holdout_manifest)
+        holdout_sha = sha256_file(holdout_manifest)
+        holdout_results, holdout_metrics = asyncio.run(
+            run_cases(catalog, holdout_cases, holdout_manifest)
+        )
+        write_json(output_dir / "real_query_holdout_results.json", holdout_results)
+        write_json(output_dir / "real_query_holdout_metrics.json", holdout_metrics)
+    gate = release_gate(metrics, holdout_metrics)
+    write_json(output_dir / "release_gate.json", gate)
+    write_acceptance_report(
+        output_dir / "真实数据验收报告.md",
+        pair_count=len(pairs),
+        factor_count=len(factors_tuple),
+        case_count=len(cases),
+        finding_count=len(all_findings),
+        metrics=metrics,
+        holdout_metrics=holdout_metrics,
+        gate=gate,
+    )
     try:
         git_sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
             check=True,
             capture_output=True,
             text=True,
@@ -668,22 +966,34 @@ def build_acceptance(source_dir: Path, output_dir: Path) -> dict[str, Any]:
         package_version = importlib.metadata.version("carbon-factor-resolver")
     except importlib.metadata.PackageNotFoundError:
         package_version = "unknown"
+    source_files_unchanged = all(
+        sha256_file(Path(pair.docx_path)) == pair.docx_sha256
+        and sha256_file(Path(pair.pdf_path)) == pair.pdf_sha256
+        for pair in pairs
+    )
+    if not source_files_unchanged:
+        raise RuntimeError("one or more source reports changed during the acceptance run")
     run_manifest = {
         "schema_version": "cfr-true-data-acceptance-run/v1",
         "generated_at": datetime.now(UTC).isoformat(),
         "git_sha": git_sha,
         "package_version": package_version,
-        "source_directory": str(source_dir),
+        "source_dataset_id": hashlib.sha256(canonical_json_bytes([
+            (pair.report_id, pair.docx_sha256, pair.pdf_sha256) for pair in pairs
+        ])).hexdigest(),
         "source_manifest_sha256": sha256_file(output_dir / "source_manifest.json"),
         "extracted_factors_sha256": sha256_file(output_dir / "extracted_factors.json"),
         "catalog_snapshot_sha256": sha256_file(output_dir / "isolated_catalog_snapshot.json"),
         "catalog_record_anchor": metrics["catalog_snapshot_sha256"],
-        "blind_test_manifest_sha256": frozen_sha,
-        "blind_test_manifest_verified_unchanged": (
+        "ingestion_acceptance_manifest_sha256": frozen_sha,
+        "ingestion_acceptance_manifest_verified_unchanged": (
             metrics["preset_sha256_before"] == metrics["preset_sha256_after"]
         ),
-        "formal_factor_database_written": False,
-        "source_files_written": False,
+        "real_query_holdout_manifest_sha256": holdout_sha,
+        "real_query_holdout_metrics": holdout_metrics,
+        "release_gate": gate,
+        "formal_factor_database_accessed": False,
+        "source_files_verified_unchanged": source_files_unchanged,
     }
     write_json(output_dir / "run_manifest.json", run_manifest)
     return {
@@ -692,7 +1002,9 @@ def build_acceptance(source_dir: Path, output_dir: Path) -> dict[str, Any]:
         "case_count": len(cases),
         "finding_count": len(all_findings),
         "metrics": metrics,
-        "preset_sha256": frozen_sha,
+        "real_query_holdout_metrics": holdout_metrics,
+        "release_gate": gate,
+        "ingestion_manifest_sha256": frozen_sha,
         "output_dir": str(output_dir.resolve()),
     }
 
@@ -701,13 +1013,22 @@ def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
     value.add_argument("source_dir", type=Path)
     value.add_argument("output_dir", type=Path)
+    value.add_argument("--expected-pairs", type=int)
+    value.add_argument("--holdout-manifest", type=Path)
     return value
 
 
 def main() -> None:
     args = parser().parse_args()
-    summary = build_acceptance(args.source_dir.resolve(), args.output_dir.resolve())
+    summary = build_acceptance(
+        args.source_dir.resolve(),
+        args.output_dir.resolve(),
+        expected_pairs=args.expected_pairs,
+        holdout_manifest=args.holdout_manifest,
+    )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if not summary["release_gate"]["passed"]:
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

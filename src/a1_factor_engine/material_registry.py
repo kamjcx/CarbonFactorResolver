@@ -168,7 +168,8 @@ class RegistryResolution:
 
 
 class MaterialSemanticRegistryPort(Protocol):
-    version: str
+    @property
+    def version(self) -> str: ...
 
     @property
     def sha256(self) -> str: ...
@@ -864,6 +865,8 @@ class VersionedMaterialSemanticRegistry:
     def _enrich_identity(
         identity: MaterialIdentity, value: str, production_process: str | None
     ) -> MaterialIdentity:
+        if identity.entity_type == EntityType.PRODUCT_FAMILY and identity.product_entity_id is None:
+            return replace(identity, unresolved_attributes=("product_variant",))
         if identity.head_material != "steel":
             return identity
         is_fiber = identity.product_form == "fiber"
@@ -955,8 +958,24 @@ class NullMaterialRuleSuggestion:
 
 
 DEFAULT_MATERIAL_REGISTRY = VersionedMaterialSemanticRegistry(
-    version="material-semantic-registry/2.1.0",
+    version="material-semantic-registry/2.2.0",
     material_rules=(
+        MaterialRule("product.gas_purging_brick/v1", "gas_purging_brick", "gas_purging_brick_products", MaterialCategory.MANUFACTURED_MINERAL, ("gas-purging brick", "gas purging brick", "透气砖"), entity_id="mat.product_family.gas_purging_brick", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.gas_purging_brick", product_family_id="family.gas_purging_brick"),
+        MaterialRule("product.fused_white_alumina/v1", "fused_white_alumina", "white_alumina_products", MaterialCategory.MANUFACTURED_MINERAL, ("fused white alumina", "white fused alumina", "白刚玉", "电熔白刚玉制品"), entity_id="mat.compound.alumina", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.fused_white_alumina", product_family_id="family.white_alumina"),
+        MaterialRule("product.aluminium_cell_brick/v1", "aluminium_cell_brick", "aluminium_cell_brick_products", MaterialCategory.MANUFACTURED_MINERAL, ("aluminum electrolysis cell brick", "aluminium electrolysis cell brick", "铝电解槽砖", "铝电解槽用砖"), entity_id="mat.product_family.aluminium_cell_brick", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.aluminium_cell_brick", product_family_id="family.aluminium_cell_brick"),
+        MaterialRule("product.low_creep_clay_brick/v1", "clay_brick", "clay_brick_products", MaterialCategory.MANUFACTURED_MINERAL, ("clay brick including low-creep clay brick", "clay brick", "粘土砖", "低蠕变粘土砖", "粘土砖（含低蠕变粘土砖）"), entity_id="mat.product_family.clay_brick", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.low_creep_clay_brick", product_family_id="family.clay_brick"),
+        MaterialRule("product.sliding_gate.low_temperature/v1", "sliding_gate", "sliding_gate_products", MaterialCategory.MANUFACTURED_MINERAL, ("low-temperature-treated sliding gate", "low temperature treated sliding gate", "低温滑动水口", "低温处理滑动水口"), entity_id="mat.product_family.sliding_gate", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.sliding_gate.low_temperature", product_family_id="family.sliding_gate"),
+        MaterialRule("product.sliding_gate.medium_temperature/v1", "sliding_gate", "sliding_gate_products", MaterialCategory.MANUFACTURED_MINERAL, ("medium-temperature-treated sliding gate", "medium temperature treated sliding gate", "中温滑动水口"), entity_id="mat.product_family.sliding_gate", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.sliding_gate.medium_temperature", product_family_id="family.sliding_gate"),
+        MaterialRule("product.sliding_gate.high_temperature/v1", "sliding_gate", "sliding_gate_products", MaterialCategory.MANUFACTURED_MINERAL, ("high-temperature-treated sliding gate", "high temperature treated sliding gate", "高温滑动水口", "高温处理滑动水口"), entity_id="mat.product_family.sliding_gate", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.sliding_gate.high_temperature", product_family_id="family.sliding_gate"),
+        MaterialRule("product.sliding_gate.family/v1", "sliding_gate", "sliding_gate_products", MaterialCategory.MANUFACTURED_MINERAL, ("sliding gate", "滑动水口"), entity_id="mat.product_family.sliding_gate", entity_type=EntityType.PRODUCT_FAMILY, product_family_id="family.sliding_gate"),
+        MaterialRule("product.precast.rotary_kiln/v1", "precast", "precast_products", MaterialCategory.MANUFACTURED_MINERAL, ("rotary kiln precast brick", "回转窑预制件", "回转窑用预制砖"), entity_id="mat.product_family.precast", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.precast.rotary_kiln", product_family_id="family.precast"),
+        MaterialRule("product.precast.family/v1", "precast", "precast_products", MaterialCategory.MANUFACTURED_MINERAL, ("precast shape", "precast", "预制件"), entity_id="mat.product_family.precast", entity_type=EntityType.PRODUCT_FAMILY, product_family_id="family.precast"),
+        MaterialRule("product.wear_castable.explosion_resistant/v1", "wear_resistant_castable", "wear_resistant_castable_products", MaterialCategory.MANUFACTURED_MINERAL, ("explosion-resistant high-wear-resistant castable", "explosion resistant high wear resistant castable", "防爆高耐磨浇注料"), entity_id="mat.product_family.wear_resistant_castable", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.wear_castable.explosion_resistant", product_family_id="family.wear_resistant_castable"),
+        MaterialRule("product.wear_castable.high_strength/v1", "wear_resistant_castable", "wear_resistant_castable_products", MaterialCategory.MANUFACTURED_MINERAL, ("high-strength wear-resistant castables", "high strength wear resistant castable", "高强耐磨浇注料"), entity_id="mat.product_family.wear_resistant_castable", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.wear_castable.high_strength", product_family_id="family.wear_resistant_castable"),
+        MaterialRule("product.wear_castable.family/v1", "wear_resistant_castable", "wear_resistant_castable_products", MaterialCategory.MANUFACTURED_MINERAL, ("wear-resistant castable", "wear resistant castable", "耐磨浇注料"), entity_id="mat.product_family.wear_resistant_castable", entity_type=EntityType.PRODUCT_FAMILY, product_family_id="family.wear_resistant_castable"),
+        MaterialRule("product.silica_brick.coke_hot_blast/v1", "silica_brick", "silica_brick_products", MaterialCategory.MANUFACTURED_MINERAL, ("silica brick for coke oven and hot-blast stove", "silica brick for coke oven and hot blast stove", "焦炉热风炉硅砖"), entity_id="mat.compound.silica", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.silica_brick.coke_hot_blast", product_family_id="family.silica_brick"),
+        MaterialRule("product.silica_brick.low_creep/v1", "silica_brick", "silica_brick_products", MaterialCategory.MANUFACTURED_MINERAL, ("silicon brick exhibits low creep properties", "low-creep silica brick", "低蠕变硅砖"), entity_id="mat.compound.silica", entity_type=EntityType.ENGINEERED_MATERIAL, product_entity_id="mat.product.silica_brick.low_creep", product_family_id="family.silica_brick"),
+        MaterialRule("product.silica_brick.family/v1", "silica_brick", "silica_brick_products", MaterialCategory.MANUFACTURED_MINERAL, ("silica brick", "硅砖"), entity_id="mat.compound.silica", entity_type=EntityType.PRODUCT_FAMILY, product_family_id="family.silica_brick"),
         MaterialRule("material.zircon_mullite/v2", "zircon_mullite", "composite_materials", MaterialCategory.MANUFACTURED_MINERAL, ("锆莫来石", "zircon mullite"), entity_id="mat.composite.zircon_mullite", entity_type=EntityType.COMPOSITE, product_family_id="family.composite_materials", constituent_entity_ids=("mat.compound.zirconia", "mat.mineral.mullite")),
         MaterialRule("material.primary_aluminium/v2", "aluminium", "aluminium_products", MaterialCategory.METAL, ("原铝", "电解铝", "primary aluminium", "primary aluminum"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_entity_id="mat.product.primary_aluminium", product_family_id="family.aluminium_products", route="primary"),
         MaterialRule("material.secondary_aluminium/v2", "aluminium", "aluminium_products", MaterialCategory.RECYCLED_MATERIAL, ("再生铝", "secondary aluminium", "secondary aluminum", "recycled aluminium", "recycled aluminum"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_entity_id="mat.product.secondary_aluminium", product_family_id="family.aluminium_products", route="secondary_recycling"),

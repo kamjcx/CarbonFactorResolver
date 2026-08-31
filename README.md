@@ -4,7 +4,7 @@ CarbonFactorResolver（CFR，碳因子解析引擎）是独立、框架无关的
 
 ## End-to-end demo
 
-Version 0.13 adds structured pipeline diagnostics, hybrid semantic recall, evidence-gated external discovery, FactorBench regression evaluation, FastAPI/CLI surfaces, and a three-tab dashboard. The default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
+Version 0.13.1 adds exact lifecycle-stage qualification, subject and source-quality admission gates, a hardened true-data ingestion acceptance, and an independently frozen real-query holdout. The default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
 
 ```bash
 pip install -e ".[test,api]"
@@ -30,6 +30,8 @@ record = SourceRecord(
     composition="carbon steel", production_process="electric arc furnace",
     boundary="cradle-to-gate", citation="EPD-001",
     factor_kind=FactorKind.EPD_INDICATOR, indicator="GWP-total",
+    subject_type="finished_product", source_quality_status="verified",
+    admission_eligible=True,
 )
 engine = A1FactorResolutionEngine(
     local_retrieval=InMemoryFactorRepository([record]),

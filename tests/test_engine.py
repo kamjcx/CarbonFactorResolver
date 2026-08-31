@@ -20,6 +20,7 @@ from a1_factor_engine import (
     EnterpriseProcessEmissionRecord,
     FactorKind,
     FactorSourceType,
+    FactorSubjectType,
     GapType,
     IdentityOutcome,
     LinkOutcome,
@@ -38,6 +39,7 @@ from a1_factor_engine import (
     ResultTier,
     ScopedProcessParameterRecord,
     SemanticRole,
+    SourceQualityStatus,
     SourceRecord,
     SqliteEnergyProcessParameterRepository,
     VersionedMaterialSemanticRegistry,
@@ -57,7 +59,183 @@ from a1_factor_engine.adapters import (
     InMemoryReferenceFlowRepository,
 )
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
+from a1_factor_engine.models import NormalizedActivity, resolution_request_fingerprint
+from a1_factor_engine.qualification import qualify_record
 from a1_factor_engine.units import convert_factor, convert_mass, parse_factor_unit
+
+
+@pytest.mark.parametrize(
+    ("request_boundary", "source_modules", "expected"),
+    [
+        (request, source, request == source)
+        for request in ("A1", "A2", "A3", "A1-A3")
+        for source in ("A1", "A2", "A3", "A1-A3")
+    ],
+)
+def test_lifecycle_boundary_matrix_is_exact(
+    request_boundary: str, source_modules: str, expected: bool
+) -> None:
+    modules = ("A1", "A2", "A3") if source_modules == "A1-A3" else (source_modules,)
+    activity = NormalizedActivity(
+        request_id="boundary-matrix",
+        canonical_name="High Alumina Brick",
+        aliases=(),
+        quantity_kg=1000.0,
+        geography=None,
+        year=2025,
+        product_form=None,
+        composition=None,
+        production_process=None,
+        subject_type=FactorSubjectType.FINISHED_PRODUCT,
+        boundary=request_boundary,
+        target_factor_unit="kgCO2e/t",
+    )
+    source = SourceRecord(
+        source_id=f"source-{source_modules}",
+        source_type=FactorSourceType.EPD,
+        provider="issuer",
+        locator="evidence://source",
+        material_name="High Alumina Brick",
+        factor_value=1.0,
+        factor_unit="kgCO2e/t",
+        factor_kind=FactorKind.EPD_INDICATOR,
+        subject_type=FactorSubjectType.FINISHED_PRODUCT,
+        source_quality_status=SourceQualityStatus.VERIFIED,
+        admission_eligible=True,
+        indicator="GWP-total",
+        declared_product="High Alumina Brick",
+        boundary="cradle-to-gate" if source_modules == "A1-A3" else source_modules,
+        boundary_modules=modules,
+    )
+
+    qualification = qualify_record(activity, source)
+
+    assert qualification.boundary.status.value == ("pass" if expected else "mismatch")
+    assert qualification.eligible is expected
+
+
+def test_subject_and_source_quality_are_hard_qualification_dimensions() -> None:
+    activity = NormalizedActivity(
+        request_id="raw-material",
+        canonical_name="alumina",
+        aliases=(), quantity_kg=1000.0, geography=None, year=2025,
+        product_form=None, composition=None, production_process=None,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+        boundary="A1", target_factor_unit="kgCO2e/t",
+    )
+    finished_product = SourceRecord(
+        source_id="finished-product", source_type=FactorSourceType.EPD,
+        provider="issuer", locator="evidence://finished", material_name="alumina",
+        factor_value=1.0, factor_unit="kgCO2e/t", factor_kind=FactorKind.EPD_INDICATOR,
+        subject_type=FactorSubjectType.FINISHED_PRODUCT,
+        indicator="GWP-total", declared_product="alumina", boundary="A1", boundary_modules=("A1",),
+    )
+    rejected_source = replace(
+        finished_product,
+        source_id="rejected-source",
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+        source_quality_status=SourceQualityStatus.REJECTED,
+        admission_eligible=False,
+    )
+
+    subject_result = qualify_record(activity, finished_product)
+    quality_result = qualify_record(activity, rejected_source)
+
+    assert subject_result.subject_type.status.value == "mismatch"
+    assert subject_result.primary_exclusion == "subject_type_mismatch"
+    assert quality_result.source_quality.status.value == "mismatch"
+    assert quality_result.primary_exclusion == "source_quality_not_admissible"
+
+
+def test_explicit_subject_request_rejects_source_with_unknown_subject() -> None:
+    activity = NormalizedActivity(
+        request_id="unknown-subject",
+        canonical_name="alumina",
+        aliases=(), quantity_kg=1000.0, geography=None, year=2025,
+        product_form=None, composition=None, production_process=None,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+        boundary="A1", target_factor_unit="kgCO2e/t",
+    )
+    source = SourceRecord(
+        source_id="unknown-subject", source_type=FactorSourceType.EPD,
+        provider="issuer", locator="evidence://unknown", material_name="alumina",
+        factor_value=1.0, factor_unit="kgCO2e/t", factor_kind=FactorKind.EPD_INDICATOR,
+        subject_type=FactorSubjectType.UNKNOWN,
+        indicator="GWP-total", declared_product="alumina", boundary="A1", boundary_modules=("A1",),
+    )
+
+    result = qualify_record(activity, source)
+
+    assert result.subject_type.status.value == "unknown"
+    assert result.eligible is False
+    assert result.primary_exclusion == "subject_type_mismatch"
+
+
+def test_subject_type_is_validated_and_changes_request_fingerprint() -> None:
+    raw = ResolutionRequest(material_name="alumina", quantity=1, subject_type="raw_material")
+    product = ResolutionRequest(
+        material_name="alumina", quantity=1, subject_type=FactorSubjectType.FINISHED_PRODUCT
+    )
+
+    assert raw.subject_type == FactorSubjectType.RAW_MATERIAL
+    assert resolution_request_fingerprint(raw) != resolution_request_fingerprint(product)
+    with pytest.raises(ValueError, match="supported FactorSubjectType"):
+        ResolutionRequest(material_name="alumina", quantity=1, subject_type="not-a-subject")
+
+
+def test_source_record_validates_subject_quality_and_admission_types() -> None:
+    converted = SourceRecord(
+        source_id="converted", source_type=FactorSourceType.EPD, provider="issuer",
+        locator="evidence://converted", material_name="alumina", factor_value=1,
+        factor_unit="kgCO2e/kg", factor_kind="epd_indicator",
+        subject_type="raw_material", source_quality_status="verified", admission_eligible=True,
+    )
+    assert converted.factor_kind == FactorKind.EPD_INDICATOR
+    assert converted.subject_type == FactorSubjectType.RAW_MATERIAL
+    assert converted.source_quality_status == SourceQualityStatus.VERIFIED
+    with pytest.raises(ValueError, match="subject_type"):
+        replace(converted, subject_type="bad-subject")
+    with pytest.raises(ValueError, match="source_quality_status"):
+        replace(converted, source_quality_status="bad-quality")
+    with pytest.raises(ValueError, match="admission_eligible"):
+        replace(converted, admission_eligible=1)
+
+
+@pytest.mark.asyncio
+async def test_catalog_quality_fields_are_fail_closed_when_missing_or_invalid() -> None:
+    digest = "4" * 64
+    records = []
+    for source_id, quality in (("missing-quality", None), ("invalid-quality", "UNREVIEWED")):
+        item = {
+            "record_id": source_id, "name": "steel coil", "primary_value": 1.0,
+            "primary_unit": "kgCO2e/kg", "factor_kind": "lifecycle_factor",
+            "indicator": "GWP-total", "declared_product": "steel coil",
+            "boundary": "cradle-to-gate", "boundary_modules": ["A1", "A2", "A3"],
+            "production_process": "electric arc furnace",
+        }
+        if quality is not None:
+            item["source_quality_status"] = quality
+            item["admission_eligible"] = True
+        records.append(item)
+    result = await A1FactorResolutionEngine(
+        local_retrieval=HttpCatalogFactorRepository(
+            expected_sha256=digest,
+            fetch_json=lambda _: {
+                "catalog_version": "fail-closed-quality/v1",
+                "database": {"name": "catalog.db", "sha256": digest},
+                "records": records,
+            },
+        )
+    ).resolve(request())
+
+    assert result.candidates == ()
+    qualifications = result.trace.explain()["record_qualifications"]
+    assert {item["source_quality"]["status"] for item in qualifications} == {
+        "mismatch", "unknown"
+    }
+    assert {item["primary_exclusion"] for item in qualifications} == {
+        "source_quality_not_admissible"
+    }
 
 
 def test_versioned_registry_resolves_mullite_spinel_process_and_relations():
@@ -134,7 +312,7 @@ async def test_semantic_index_does_not_recall_silicon_or_alumina_for_metallic_al
     explanation = result.trace.explain()
     assert explanation["material_identity"]["base_entity_id"] == "mat.element.aluminium"
     assert explanation["local_retrieval"]["record_count"] == 0
-    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.1.0"
+    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.2.0"
 
 
 @pytest.mark.asyncio
@@ -856,7 +1034,10 @@ async def test_http_catalog_adapter_anchors_formal_database_response():
         "catalog_version": "factor-catalog-v0.2.1",
         "database": {"name": "emission_factors.db", "sha256": digest},
         "records": [{
-            "record_id": "lifecycle_factor:steel",
+                "record_id": "lifecycle_factor:steel",
+                "source_quality_status": "VERIFIED",
+                "admission_eligible": True,
+                "subject_type": "raw_material",
             "category": "lifecycle_factor",
             "code": "STEEL_COIL",
             "name": "steel coil",
@@ -2504,7 +2685,10 @@ async def test_http_catalog_preserves_original_document_locator_when_supplied():
         "catalog_version": "v-provenance",
         "database": {"name": "catalog.db", "sha256": digest},
         "records": [{
-            "record_id": "documented-factor",
+                "record_id": "documented-factor",
+                "source_quality_status": "VERIFIED",
+                "admission_eligible": True,
+                "subject_type": "raw_material",
             "name": "steel coil",
             "primary_value": 1.1,
             "primary_unit": "kgCO2e/kg",
@@ -2540,7 +2724,10 @@ async def test_http_catalog_preserves_live_source_path_and_sha_aliases():
         "catalog_version": "v-live-aliases",
         "database": {"name": "catalog.db", "sha256": digest},
         "records": [{
-            "record_id": "live-source-aliases",
+                "record_id": "live-source-aliases",
+                "source_quality_status": "VERIFIED",
+                "admission_eligible": True,
+                "subject_type": "raw_material",
             "name": "steel coil",
             "primary_value": 1.2,
             "primary_unit": "kgCO2e/kg",
@@ -2578,7 +2765,10 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
         "catalog_version": "formal-refractory-v1",
         "database": {"name": "emission_factors.db", "sha256": digest},
         "records": [{
-            "record_id": "refractory-standard:sintered-spinel",
+                "record_id": "refractory-standard:sintered-spinel",
+                "source_quality_status": "VERIFIED",
+                "admission_eligible": True,
+                "subject_type": "raw_material",
             "category": "lifecycle_factor",
             "name": "烧结尖晶石",
             "primary_value": 4.602431,
@@ -2711,6 +2901,9 @@ async def test_reviewable_only_is_not_reported_as_unresolved():
 async def test_malformed_source_priority_isolated_to_record_warning(invalid_rank):
     digest = "9" * 64
     common = {
+        "source_quality_status": "VERIFIED",
+        "admission_eligible": True,
+        "subject_type": "raw_material",
         "name": "steel coil",
         "primary_value": 1.0,
         "primary_unit": "kgCO2e/kg",
@@ -2767,7 +2960,10 @@ async def test_explicit_dataset_approval_anchor_can_lift_draft_tier_cap():
         "catalog_version": "approved-refractory-v1",
         "database": {"name": "emission_factors.db", "sha256": digest},
         "records": [{
-            "record_id": "approved-draft:sintered-spinel",
+                "record_id": "approved-draft:sintered-spinel",
+                "source_quality_status": "VERIFIED",
+                "admission_eligible": True,
+                "subject_type": "raw_material",
             "category": "lifecycle_factor",
             "name": "烧结尖晶石",
             "primary_value": 4.602431,

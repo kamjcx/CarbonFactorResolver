@@ -128,10 +128,10 @@ async def test_factorbench_run_is_deterministic_and_captures_reproducibility_anc
 
     assert first.run_id == second.run_id
     assert first.dataset_sha256 == second.dataset_sha256
-    assert first.registry_version == "material-semantic-registry/2.1.0"
+    assert first.registry_version == "material-semantic-registry/2.2.0"
     assert len(first.registry_sha256) == 64
     assert first.git_sha
-    assert first.package_version == "0.13.0"
+    assert first.package_version == "0.13.1"
     assert len(first.catalog_anchors) == 4
     assert len(first.semantic_index_anchors) == 4
     assert first.energy_anchors == ()

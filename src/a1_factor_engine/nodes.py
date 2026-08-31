@@ -28,12 +28,16 @@ from .material_registry import (
     MaterialSemanticRegistryPort,
 )
 from .models import (
+    AccountingAssignment,
+    AccountingModule,
     AccountingQuantificationStatus,
+    AccountingRole,
     Candidate,
     CandidateAdmission,
     CandidateExclusion,
     CandidateOrigin,
     CandidateQualification,
+    FactorSubjectType,
     GapType,
     LinkAttempt,
     LinkOutcome,
@@ -470,10 +474,18 @@ class NormalizeNode(Node[GraphState]):
         resolved_process = production_process.value or (
             identity.manufacturing_route[0] if identity.manufacturing_route else None
         )
+        subject_type = state.request.subject_type
+        if subject_type == FactorSubjectType.UNKNOWN:
+            raw_subject_text = state.request.material_name.casefold()
+            if "raw material" in raw_subject_text or "原料" in raw_subject_text or "原矿" in raw_subject_text:
+                subject_type = FactorSubjectType.RAW_MATERIAL
         request_gap_items: list[RequestGap] = []
         first_unresolved = identity.unresolved_attributes[:1]
         for field in first_unresolved:
-            if field in {"steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"}:
+            if (
+                field in {"steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"}
+                and subject_type != FactorSubjectType.RAW_MATERIAL
+            ):
                 request_gap_items.append(RequestGap(
                     gap_id=f"{state.request.request_id}:{field}",
                     gap_type=RequestGapType.INPUT_SPECIFICATION,
@@ -493,6 +505,15 @@ class NormalizeNode(Node[GraphState]):
                     ),
                     required=True,
                     options=tuple((*identity.constituent_entity_ids, "unknown")),
+                ))
+            elif field == "product_variant":
+                request_gap_items.append(RequestGap(
+                    gap_id=f"{state.request.request_id}:{field}",
+                    gap_type=RequestGapType.INPUT_SPECIFICATION,
+                    field=field,
+                    reason="the product-family label has multiple declared-product variants",
+                    required=True,
+                    options=("specific_declared_product", "unknown"),
                 ))
         request_gaps = tuple(request_gap_items)
         boundary = normalize_text(state.request.boundary)
@@ -516,6 +537,7 @@ class NormalizeNode(Node[GraphState]):
             product_form=canonical_product_form,
             composition=composition.value or None,
             production_process=resolved_process,
+            subject_type=subject_type,
             boundary=boundary.value,
             target_factor_unit=state.request.target_factor_unit,
             normalization_rule_ids=tuple(dict.fromkeys(rule_ids)),
@@ -678,7 +700,10 @@ class LocalEvaluateNode(Node[GraphState]):
                     break
             state.local_candidates = selected
             state.qualifications = tuple(qualifications)
-            dimensions = ("identity", "factor_kind", "indicator", "declared_product", "boundary", "unit")
+            dimensions = (
+                "identity", "factor_kind", "subject_type", "source_quality",
+                "indicator", "declared_product", "boundary", "unit",
+            )
             state.qualification_diagnostics = tuple(
                 QualificationDiagnostic(
                     source_id=item.source_id,
@@ -710,15 +735,15 @@ class LocalEvaluateNode(Node[GraphState]):
                     "mat.product.primary_aluminium": "primary",
                     "mat.product.secondary_aluminium": "secondary",
                 }
-                variants = tuple(dict.fromkeys(
-                    product_routes.get(candidate.source.metadata.get("product_entity_id", ""))
-                    or route_aliases.get(_text(candidate.source.production_process))
-                    for candidate in selected
-                    if (
+                variant_values: list[str] = []
+                for candidate in selected:
+                    variant = (
                         product_routes.get(candidate.source.metadata.get("product_entity_id", ""))
                         or route_aliases.get(_text(candidate.source.production_process))
                     )
-                ))
+                    if variant is not None:
+                        variant_values.append(variant)
+                variants = tuple(dict.fromkeys(variant_values))
                 if len(variants) > 1:
                     route_gap = RequestGap(
                         gap_id=f"{state.request.request_id}:route",
@@ -1213,7 +1238,9 @@ class TopKNode(Node[GraphState]):
             for candidate in diagnostics
             for gap in candidate.gaps
         }.values())
-        assignment_by_role = {}
+        assignment_by_role: dict[
+            tuple[str, AccountingRole, tuple[AccountingModule, ...]], AccountingAssignment
+        ] = {}
         for item in state.accounting_assignments:
             key = (item.subject, item.role, item.modules)
             previous = assignment_by_role.get(key)
@@ -1243,8 +1270,8 @@ class TopKNode(Node[GraphState]):
         known_exclusions = {(item.candidate_id, item.source_id) for item in state.excluded_candidates}
         for candidate in state.ranked_candidates:
             reasons = candidate_rejection_reasons(candidate, state)
-            key = (candidate.candidate_id, candidate.source.source_id)
-            if reasons and key not in known_exclusions:
+            admission_key = (candidate.candidate_id, candidate.source.source_id)
+            if reasons and admission_key not in known_exclusions:
                 state.excluded_candidates.append(CandidateExclusion(
                     source_id=candidate.source.source_id,
                     origin=candidate.origin,

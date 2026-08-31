@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import importlib.util
-import sys
+from decimal import Decimal
 from pathlib import Path
 
-TOOL_PATH = Path(__file__).parents[1] / "tools" / "true_data_acceptance.py"
-SPEC = importlib.util.spec_from_file_location("true_data_acceptance", TOOL_PATH)
-assert SPEC is not None and SPEC.loader is not None
-MODULE = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = MODULE
-SPEC.loader.exec_module(MODULE)
+import pytest
+
+from tools import true_data_acceptance as MODULE
 
 
 def factor(stage: str, value: float) -> object:
@@ -42,6 +38,8 @@ def factor(stage: str, value: float) -> object:
         pdf_sha256="2" * 64,
         pdf_evidence="page 2",
         cross_format_verified=True,
+        product_name_en="Example Refractory Brick",
+        value_raw=f"{value:.2f}",
     )
 
 
@@ -53,12 +51,15 @@ def test_catalog_snapshot_preserves_lifecycle_boundaries() -> None:
     assert records[0]["boundary_modules"] == ["A1"]
     assert records[1]["boundary"] == "cradle-to-gate"
     assert records[1]["boundary_modules"] == ["A1", "A2", "A3"]
+    assert records[0]["subject_type"] == "finished_product"
+    assert records[0]["source_quality_status"] == "VERIFIED"
+    assert records[0]["admission_eligible"] is True
     assert len(payload["database"]["sha256"]) == 64
 
 
-def test_blind_cases_freeze_exact_candidate_and_add_controls() -> None:
+def test_ingestion_cases_freeze_exact_candidate_and_add_controls() -> None:
     factors = (factor("A1", 10.0), factor("TOTAL", 12.0))
-    cases = MODULE.blind_cases(factors)
+    cases = MODULE.ingestion_cases(factors)
 
     extracted = cases[:2]
     assert extracted[0]["acceptable_candidates"] == ["TD-01-A1"]
@@ -70,12 +71,97 @@ def test_blind_cases_freeze_exact_candidate_and_add_controls() -> None:
 
 
 def test_number_parser_preserves_report_precision() -> None:
-    assert MODULE.parse_number("3,624.70") == 3624.70
+    assert MODULE.parse_number("3,624.70") == Decimal("3624.70")
+    assert MODULE.parse_number("0.123400") == Decimal("0.123400")
 
 
 def test_product_name_is_derived_from_filename_without_case_registry() -> None:
     path = Path("20--示例组织--示例预制件产品碳足迹报告说明_证书边框.docx")
     assert MODULE.infer_product_name_cn(path) == "示例预制件"
+
+
+def test_product_name_is_not_reverse_parsed_or_truncated() -> None:
+    original = factor("A1", 10.0)
+    high_alumina = MODULE.replace(original, product_name_en="High Alumina Brick")
+
+    catalog = MODULE.catalog_payload((high_alumina,))
+    cases = MODULE.ingestion_cases((high_alumina,))
+
+    assert catalog["records"][0]["name"] == "High Alumina Brick"
+    assert cases[0]["request"]["material_name"] == "High Alumina Brick"
+
+
+def test_report_pairing_rejects_duplicate_and_invalid_ids(tmp_path: Path) -> None:
+    duplicate = tmp_path / "duplicate"
+    duplicate.mkdir()
+    for name in ("01--a.docx", "01--b.docx", "01--a.pdf"):
+        (duplicate / name).write_bytes(b"fixture")
+    with pytest.raises(ValueError, match="duplicate DOCX report IDs"):
+        MODULE.source_pairs(duplicate)
+
+    invalid = tmp_path / "invalid"
+    invalid.mkdir()
+    for name in ("A1--a.docx", "A1--a.pdf"):
+        (invalid / name).write_bytes(b"fixture")
+    with pytest.raises(ValueError, match="invalid DOCX report filename"):
+        MODULE.source_pairs(invalid)
+
+
+def test_pdf_cross_check_is_bound_to_stage_row_and_carbon_footprint_column() -> None:
+    class Row:
+        def __init__(self, marker: float):
+            self.cells = ((0.0, 0.0, 1.0, 1.0),) * 4 + ((marker, 1.0, marker + 1.0, 2.0),)
+
+    class Table:
+        rows = [Row(float(index)) for index in range(5)]
+
+        @staticmethod
+        def extract():
+            return [
+                ["Life Cycle Process", "", "Sub-process", "Net Emissions", "Carbon Footprint"],
+                ["A1", "", "", "100", "10.10"],
+                ["A2", "", "", "200", "20.20"],
+                ["A3", "", "", "300", "30.30"],
+                ["Total", "", "", "600", "60.60"],
+            ]
+
+    class Page:
+        @staticmethod
+        def find_tables():
+            return [Table()]
+
+    cells = MODULE._pdf_lifecycle_cells(Page())
+
+    assert cells["A2"][:3] == ("20.20", 0, 2)
+    assert cells["A2"][3] == (2.0, 1.0, 3.0, 2.0)
+    assert MODULE.parse_number(cells["A2"][0]) != MODULE.parse_number(cells["A1"][0])
+
+
+def test_rejected_source_is_not_an_acceptable_ingestion_answer() -> None:
+    rejected = MODULE.replace(
+        factor("A1", 10.0), source_quality_status="REJECTED", admission_eligible=False
+    )
+
+    record = MODULE.catalog_payload((rejected,))["records"][0]
+    case = MODULE.ingestion_cases((rejected,))[0]
+
+    assert record["admission_eligible"] is False
+    assert case["case_type"] == "source_quality_control"
+    assert case["acceptable_candidates"] == []
+    assert case["expected_abstention"] is True
+
+
+def test_output_directory_cannot_overlap_source_or_overwrite_prior_run(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    with pytest.raises(ValueError, match="must not equal or be inside"):
+        MODULE.build_acceptance(source, source / "output")
+
+    output = tmp_path / "output"
+    output.mkdir()
+    (output / "prior-run.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be new or empty"):
+        MODULE.build_acceptance(source, output)
 
 
 def test_error_never_counts_as_correct_non_more_input() -> None:
@@ -92,6 +178,8 @@ def test_evidence_completeness_is_candidate_weighted() -> None:
             "wrong_candidate_count": 0,
             "abstention_correct": None,
             "more_input_correct": True,
+            "expected_more_input": False,
+            "observed_status": "recommendation_ready",
             "evidence_coverage_sum": 1.0,
             "evidence_candidate_count": 1,
         },
@@ -101,6 +189,8 @@ def test_evidence_completeness_is_candidate_weighted() -> None:
             "wrong_candidate_count": 2,
             "abstention_correct": None,
             "more_input_correct": True,
+            "expected_more_input": False,
+            "observed_status": "recommendation_ready",
             "evidence_coverage_sum": 1.5,
             "evidence_candidate_count": 3,
         },
@@ -114,3 +204,57 @@ def test_evidence_completeness_is_candidate_weighted() -> None:
 
     assert metrics["evidence_completeness_rate"] == 0.625
     assert metrics["wrong_candidate_rate"] == 0.5
+
+
+def test_release_gate_requires_twenty_negative_holdout_cases() -> None:
+    metrics = {
+        "recall_at_5": 1.0,
+        "wrong_candidate_rate": 0.0,
+        "correct_abstention_rate": 1.0,
+        "abstention_case_count": 20,
+        "more_input_positive_recall": 1.0,
+        "more_input_negative_specificity": 1.0,
+        "evidence_completeness_rate": 1.0,
+        "case_error_count": 0,
+    }
+    assert MODULE.release_gate(metrics, metrics)["passed"] is True
+
+    undersized = dict(metrics, abstention_case_count=19)
+    gate = MODULE.release_gate(metrics, undersized)
+    assert gate["passed"] is False
+    assert gate["checks"]["holdout_negative_sample_size"] is False
+
+    missing = MODULE.release_gate(metrics, None)
+    assert missing["passed"] is False
+    assert missing["checks"]["holdout_present"] is False
+
+
+def test_generated_report_uses_top_one_metric_and_methodology_labels(tmp_path: Path) -> None:
+    metric = {
+        "recall_at_5": 1.0,
+        "top_1_accuracy": 0.875,
+        "wrong_candidate_rate": 0.0,
+        "correct_abstention_rate": 1.0,
+        "more_input_positive_recall": 1.0,
+        "more_input_negative_specificity": 1.0,
+        "evidence_metadata_presence_rate": 1.0,
+        "case_count": 32,
+        "abstention_case_count": 20,
+    }
+    target = tmp_path / "report.md"
+    MODULE.write_acceptance_report(
+        target,
+        pair_count=18,
+        factor_count=72,
+        case_count=80,
+        finding_count=1,
+        metrics=metric,
+        holdout_metrics=metric,
+        gate={"passed": True, "checks": {"holdout": True}},
+    )
+
+    report = target.read_text(encoding="utf-8")
+    assert "Top-1 | 87.5%" in report
+    assert "闭环摄取一致性验收" in report
+    assert "独立真实查询 Holdout" in report
+    assert "盲测" not in report

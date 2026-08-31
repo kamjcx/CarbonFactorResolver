@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carbon-factor-resolver"
-version = "0.13.0"
+version = "0.13.1"
 description = "Evidence-governed carbon-factor resolution for materials, energy and processes"
 requires-python = ">=3.11"
 license = "MIT"
@@ -29,6 +29,7 @@ cfr = "a1_factor_engine.cli:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -60,12 +61,9 @@ warn_unused_ignores = true
 # remain under strict checking above.
 [[tool.mypy.overrides]]
 module = [
-  "a1_factor_engine.adapters",
   "a1_factor_engine.energy_database",
   "a1_factor_engine.engine",
   "a1_factor_engine.material_registry",
-  "a1_factor_engine.nodes",
-  "a1_factor_engine.qualification",
   "a1_factor_engine.semantic_index",
   "a1_factor_engine.units",
 ]

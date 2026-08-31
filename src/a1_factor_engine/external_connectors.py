@@ -19,7 +19,14 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping
 from urllib.parse import quote
 
-from .models import FactorKind, FactorSourceType, RetrievalIntent, SourceRecord
+from .models import (
+    FactorKind,
+    FactorSourceType,
+    FactorSubjectType,
+    RetrievalIntent,
+    SourceQualityStatus,
+    SourceRecord,
+)
 from .units import parse_factor_unit
 
 PARSER_VERSION = "structured-epd/v1"
@@ -468,6 +475,17 @@ class StructuredEPDEvidenceExtractor:
         source_locator = str(item.get("source_locator", document.ref.locator)).strip()
         if not evidence_locator or not source_locator:
             raise InvalidExternalEvidence("source and evidence locators are required")
+        try:
+            subject_type = FactorSubjectType(str(item.get("subject_type", "")))
+        except ValueError as exc:
+            raise InvalidExternalEvidence("subject_type is required and must be supported") from exc
+        try:
+            quality_status = SourceQualityStatus(str(item.get("source_quality_status", "")).upper())
+        except ValueError as exc:
+            raise InvalidExternalEvidence("source_quality_status is required and must be supported") from exc
+        admission_eligible = item.get("admission_eligible")
+        if type(admission_eligible) is not bool:
+            raise InvalidExternalEvidence("admission_eligible is required and must be boolean")
 
         terms = _intent_terms(intent)
         names = {_normalise(str(item.get("material_name", "")))}
@@ -502,6 +520,9 @@ class StructuredEPDEvidenceExtractor:
                 retrieved_at=document.retrieved_at,
                 metadata=metadata,
                 factor_kind=FactorKind.EPD_INDICATOR,
+                subject_type=subject_type,
+                source_quality_status=quality_status,
+                admission_eligible=admission_eligible,
                 indicator=indicator,
                 declared_product=declared_product,
                 boundary_modules=modules,

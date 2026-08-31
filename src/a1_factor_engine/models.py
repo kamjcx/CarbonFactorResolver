@@ -43,6 +43,24 @@ class FactorKind(str, Enum):
     OTHER = "other"
 
 
+class FactorSubjectType(str, Enum):
+    """Business subject represented by a factor, independent of its numeric kind."""
+
+    RAW_MATERIAL = "raw_material"
+    FINISHED_PRODUCT = "finished_product"
+    ENERGY = "energy"
+    TRANSPORT = "transport"
+    PROCESS = "process"
+    WASTE = "waste"
+    UNKNOWN = "unknown"
+
+
+class SourceQualityStatus(str, Enum):
+    VERIFIED = "VERIFIED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    REJECTED = "REJECTED"
+
+
 class CandidateOrigin(str, Enum):
     LOCAL = "local"
     EXTERNAL = "external"
@@ -767,6 +785,8 @@ class CandidateQualification:
     source_id: str
     identity: QualificationDimension
     factor_kind: QualificationDimension
+    subject_type: QualificationDimension
+    source_quality: QualificationDimension
     indicator: QualificationDimension
     declared_product: QualificationDimension
     boundary: QualificationDimension
@@ -787,6 +807,8 @@ class CandidateQualification:
             "source_id": self.source_id,
             "identity": dimension(self.identity),
             "factor_kind": dimension(self.factor_kind),
+            "subject_type": dimension(self.subject_type),
+            "source_quality": dimension(self.source_quality),
             "indicator": dimension(self.indicator),
             "declared_product": dimension(self.declared_product),
             "boundary": dimension(self.boundary),
@@ -1251,6 +1273,7 @@ def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
         "product_form": request.product_form,
         "composition": request.composition,
         "production_process": request.production_process,
+        "subject_type": request.subject_type.value,
         "boundary": request.boundary,
         "target_factor_unit": request.target_factor_unit,
         "top_k": request.top_k,
@@ -1288,6 +1311,7 @@ def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
         "product_form": normalized(activity.product_form),
         "composition": normalized(activity.composition),
         "production_process": normalized(activity.production_process),
+        "subject_type": activity.subject_type.value,
         "numeric_grade": (
             {
                 "schema_id": activity.material_mention.numeric_grade.schema_id,
@@ -1351,6 +1375,9 @@ class SourceRecord:
     retrieved_at: datetime = field(default_factory=_now)
     metadata: Mapping[str, str] = field(default_factory=dict)
     factor_kind: FactorKind = FactorKind.OTHER
+    subject_type: FactorSubjectType = FactorSubjectType.UNKNOWN
+    source_quality_status: SourceQualityStatus = SourceQualityStatus.VERIFIED
+    admission_eligible: bool = True
     indicator: str | None = None
     declared_product: str | None = None
     boundary_modules: tuple[str, ...] = ()
@@ -1376,6 +1403,22 @@ class SourceRecord:
                 object.__setattr__(self, "factor_kind", FactorKind(str(self.factor_kind)))
             except ValueError as exc:
                 raise ValueError("factor_kind must be a supported FactorKind") from exc
+        if not isinstance(self.subject_type, FactorSubjectType):
+            try:
+                object.__setattr__(self, "subject_type", FactorSubjectType(str(self.subject_type)))
+            except ValueError as exc:
+                raise ValueError("subject_type must be a supported FactorSubjectType") from exc
+        if not isinstance(self.source_quality_status, SourceQualityStatus):
+            try:
+                object.__setattr__(
+                    self,
+                    "source_quality_status",
+                    SourceQualityStatus(str(self.source_quality_status).upper()),
+                )
+            except ValueError as exc:
+                raise ValueError("source_quality_status must be VERIFIED, NEEDS_REVIEW or REJECTED") from exc
+        if type(self.admission_eligible) is not bool:
+            raise ValueError("admission_eligible must be boolean")
         object.__setattr__(self, "boundary_modules", tuple(self.boundary_modules))
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
@@ -1407,6 +1450,7 @@ class ResolutionRequest:
     product_form: Optional[str] = None
     composition: Optional[str] = None
     production_process: Optional[str] = None
+    subject_type: FactorSubjectType = FactorSubjectType.UNKNOWN
     boundary: str = "cradle-to-gate"
     target_factor_unit: str = "kgCO2e/kg"
     top_k: int = 3
@@ -1424,6 +1468,11 @@ class ResolutionRequest:
             raise ValueError("top_k must be between 1 and 50")
         if not 0 <= self.min_score <= 1:
             raise ValueError("min_score must be between 0 and 1")
+        if not isinstance(self.subject_type, FactorSubjectType):
+            try:
+                object.__setattr__(self, "subject_type", FactorSubjectType(str(self.subject_type)))
+            except ValueError as exc:
+                raise ValueError("subject_type must be a supported FactorSubjectType") from exc
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "ResolutionRequest":
@@ -1450,6 +1499,7 @@ class NormalizedActivity:
     product_form: Optional[str]
     composition: Optional[str]
     production_process: Optional[str]
+    subject_type: FactorSubjectType
     boundary: str
     target_factor_unit: str
     normalization_rule_ids: tuple[str, ...] = ()

@@ -20,6 +20,7 @@ from .models import (
     DatabaseVersionAnchor,
     FactorKind,
     FactorSourceType,
+    FactorSubjectType,
     LinkAttempt,
     LinkOutcome,
     LinkStrategy,
@@ -40,6 +41,7 @@ from .models import (
     RetrievalIntent,
     RetrievalResult,
     SemanticAssessment,
+    SourceQualityStatus,
     SourceRecord,
 )
 from .semantic_index import SemanticFactorIndex
@@ -273,7 +275,7 @@ class HttpCatalogFactorRepository:
                 reasons: list[str] = []
                 dropped_fields: list[str] = []
                 try:
-                    value = float(item.get("primary_value"))
+                    value = float(item.get("primary_value") or "")
                     if not (value >= 0 and value < float("inf")):
                         reasons.append("primary_value_missing_or_invalid")
                 except (TypeError, ValueError):
@@ -291,7 +293,7 @@ class HttpCatalogFactorRepository:
                         reasons.append("record_validation_failed")
                         dropped_fields.append(type(exc).__name__)
                 success = source is not None
-                if success:
+                if source is not None:
                     converted_items.append(source)
                 elif not reasons:
                     reasons.append("adapter_returned_none")
@@ -304,7 +306,7 @@ class HttpCatalogFactorRepository:
             self._cached_index_key = cache_key
             self._cached_conversion_diagnostics = tuple(conversion_diagnostics)
         result = self._cached_index.query(intent)
-        conversion_diagnostics = getattr(self, "_cached_conversion_diagnostics", ())
+        cached_conversion_diagnostics = self._cached_conversion_diagnostics
         retrieval_diagnostics = tuple(
             RetrievalDiagnostic(
                 stage="semantic_index", strategy=attempt.strategy.value,
@@ -317,10 +319,10 @@ class HttpCatalogFactorRepository:
         )
         return RetrievalResult(
             result.records, anchor, result.attempts, result.observations, result.anchor,
-            retrieval_diagnostics, conversion_diagnostics,
+            retrieval_diagnostics, cached_conversion_diagnostics,
             PipelineFunnel(
                 raw_catalog_records=len(records), retrieval_hits=len(result.records),
-                converted_records=sum(item.success for item in conversion_diagnostics),
+                converted_records=sum(item.success for item in cached_conversion_diagnostics),
             ),
         )
 
@@ -340,7 +342,8 @@ class HttpCatalogFactorRepository:
 
     @staticmethod
     def _synonym_match(item: Mapping[str, Any], query: str, request_aliases: set[str]) -> bool:
-        item_aliases = item.get("aliases") if isinstance(item.get("aliases"), list) else []
+        raw_aliases = item.get("aliases")
+        item_aliases: list[Any] = raw_aliases if isinstance(raw_aliases, list) else []
         aliases = {_norm(str(alias)) for alias in item_aliases if _norm(str(alias))}
         name = _norm(str(item.get("name") or ""))
         return bool((name and name in request_aliases) or (query and query in aliases) or request_aliases & aliases)
@@ -359,7 +362,7 @@ class HttpCatalogFactorRepository:
         dataset_policies: Sequence[CatalogDatasetPolicy] = (),
     ) -> SourceRecord | None:
         try:
-            value = float(item.get("primary_value"))
+            value = float(item.get("primary_value") or "")
         except (TypeError, ValueError):
             return None
         unit = str(item.get("primary_unit") or "").strip()
@@ -389,10 +392,22 @@ class HttpCatalogFactorRepository:
 
         year_value = inherited("year")
         try:
-            year = int(year_value) if year_value not in (None, "") else None
+            year = int(str(year_value)) if year_value not in (None, "") else None
         except (TypeError, ValueError):
             year = None
         raw_kind = str(item.get("factor_kind") or item.get("category") or "other").strip().lower()
+        raw_subject_type = str(item.get("subject_type") or "unknown").strip().lower()
+        try:
+            subject_type = FactorSubjectType(raw_subject_type)
+        except ValueError:
+            subject_type = FactorSubjectType.UNKNOWN
+        raw_quality_status = str(item.get("source_quality_status") or "NEEDS_REVIEW").strip().upper()
+        try:
+            source_quality_status = SourceQualityStatus(raw_quality_status)
+        except ValueError:
+            source_quality_status = SourceQualityStatus.NEEDS_REVIEW
+        admission_value = item.get("admission_eligible", False)
+        admission_eligible = admission_value if type(admission_value) is bool else False
         aliases = item.get("aliases")
         catalog_locator = f"{anchor.locator}#{source_id}"
         source_document_locator = str(
@@ -479,6 +494,14 @@ class HttpCatalogFactorRepository:
             "source_document_page": page or "",
             "source_document_table": table or "",
             "source_document_row": row or "",
+            "subject_type": subject_type.value,
+            "source_quality_status": source_quality_status.value,
+            "admission_eligible": str(admission_eligible).lower(),
+            "cross_format_verified": str(item.get("cross_format_verified") or ""),
+            "parser_version": str(item.get("parser_version") or ""),
+            "extraction_confidence": str(item.get("extraction_confidence") or ""),
+            "license": str(item.get("license") or ""),
+            "evidence_cell_bbox": json.dumps(item.get("evidence_cell_bbox"), ensure_ascii=False),
             "primary_label": str(item.get("primary_label") or ""),
             "scope": str(item.get("scope") or ""),
             "standard": str(item.get("standard") or ""),
@@ -559,6 +582,9 @@ class HttpCatalogFactorRepository:
             excerpt=str(item.get("notes") or ""),
             metadata=metadata,
             factor_kind=factor_kind,
+            subject_type=subject_type,
+            source_quality_status=source_quality_status,
+            admission_eligible=admission_eligible,
             indicator=str(inherited("indicator") or "").strip() or None,
             declared_product=(
                 str(item.get("declared_product") or "").strip()

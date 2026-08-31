@@ -4,6 +4,9 @@
     {
       "source_id": "fixture-al-primary-a1a3",
       "document_kind": "fixture_factor",
+      "subject_type": "raw_material",
+      "source_quality_status": "VERIFIED",
+      "admission_eligible": true,
       "source_type": "external_database",
       "material_name": "primary aluminium",
       "aliases": ["primary aluminum", "virgin aluminium", "aluminium", "aluminum", "铝", "金属铝"],
@@ -25,6 +28,9 @@
     {
       "source_id": "fixture-al-secondary-a1a3",
       "document_kind": "fixture_factor",
+      "subject_type": "raw_material",
+      "source_quality_status": "VERIFIED",
+      "admission_eligible": true,
       "source_type": "external_database",
       "material_name": "secondary aluminium",
       "aliases": ["secondary aluminum", "recycled aluminium", "aluminium", "aluminum", "铝", "金属铝"],
@@ -46,6 +52,9 @@
     {
       "source_id": "fixture-alumina-a1a3",
       "document_kind": "fixture_factor",
+      "subject_type": "raw_material",
+      "source_quality_status": "VERIFIED",
+      "admission_eligible": true,
       "source_type": "external_database",
       "material_name": "alumina",
       "aliases": ["aluminium oxide", "aluminum oxide"],
