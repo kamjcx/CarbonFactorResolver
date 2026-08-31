@@ -1,8 +1,8 @@
-# OFR Proxy Resolution V1 技术更新
+# CFR Proxy Resolution V1 技术更新
 
-> 文档对象：A1 Factor Resolution Engine（OFR）的 Proxy Resolution 子系统  
+> 文档对象：A1 Factor Resolution Engine（CFR）的 Proxy Resolution 子系统<br>
 > 文档状态：目标设计与实现规范，不代表当前代码已全部实现  
-> 历史设计基线版本（不是当前实现版本）：OFR `0.1.0`  
+> 历史设计基线版本（不是当前实现版本）：CFR `0.1.0`<br>
 > 设计版本：`proxy-resolution-v1.0`  
 > 技术基线：Python 3.11+  
 > 文档日期：2026-08-19  
@@ -12,7 +12,7 @@
 
 ## 1. 更新背景
 
-现有 OFR 已经具备：
+现有 CFR 已经具备：
 
 - 活动标准化；
 - 本地正式因子目录检索；
@@ -973,7 +973,7 @@ SINTERED_MULLITE exact material family candidate found
 
 ---
 
-## 14. 与现有 OFR 的代码变更建议
+## 14. 与现有 CFR 的代码变更建议
 
 ### 14.1 Graph
 

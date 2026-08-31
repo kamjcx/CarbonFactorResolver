@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
-name = "a1-factor-resolution-engine"
+name = "carbon-factor-resolver"
 version = "0.12.2"
 source = { editable = "." }
 

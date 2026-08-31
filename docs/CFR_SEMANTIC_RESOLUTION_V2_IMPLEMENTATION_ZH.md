@@ -1,4 +1,4 @@
-# OFR Entity-first Semantic Resolution V2 实施方案
+# CFR Entity-first Semantic Resolution V2 实施方案
 
 > 对应包版本：`0.7.0`  
 > 注册表：`material-semantic-registry/2.0.0`  
@@ -343,7 +343,7 @@ options = primary_aluminium / secondary_aluminium / unknown
 
 ## 14. 最终原则
 
-OFR 不再把“能搜到相似名称”当成“有资格成为因子候选”。实体身份、来源记录资格和数值可追溯性是三个独立门槛：
+CFR 不再把“能搜到相似名称”当成“有资格成为因子候选”。实体身份、来源记录资格和数值可追溯性是三个独立门槛：
 
 ```text
 Identity Proof

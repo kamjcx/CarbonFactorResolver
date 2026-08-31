@@ -1,6 +1,6 @@
-# OFR 钢纤维解析问题改进设计
+# CFR 钢纤维解析问题改进设计
 
-> 系统：OFR / A1 Factor Resolution Engine  
+> 系统：CFR / A1 Factor Resolution Engine<br>
 > 当前基线：0.2.0  
 > 文档日期：2026-08-20  
 > 文档类型：架构改进与实施规格  
@@ -261,7 +261,7 @@ class RecallObservation:
     additional_exclusions: tuple[str, ...] = ()
 ```
 
-这让OFR可以同时表达：
+这让 CFR 可以同时表达：
 
 ```text
 搜索看到了该记录
@@ -525,7 +525,7 @@ factor qualification success
 
 ### 11.1 扩展现有状态
 
-当前OFR已经具备：
+当前 CFR 已经具备：
 
 ```text
 ResolutionStatus.MORE_INPUT_NEEDED
@@ -1022,7 +1022,7 @@ P1完成标准：
 
 > 在检索前建立材料身份，在计算前建立记录资格，在Proxy前判断缺的是输入、单位、工艺、牌号还是材料本身，在锁定前区分正式候选和参考候选。
 
-改进后，OFR应能够：
+改进后，CFR 应能够：
 
 - 看见但不误用form-only相关记录；
 - 区分排放限额与生命周期因子；

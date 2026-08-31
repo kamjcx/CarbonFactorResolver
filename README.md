@@ -1,6 +1,6 @@
-# A1 Factor Resolution Engine V1
+# CarbonFactorResolver
 
-独立、框架无关的 Python 3.11+ Graph Engineering 引擎，用于在本地因子缺失时按 technology-aware Proxy 的有界路径解析 A1 原材料排放因子。
+CarbonFactorResolver（CFR，碳因子解析引擎）是独立、框架无关的 Python 3.11+ Graph Engineering 引擎，用于对原材料、能源与工艺相关的碳因子进行有证据约束的检索、语义匹配、代理解析和审计追溯。
 
 ## Quick start
 
@@ -112,7 +112,7 @@ Version 0.7 upgrades the deterministic semantic layer from name-first matching t
 
 For example, `电熔莫来石` resolves to base entity `mat.mineral.mullite` plus process `electrofused`; `烧结莫来石` is therefore recalled only as a same-entity process variant and enters Process Gap analysis, while `电熔刚玉` is excluded despite sharing the process word `电熔`.
 
-The complete Chinese implementation contract is in `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`.
+The complete Chinese implementation contract is in `docs/CFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`.
 
 ## Entity-scoped numeric purity grades
 
@@ -125,7 +125,7 @@ Version 0.8 adds a deterministic numeric-token layer on top of entity-first reso
 - Requests and factor records use the same parser and registry. A source with a missing, different or differently based grade produces a structured Grade Gap; it is never treated as an exact match and no unsupported factor interpolation is performed.
 - Grade schema/version, basis component, interpretation, evidence scope, parser rule IDs and rejected numeric roles remain visible in Trace. Grade identity is also part of the normalized business fingerprint.
 
-The Chinese contract and adversarial cases are documented in `docs/OFR_NUMERIC_PURITY_GRADE_V1_ZH.md`.
+The Chinese contract and adversarial cases are documented in `docs/CFR_NUMERIC_PURITY_GRADE_V1_ZH.md`.
 
 ## Versioned energy-evidence database
 

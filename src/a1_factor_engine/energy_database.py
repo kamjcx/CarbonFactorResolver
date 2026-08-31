@@ -1303,7 +1303,7 @@ class SqliteEnergyProcessParameterRepository:
             value=1.0,
             unit="boolean",
             source_type=ParameterSourceType.USER_CONFIRMED_ENGINEERING_DATA,
-            provider="OFR deterministic policy",
+            provider="CFR deterministic policy",
             locator=f"policy:{DATABASE_PRIORITY_POLICY_ID}",
             citation="User-approved database-priority route-energy replacement policy",
             quality_note=(

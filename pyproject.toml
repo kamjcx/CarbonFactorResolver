@@ -3,9 +3,9 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "a1-factor-resolution-engine"
+name = "carbon-factor-resolver"
 version = "0.12.2"
-description = "Graph-based A1 raw-material emission-factor resolution engine"
+description = "Evidence-governed carbon-factor resolution for materials, energy and processes"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]

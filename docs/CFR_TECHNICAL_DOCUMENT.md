@@ -1,6 +1,6 @@
-# OFR 完整技术文档
+# CFR 完整技术文档
 
-> 文档对象：当前仓库中的 A1 Factor Resolution Engine V1（下文简称 OFR）  
+> 文档对象：当前仓库中的 A1 Factor Resolution Engine V1（下文简称 CFR）<br>
 > 实现版本：`0.12.2`（会计量化状态、Reviewable 终态语义与严格目录优先级类型）
 > 技术基线：Python 3.11+  
 > 文档日期：2026-08-21
@@ -8,7 +8,7 @@
 
 ## 1. 文档目的
 
-OFR 用于解决 A1 原材料排放因子缺失、命名不一致和“不完全匹配”的问题。系统先召回可追溯来源，再结构化识别 Unit、Reference Flow、Process、Grade/Composition 与 Material Absence Gap；可解差异通过有来源参数和版本化公式转换，材料类别代理仅作为最后一级后备，最终返回分层 Top-K 供人工审批和锁定。
+CFR 用于解决 A1 原材料排放因子缺失、命名不一致和“不完全匹配”的问题。系统先召回可追溯来源，再结构化识别 Unit、Reference Flow、Process、Grade/Composition 与 Material Absence Gap；可解差异通过有来源参数和版本化公式转换，材料类别代理仅作为最后一级后备，最终返回分层 Top-K 供人工审批和锁定。
 
 本文面向：
 
@@ -467,7 +467,7 @@ HTTP Adapter 当前映射：数值、单位、年份、边界、引用、说明�
 
 ### 10.5 Options 接口
 
-`/api/v2/factors/options` 可作为调用端的精简选项来源，但当前 OFR Adapter 没有调用该接口；解析仍以 `/catalog` 为准。
+`/api/v2/factors/options` 可作为调用端的精简选项来源，但当前 CFR Adapter 没有调用该接口；解析仍以 `/catalog` 为准。
 
 ## 11. Local Candidate Evaluation
 
@@ -959,7 +959,7 @@ pytest
 
 ### 27.2 生产服务建议
 
-OFR 当前是 Python Library，不包含 HTTP Server。生产封装建议：
+CFR 当前是 Python Library，不包含 HTTP Server。生产封装建议：
 
 - 在 Web API 层构造 `ResolutionRequest`；
 - 将 Engine 作为应用服务依赖注入；
@@ -1070,7 +1070,7 @@ GraphState 为单次请求新建，不共享；但当前 `InMemoryResolutionStor
 - [Amazon carbon-assessment-with-ml](https://github.com/amazon-science/carbon-assessment-with-ml)：bounded retrieval、Candidate Matching 和 Ranking；
 - [Brightway2-io](https://github.com/brightway-lca/brightway2-io)：顺序 linking strategies、unlinked state 和中间结果可观察性。
 
-OFR 的关键差异是：Candidate Gap Analysis、四类 Resolution Router、版本化确定性公式、Derived Factor Lineage、Solve-first Result Tiers、人审和锁定始终保留在 LLM 之外。
+CFR 的关键差异是：Candidate Gap Analysis、四类 Resolution Router、版本化确定性公式、Derived Factor Lineage、Solve-first Result Tiers、人审和锁定始终保留在 LLM 之外。
 
 ## 33. 代码导航
 
@@ -1197,7 +1197,7 @@ Normalize Text
 
 `0.11.2` 的审核式 `CatalogDatasetPolicy` 只为同时匹配 category、standard 和 primary label 的记录补充来源文件已经明确规定、但目录未逐行重复的字段。当前耐火材料征求意见稿策略依据 5.2、5.3.1 和 7.1 继承 `declared_product=记录名称`、`boundary=cradle-to-gate` 和 `indicator=GWP-total`；年份与地域没有被凭空补齐。草案/征求意见、聚合和待审核来源确定性封顶为 `REFERENCE_ONLY`。只有代码侧受审 Policy 绑定非空 `production_approval_id`，才可解除该上限；应用的 policy、approval、继承字段、Tier 原因和证据章节都进入 SourceRecord metadata 与 Trace。
 
-完整契约、迁移边界和验收案例见 `docs/OFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`。
+完整契约、迁移边界和验收案例见 `docs/CFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`。
 
 ## 40. Entity-scoped Numeric Purity Grade V1
 
@@ -1221,7 +1221,7 @@ Parser 先识别反例上下文：`F80/P80` 为粒度号，`T60/CT800/CA...` 为
 
 Trace 保存 `numeric_tokens`、选中/拒绝角色、Grade Schema ID/版本、basis component、interpretation、evidence scope/evidence IDs、候选 Grade Gap、资格结果和最终排名。Registry SHA 与正式因子库 SHA 共同构成可更新 Trace 的版本锚点；Grade schema/value 进入规范化业务指纹，所以 70、80、90 是不同请求，而 `1 t` 与 `1000 kg` 的数量等价性仍保持不变。
 
-完整数据契约、默认规则、反例矩阵和验收结果见 `docs/OFR_NUMERIC_PURITY_GRADE_V1_ZH.md`。
+完整数据契约、默认规则、反例矩阵和验收结果见 `docs/CFR_NUMERIC_PURITY_GRADE_V1_ZH.md`。
 
 ## 41. 89 品种企业能耗与能源分配导入
 
@@ -1263,6 +1263,6 @@ Recommendation 采用三层候选合同：`candidates` 为普通审批候选，`
 
 ## 44. 结论
 
-当前 OFR 已形成一个独立、可测试、可解释的 A1 因子解析内核。它的核心不是“让模型猜一个数”，而是识别候选与目标之间的差异，选择可追溯的工程解析策略，把 SourceRecord、ParameterEvidence、版本化公式、假设、Top-K 和人工决策组合成一个有界 Graph。
+当前 CFR 已形成一个独立、可测试、可解释的 A1 因子解析内核。它的核心不是“让模型猜一个数”，而是识别候选与目标之间的差异，选择可追溯的工程解析策略，把 SourceRecord、ParameterEvidence、版本化公式、假设、Top-K 和人工决策组合成一个有界 Graph。
 
 V1 已经适合作为正式系统的领域内核和集成基线。`0.12.2` 已补齐诊断/软审核/普通候选三层合同、会计主体/模块/量化状态隔离、最小 Process Gap 问题、客户来源优先级及严格脏字段容错、数据集作用域空白零规则和含碳耗材化学计量。结构化 Error、持久化事务 Store、审核式 ProxyEdge Registry、生产级 Proxy Repository、受限 LLM Adapter、真实目录 Grade 字段治理和材料族 gold-set 验收仍是生产化前置工作。

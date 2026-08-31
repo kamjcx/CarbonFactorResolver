@@ -1,6 +1,6 @@
-# OFR 语义解析现状诊断与彻底治理方案 V2
+# CFR 语义解析现状诊断与彻底治理方案 V2
 
-> 文档对象：A1 Factor Resolution Engine（OFR）当前 `0.6.0` 实现及下一阶段语义架构  
+> 文档对象：A1 Factor Resolution Engine（CFR）当前 `0.6.0` 实现及下一阶段语义架构<br>
 > 文档日期：2026-08-20  
 > 基线注册表：`material-semantic-registry/1.0.0`  
 > 正式因子目录：`factor-catalog-v0.2.1`，177 条记录  
@@ -9,7 +9,7 @@
 
 ## 1. 执行结论
 
-当前 OFR 已经具备一个正确的语义治理雏形：版本化注册表、ACTIVE/DRAFT 状态、Material/Process/Form 分层规则、Typed Relations、Trace 可见规则 ID，以及“LLM 建议不能自动发布”的边界。这些设计应保留。
+当前 CFR 已经具备一个正确的语义治理雏形：版本化注册表、ACTIVE/DRAFT 状态、Material/Process/Form 分层规则、Typed Relations、Trace 可见规则 ID，以及“LLM 建议不能自动发布”的边界。这些设计应保留。
 
 但是，当前实现仍属于“受治理的小型规则集”，尚未成为能够稳定支撑正式因子检索的材料语义基础设施。`金属铝 → 金属硅粉` 误召回不是单一词条缺失，而是四个边界同时偏松：
 
