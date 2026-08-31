@@ -29,11 +29,14 @@ from .models import (
     MaterialInterpretation,
     NormalizedActivity,
     ParameterEvidence,
+    PipelineFunnel,
     Recommendation,
+    RecordConversionDiagnostic,
     ReferenceFlowRecord,
     ResolutionRequest,
     ResolutionTrace,
     ResultTier,
+    RetrievalDiagnostic,
     RetrievalIntent,
     RetrievalResult,
     SemanticAssessment,
@@ -229,6 +232,9 @@ class HttpCatalogFactorRepository:
     )
     _cached_index_key: str | None = field(default=None, init=False)
     _cached_index: SemanticFactorIndex | None = field(default=None, init=False)
+    _cached_conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = field(
+        default=(), init=False
+    )
 
     async def search(self, intent: RetrievalIntent) -> RetrievalResult:
         payload = await asyncio.to_thread(self._fetch)
@@ -253,17 +259,69 @@ class HttpCatalogFactorRepository:
         )
         cache_key = f"{anchor.identity}:{self.material_registry.sha256}:{policy_key}"
         if self._cached_index is None or self._cached_index_key != cache_key:
-            converted = tuple(
-                record
-                for item in records if isinstance(item, Mapping)
-                for record in (self._to_source_record(item, anchor, self.dataset_policies),)
-                if record is not None
-            )
+            converted_items: list[SourceRecord] = []
+            conversion_diagnostics: list[RecordConversionDiagnostic] = []
+            for position, item in enumerate(records):
+                if not isinstance(item, Mapping):
+                    conversion_diagnostics.append(RecordConversionDiagnostic(
+                        source_id=f"catalog-position:{position}", raw_name="", success=False,
+                        reason_codes=("record_not_object",),
+                    ))
+                    continue
+                source_id = str(item.get("record_id") or item.get("code") or f"catalog-position:{position}").strip()
+                raw_name = str(item.get("name") or "").strip()
+                reasons: list[str] = []
+                dropped_fields: list[str] = []
+                try:
+                    value = float(item.get("primary_value"))
+                    if not (value >= 0 and value < float("inf")):
+                        reasons.append("primary_value_missing_or_invalid")
+                except (TypeError, ValueError):
+                    reasons.append("primary_value_missing_or_invalid")
+                if not str(item.get("primary_unit") or "").strip():
+                    reasons.append("primary_unit_missing")
+                    dropped_fields.append("primary_unit")
+                if not source_id or not raw_name:
+                    reasons.append("record_identity_missing")
+                source = None
+                if not reasons:
+                    try:
+                        source = self._to_source_record(item, anchor, self.dataset_policies)
+                    except (TypeError, ValueError) as exc:
+                        reasons.append("record_validation_failed")
+                        dropped_fields.append(type(exc).__name__)
+                success = source is not None
+                if success:
+                    converted_items.append(source)
+                elif not reasons:
+                    reasons.append("adapter_returned_none")
+                conversion_diagnostics.append(RecordConversionDiagnostic(
+                    source_id=source_id, raw_name=raw_name, success=success,
+                    dropped_fields=tuple(dropped_fields), reason_codes=tuple(reasons),
+                ))
+            converted = tuple(converted_items)
             self._cached_index = SemanticFactorIndex(converted, anchor, self.material_registry)
             self._cached_index_key = cache_key
+            self._cached_conversion_diagnostics = tuple(conversion_diagnostics)
         result = self._cached_index.query(intent)
+        conversion_diagnostics = getattr(self, "_cached_conversion_diagnostics", ())
+        retrieval_diagnostics = tuple(
+            RetrievalDiagnostic(
+                stage="semantic_index", strategy=attempt.strategy.value,
+                query=intent.canonical_name, entity_id=intent.base_entity_id,
+                outcome=attempt.outcome.value,
+                reason_code=("retrieval_hit" if attempt.candidate_source_ids else "retrieval_miss"),
+                details={"candidate_source_ids": attempt.candidate_source_ids, "reason": attempt.reason},
+            )
+            for attempt in result.attempts
+        )
         return RetrievalResult(
-            result.records, anchor, result.attempts, result.observations, result.anchor
+            result.records, anchor, result.attempts, result.observations, result.anchor,
+            retrieval_diagnostics, conversion_diagnostics,
+            PipelineFunnel(
+                raw_catalog_records=len(records), retrieval_hits=len(result.records),
+                converted_records=sum(item.success for item in conversion_diagnostics),
+            ),
         )
 
     def _fetch(self) -> Mapping[str, Any]:

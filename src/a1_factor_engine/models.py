@@ -45,6 +45,7 @@ class FactorKind(str, Enum):
 
 class CandidateOrigin(str, Enum):
     LOCAL = "local"
+    EXTERNAL = "external"
     PROXY = "proxy"
 
 
@@ -1026,6 +1027,84 @@ class RetrievalResult:
     attempts: tuple[LinkAttempt, ...] = ()
     observations: tuple[RecallObservation, ...] = ()
     semantic_index_anchor: SemanticIndexAnchor | None = None
+    retrieval_diagnostics: tuple["RetrievalDiagnostic", ...] = ()
+    conversion_diagnostics: tuple["RecordConversionDiagnostic", ...] = ()
+    funnel: "PipelineFunnel | None" = None
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalDiagnostic:
+    stage: str
+    strategy: str
+    query: str
+    outcome: str
+    reason_code: str
+    entity_id: str | None = None
+    source_id: str | None = None
+    details: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "stage": self.stage, "strategy": self.strategy, "query": self.query,
+            "entity_id": self.entity_id, "source_id": self.source_id,
+            "outcome": self.outcome, "reason_code": self.reason_code,
+            "details": dict(self.details),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecordConversionDiagnostic:
+    source_id: str
+    raw_name: str
+    success: bool
+    dropped_fields: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_id": self.source_id, "raw_name": self.raw_name,
+            "success": self.success, "dropped_fields": self.dropped_fields,
+            "reason_codes": self.reason_codes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class QualificationDiagnostic:
+    source_id: str
+    dimension: str
+    status: str
+    reason_codes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_id": self.source_id, "dimension": self.dimension,
+            "status": self.status, "reason_codes": self.reason_codes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineFunnel:
+    raw_catalog_records: int = 0
+    retrieval_hits: int = 0
+    converted_records: int = 0
+    qualified_records: int = 0
+    candidate_pool: int = 0
+    ranked_candidates: int = 0
+    returned_candidates: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "raw_catalog_records": self.raw_catalog_records,
+            "retrieval_hits": self.retrieval_hits,
+            "converted_records": self.converted_records,
+            "qualified_records": self.qualified_records,
+            "candidate_pool": self.candidate_pool,
+            "ranked_candidates": self.ranked_candidates,
+            "returned_candidates": self.returned_candidates,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -1113,6 +1192,12 @@ class ResolutionTrace:
             "process_resolution": process_entries,
             "parameter_databases": tuple(parameter_databases[key] for key in sorted(parameter_databases)),
             "local_retrieval": dict(local.details) if local else None,
+            "retrieval_diagnostics": tuple(local.details.get("retrieval_diagnostics", ())) if local else (),
+            "conversion_diagnostics": tuple(local.details.get("conversion_diagnostics", ())) if local else (),
+            "pipeline_funnel": (
+                dict(top_k.details.get("pipeline_funnel") or {}) if top_k
+                else dict(local.details.get("pipeline_funnel") or {}) if local else {}
+            ),
             "proxy_decision": dict(route.details) if route else None,
             "excluded_candidates": tuple(top_k.details.get("excluded", ())) if top_k else (),
             "final_ranking": tuple(ranking.details.get("ranking", ())) if ranking else (),
@@ -1130,6 +1215,7 @@ class ResolutionTrace:
             "request_gaps": tuple(top_k.details.get("request_gaps", ())) if top_k else (),
             "raw_related_hits": tuple(top_k.details.get("raw_related_hits", ())) if top_k else (),
             "record_qualifications": tuple(top_k.details.get("record_qualifications", ())) if top_k else (),
+            "qualification_diagnostics": tuple(top_k.details.get("qualification_diagnostics", ())) if top_k else (),
             "candidate_admissions": tuple(top_k.details.get("candidate_admissions", ())) if top_k else (),
             "required_choice": top_k.details.get("required_choice") if top_k else None,
             "provisional_options": tuple(top_k.details.get("provisional_options", ())) if top_k else (),

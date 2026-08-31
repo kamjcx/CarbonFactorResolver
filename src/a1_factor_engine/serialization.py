@@ -1,0 +1,62 @@
+"""JSON-safe serializers for delivery surfaces.
+
+The domain model deliberately uses enums, datetimes, immutable mappings and
+tuples.  Keeping their conversion here prevents the HTTP and CLI layers from
+depending on FastAPI/Pydantic serialization details.
+"""
+
+from __future__ import annotations
+
+from dataclasses import fields, is_dataclass
+from datetime import date, datetime
+from enum import Enum
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Mapping
+
+
+def to_jsonable(value: Any) -> Any:
+    """Return a deterministic tree containing only JSON-compatible values."""
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Enum):
+        return to_jsonable(value.value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (Mapping, MappingProxyType)):
+        return {str(key): to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list, set, frozenset)):
+        return [to_jsonable(item) for item in value]
+    if is_dataclass(value) and not isinstance(value, type):
+        return {field.name: to_jsonable(getattr(value, field.name)) for field in fields(value)}
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return to_jsonable(to_dict())
+    raise TypeError(f"unsupported JSON value: {type(value).__name__}")
+
+
+def serialize_recommendation(recommendation: Any) -> dict[str, Any]:
+    payload = to_jsonable(recommendation)
+    if not isinstance(payload, dict):
+        raise TypeError("recommendation serializer expected an object")
+    return payload
+
+
+def serialize_trace(trace: Any) -> dict[str, Any]:
+    """Serialize both the answer-oriented trace view and append-only entries."""
+
+    to_dict = getattr(trace, "to_dict", None)
+    payload = to_jsonable(to_dict() if callable(to_dict) else trace)
+    if not isinstance(payload, dict):
+        raise TypeError("trace serializer expected an object")
+    return payload
+
+
+def serialize_benchmark(value: Any) -> dict[str, Any]:
+    payload = to_jsonable(value)
+    if not isinstance(payload, dict):
+        raise TypeError("benchmark serializer expected an object")
+    return payload

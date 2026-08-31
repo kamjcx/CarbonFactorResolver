@@ -19,9 +19,12 @@ from .models import (
     MaterialClass,
     NormalizedActivity,
     ParameterEvidence,
+    PipelineFunnel,
     ProvisionalOption,
+    QualificationDiagnostic,
     RecallObservation,
     Recommendation,
+    RecordConversionDiagnostic,
     ReferenceFlowRecord,
     RequestGap,
     RequestResolutionPlan,
@@ -31,6 +34,7 @@ from .models import (
     ResolutionTrace,
     ResolutionType,
     ResultTier,
+    RetrievalDiagnostic,
     SemanticIndexAnchor,
     SourceRecord,
     TransformationStep,
@@ -69,6 +73,11 @@ class Stage(str, Enum):
     NORMALIZE = "normalize"
     LOCAL_RETRIEVAL = "local_retrieval"
     LOCAL_EVALUATE = "local_evaluate"
+    EXTERNAL_DISCOVERY = "external_discovery"
+    EXTERNAL_FETCH = "external_fetch"
+    EVIDENCE_EXTRACTION = "evidence_extraction"
+    EXTERNAL_QUALIFICATION = "external_qualification"
+    EXTERNAL_CANDIDATE = "external_candidate"
     GAP_ANALYSIS = "gap_analysis"
     RESOLUTION_PLANNER = "resolution_planner"
     UNIT_SCALE_RESOLUTION = "unit_scale_resolution"
@@ -95,13 +104,16 @@ class GraphState:
     raw_related_hits: tuple[SourceRecord, ...] = ()
     recall_observations: tuple[RecallObservation, ...] = ()
     qualifications: tuple[CandidateQualification, ...] = ()
+    qualification_diagnostics: tuple[QualificationDiagnostic, ...] = ()
     candidate_admissions: tuple[CandidateAdmission, ...] = ()
     request_gaps: tuple[RequestGap, ...] = ()
     provisional_options: tuple[ProvisionalOption, ...] = ()
     request_resolution_plan: RequestResolutionPlan | None = None
     proxy_records: tuple[SourceRecord, ...] = ()
+    external_records: tuple[SourceRecord, ...] = ()
     local_candidates: tuple[Candidate, ...] = ()
     proxy_candidates: tuple[Candidate, ...] = ()
+    external_candidates: tuple[Candidate, ...] = ()
     resolution_candidates: tuple[Candidate, ...] = ()
     gaps: dict[str, tuple[ResolutionGap, ...]] = field(default_factory=dict)
     resolution_plans: dict[str, ResolutionPlan] = field(default_factory=dict)
@@ -118,6 +130,9 @@ class GraphState:
     ranked_candidates: tuple[Candidate, ...] = ()
     link_attempts: list[LinkAttempt] = field(default_factory=list)
     semantic_index_anchor: SemanticIndexAnchor | None = None
+    retrieval_diagnostics: tuple[RetrievalDiagnostic, ...] = ()
+    conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = ()
+    pipeline_funnel: PipelineFunnel = field(default_factory=PipelineFunnel)
     recommendation: Recommendation | None = None
     events: list[AuditEvent] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

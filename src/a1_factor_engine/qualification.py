@@ -138,6 +138,18 @@ def qualify_record(
             hard_identity_exclusions.append("identity_proof_missing")
     compare_identity("material_family", target.material_family, observed.material_family, always_hard=False)
     compare_identity("head_material", target.head_material, observed.head_material, always_hard=False)
+    compare_identity(
+        "product_entity_id",
+        target.product_entity_id,
+        observed.product_entity_id,
+        always_hard=True,
+    )
+    compare_identity(
+        "product_form",
+        target.product_form,
+        observed.product_form,
+        always_hard=False,
+    )
     identity_status = (
         QualificationStatus.MISMATCH
         if identity_reasons
@@ -167,12 +179,26 @@ def qualify_record(
             f"indicator {source.indicator!r} is not GWP-total",
         )
 
+    declared_identity = (
+        material_identity(source.declared_product, registry=registry)
+        if source.declared_product else None
+    )
+    declared_entity_compatible = bool(
+        declared_identity
+        and target.base_entity_id
+        and declared_identity.base_entity_id == target.base_entity_id
+        and (
+            not target.product_entity_id
+            or not declared_identity.product_entity_id
+            or declared_identity.product_entity_id == target.product_entity_id
+        )
+    )
     if not source.declared_product:
         declared_dim = _dimension(QualificationStatus.UNKNOWN, "declared product is unspecified")
     elif (
         text(target.canonical_name) in text(source.declared_product)
         or text(source.declared_product) in text(target.canonical_name)
-        or (target.head_material and target.head_material == observed.head_material)
+        or declared_entity_compatible
     ):
         declared_dim = _dimension(QualificationStatus.PASS)
     else:

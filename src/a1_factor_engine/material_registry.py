@@ -340,7 +340,7 @@ class VersionedMaterialSemanticRegistry:
         negative_patterns = (
             (r"(?i)(?:^|[^a-z0-9])(?:f|p)\s*-?\s*\d{2,3}(?!\d)", NumericTokenRole.GRIT_SIZE, "numeric.fepa_grit/v1"),
             (r"(?i)(?:^|[^a-z0-9])(?:t|ct|ca)\s*-?\s*\d{1,4}(?!\d)", NumericTokenRole.MODEL_CODE, "numeric.product_model/v1"),
-            (r"(?i)\baisi\s*\d{3,4}(?!\d)|\buns\s*[a-z]?\d+(?!\d)|\b\d{4}\s*铝合金", NumericTokenRole.ALLOY_GRADE, "numeric.alloy_grade/v1"),
+            (r"(?i)\baisi\s*\d{3,4}(?!\d)|\buns\s*[a-z]?\d+(?!\d)|\b\d{4}\s*铝合金|\b\d{4}\s+(?:aluminium|aluminum)\s+alloy\b", NumericTokenRole.ALLOY_GRADE, "numeric.alloy_grade/v1"),
             (r"(?i)\bgb\s*/?\s*t?\s*\d+(?:\.\d+)?(?:-\d{4})?", NumericTokenRole.STANDARD_NUMBER, "numeric.standard_number/v1"),
             (r"(?<!\d)20\d{2}(?:年)?(?!\d)", NumericTokenRole.YEAR, "numeric.year/v1"),
             (r"(?i)\d+(?:\.\d+)?\s*(?:-|~|–|—)\s*\d+(?:\.\d+)?\s*(?:mm|cm|µm|um|mesh|目)", NumericTokenRole.PARTICLE_SIZE, "numeric.particle_range/v1"),
@@ -750,6 +750,9 @@ class VersionedMaterialSemanticRegistry:
         )
         identity = self._enrich_identity(identity, value, production_process)
         unresolved_grade = any(token.role == NumericTokenRole.UNRESOLVED for token in numeric_tokens)
+        alloy_grade_token = next(
+            (token for token in numeric_tokens if token.role == NumericTokenRole.ALLOY_GRADE), None
+        )
         if numeric_grade:
             identity = replace(identity, grade=numeric_grade.canonical_label)
         elif unresolved_grade:
@@ -757,6 +760,18 @@ class VersionedMaterialSemanticRegistry:
                 identity,
                 unresolved_attributes=tuple(dict.fromkeys((
                     *identity.unresolved_attributes, "numeric_grade_basis",
+                ))),
+            )
+        elif alloy_grade_token:
+            designation = next(
+                (part for part in re.findall(r"\d{4}", alloy_grade_token.raw)),
+                alloy_grade_token.raw,
+            )
+            identity = replace(
+                identity,
+                grade=designation,
+                unresolved_attributes=tuple(dict.fromkeys((
+                    *identity.unresolved_attributes, "alloy_grade",
                 ))),
             )
         mention = MaterialMention(
@@ -814,6 +829,13 @@ class VersionedMaterialSemanticRegistry:
             product_entity_id=product_entity_id,
             product_family_id=product_family_id,
             allowed_base_entity_ids=(base_entity_id,) if base_entity_id else (),
+            allowed_product_entity_ids=(
+                ("mat.product.primary_aluminium", "mat.product.secondary_aluminium")
+                if base_entity_id == "mat.element.aluminium"
+                and product_family_id == "family.aluminium_products"
+                and product_entity_id is None
+                else (product_entity_id,) if product_entity_id else ()
+            ),
             aliases=intent_aliases,
             process=resolved_process,
             route=route,
@@ -938,7 +960,7 @@ DEFAULT_MATERIAL_REGISTRY = VersionedMaterialSemanticRegistry(
         MaterialRule("material.zircon_mullite/v2", "zircon_mullite", "composite_materials", MaterialCategory.MANUFACTURED_MINERAL, ("锆莫来石", "zircon mullite"), entity_id="mat.composite.zircon_mullite", entity_type=EntityType.COMPOSITE, product_family_id="family.composite_materials", constituent_entity_ids=("mat.compound.zirconia", "mat.mineral.mullite")),
         MaterialRule("material.primary_aluminium/v2", "aluminium", "aluminium_products", MaterialCategory.METAL, ("原铝", "电解铝", "primary aluminium", "primary aluminum"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_entity_id="mat.product.primary_aluminium", product_family_id="family.aluminium_products", route="primary"),
         MaterialRule("material.secondary_aluminium/v2", "aluminium", "aluminium_products", MaterialCategory.RECYCLED_MATERIAL, ("再生铝", "secondary aluminium", "secondary aluminum", "recycled aluminium", "recycled aluminum"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_entity_id="mat.product.secondary_aluminium", product_family_id="family.aluminium_products", route="secondary_recycling"),
-        MaterialRule("material.aluminium_ingot/v2", "aluminium", "aluminium_products", MaterialCategory.METAL, ("铝锭", "aluminium ingot", "aluminum ingot"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_entity_id="mat.product.aluminium_ingot", product_family_id="family.aluminium_products"),
+        MaterialRule("material.aluminium_ingot/v2", "aluminium", "aluminium_products", MaterialCategory.METAL, ("铝锭", "aluminium ingot", "aluminum ingot"), entity_id="mat.element.aluminium", entity_type=EntityType.ELEMENTAL_METAL, chemical_formula="Al", product_family_id="family.aluminium_products"),
         MaterialRule("material.aluminium_alloy/v2", "aluminium", "aluminium_alloys", MaterialCategory.METAL, ("铝合金", "aluminium alloy", "aluminum alloy"), entity_id="mat.element.aluminium", entity_type=EntityType.ALLOY, chemical_formula="Al", product_entity_id="mat.alloy.aluminium", product_family_id="family.aluminium_alloys"),
         MaterialRule("material.alumina/v2", "alumina", "alumina_products", MaterialCategory.MANUFACTURED_MINERAL, ("氧化铝", "aluminium oxide", "aluminum oxide", "alumina", "al2o3", "fused alumina"), entity_id="mat.compound.alumina", entity_type=EntityType.OXIDE, chemical_formula="Al2O3", product_family_id="family.alumina_products"),
         MaterialRule("material.bauxite/v2", "bauxite", "bauxite_products", MaterialCategory.NATURAL_MINERAL, ("铝土矿", "铝矾土", "bauxite"), entity_id="mat.ore.bauxite", entity_type=EntityType.MINERAL, product_family_id="family.bauxite_products"),

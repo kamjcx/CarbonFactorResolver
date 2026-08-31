@@ -154,8 +154,8 @@ async def test_generic_aluminium_requires_route_choice_when_primary_and_secondar
     assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
     assert result.trace.explain()["required_choice"]["field"] == "route"
     assert set(result.trace.explain()["required_choice"]["options"]) == {
-        "mat.product.primary_aluminium",
-        "mat.product.secondary_aluminium",
+        "primary",
+        "secondary",
         "unknown",
     }
     admissions = result.trace.explain()["candidate_admissions"]

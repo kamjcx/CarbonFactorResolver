@@ -25,7 +25,28 @@ jobs:
           --cov-fail-under=85
       - name: Compile sources
         run: uv run --extra energy-import python -m compileall -q src tests tools
-      - name: Check imports and undefined names
-        run: uvx ruff check --select I,F src tests tools
+      - name: Lint
+        run: uv run --extra test ruff check .
+      - name: Type check
+        run: uv run --extra test mypy src
+      - name: Run FactorBench
+        run: uv run --extra test cfr benchmark run data/benchmarks/factorbench_v1.jsonl > factorbench-run.json
       - name: Build package
         run: uv build
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker compose build
+      - name: Start and verify health
+        run: |
+          docker compose up -d
+          for i in $(seq 1 20); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' carbonfactorresolver-resolver-1 2>/dev/null || true)
+            [ "$status" = healthy ] && exit 0
+            sleep 2
+          done
+          docker compose logs
+          exit 1

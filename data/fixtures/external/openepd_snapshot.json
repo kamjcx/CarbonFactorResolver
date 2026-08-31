@@ -1,0 +1,22 @@
+{
+  "snapshot_version": "openepd-shape-v1",
+  "records": [
+    {
+      "source_id": "openepd-shape-aluminium-001",
+      "document_kind": "openepd",
+      "source_type": "epd",
+      "material_name": "primary aluminium",
+      "aliases": ["primary aluminum"],
+      "factor_value": 9.1,
+      "factor_unit": "kgCO2e/kg",
+      "indicator": "GWP-total",
+      "declared_product": "1 kg aluminium product",
+      "boundary": "product stage",
+      "boundary_modules": ["A1", "A2", "A3"],
+      "source_locator": "fixture://openepd-compatible/001",
+      "evidence_locator": "fixture://openepd-compatible/001#GWP-total",
+      "citation": "Synthetic OpenEPD-compatible shape fixture.",
+      "license": "synthetic-test-data"
+    }
+  ]
+}

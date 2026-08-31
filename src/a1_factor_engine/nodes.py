@@ -43,6 +43,7 @@ from .models import (
     NormalizedActivity,
     ParameterEvidence,
     ProvisionalOption,
+    QualificationDiagnostic,
     QualificationPolicy,
     RecallObservation,
     RequestGap,
@@ -605,6 +606,10 @@ class LocalRetrievalNode(Node[GraphState]):
         state.link_attempts.extend(result.attempts)
         state.trace.set_database_anchor(result.database_anchor)
         state.semantic_index_anchor = result.semantic_index_anchor
+        state.retrieval_diagnostics = result.retrieval_diagnostics
+        state.conversion_diagnostics = result.conversion_diagnostics
+        if result.funnel is not None:
+            state.pipeline_funnel = result.funnel
         # Semantic-index observations already carry resolved entity evidence;
         # qualification may append exclusions without changing their source.
         state.recall_observations = result.observations
@@ -624,6 +629,9 @@ class LocalRetrievalNode(Node[GraphState]):
             "raw_related_hits": tuple(record.source_id for record in state.local_records
                                        if record.metadata.get("match_strategy") == LinkStrategy.RELATED.value),
             "recall_observations": tuple(observation.to_dict() for observation in state.recall_observations),
+            "retrieval_diagnostics": tuple(item.to_dict() for item in state.retrieval_diagnostics),
+            "conversion_diagnostics": tuple(item.to_dict() for item in state.conversion_diagnostics),
+            "pipeline_funnel": state.pipeline_funnel.to_dict(),
         })
         return state
 
@@ -670,6 +678,17 @@ class LocalEvaluateNode(Node[GraphState]):
                     break
             state.local_candidates = selected
             state.qualifications = tuple(qualifications)
+            dimensions = ("identity", "factor_kind", "indicator", "declared_product", "boundary", "unit")
+            state.qualification_diagnostics = tuple(
+                QualificationDiagnostic(
+                    source_id=item.source_id,
+                    dimension=dimension,
+                    status=getattr(item, dimension).status.value,
+                    reason_codes=getattr(item, dimension).reasons,
+                )
+                for item in state.qualifications
+                for dimension in dimensions
+            )
             state.candidate_admissions = tuple(admissions)
             state.recall_observations = tuple(observations)
             state.excluded_candidates.extend(exclusions)
@@ -680,10 +699,25 @@ class LocalEvaluateNode(Node[GraphState]):
                 and identity_resolution.sufficiently_resolved
                 and identity_resolution.selected_product_entity_id is None
             ):
+                route_aliases = {
+                    "primary": "primary",
+                    "primary aluminium production": "primary",
+                    "secondary recycling": "secondary",
+                    "secondary aluminium production": "secondary",
+                    "recycled aluminium production": "secondary",
+                }
+                product_routes = {
+                    "mat.product.primary_aluminium": "primary",
+                    "mat.product.secondary_aluminium": "secondary",
+                }
                 variants = tuple(dict.fromkeys(
-                    candidate.source.metadata.get("product_entity_id", "")
+                    product_routes.get(candidate.source.metadata.get("product_entity_id", ""))
+                    or route_aliases.get(_text(candidate.source.production_process))
                     for candidate in selected
-                    if candidate.source.metadata.get("product_entity_id", "")
+                    if (
+                        product_routes.get(candidate.source.metadata.get("product_entity_id", ""))
+                        or route_aliases.get(_text(candidate.source.production_process))
+                    )
                 ))
                 if len(variants) > 1:
                     route_gap = RequestGap(
@@ -708,6 +742,9 @@ class LocalEvaluateNode(Node[GraphState]):
             "candidate_ids": tuple(candidate.candidate_id for candidate in state.local_candidates),
             "excluded": tuple({"source_id": item.source_id, "reasons": item.reasons} for item in state.excluded_candidates),
             "record_qualifications": tuple(item.to_dict() for item in state.qualifications),
+            "qualification_diagnostics": tuple(
+                item.to_dict() for item in state.qualification_diagnostics
+            ),
             "candidate_admissions": tuple(item.to_dict() for item in state.candidate_admissions),
             "raw_related_hits": tuple(item.to_dict() for item in state.recall_observations),
         })
@@ -1088,6 +1125,11 @@ class CandidatePoolNode(Node[GraphState]):
             if previous is None or candidate.resolution_strength > previous.resolution_strength:
                 by_id[candidate.candidate_id] = candidate
         state.candidate_pool = tuple(by_id.values())
+        state.pipeline_funnel = replace(
+            state.pipeline_funnel,
+            qualified_records=sum(item.eligible for item in state.qualifications),
+            candidate_pool=len(state.candidate_pool),
+        )
         state.event(Stage.CANDIDATE_POOL, f"candidate pool contains {len(state.candidate_pool)} candidates", {
             "candidate_ids": tuple(candidate.candidate_id for candidate in state.candidate_pool),
         })
@@ -1110,6 +1152,9 @@ class RankNode(Node[GraphState]):
                 c.source.source_id,
                 c.candidate_id,
             ))
+        )
+        state.pipeline_funnel = replace(
+            state.pipeline_funnel, ranked_candidates=len(state.ranked_candidates)
         )
         state.event(Stage.RANK, "candidates ranked by resolution type, strength, evidence and stable lineage", {
             "ranking": tuple({
@@ -1144,6 +1189,11 @@ class TopKNode(Node[GraphState]):
             if not candidate_hard_rejection_reasons(candidate)
             and candidate.result_tier == ResultTier.REFERENCE_ONLY
         )
+        if state.request_gaps:
+            # Discovery candidates remain in Trace, but incomplete request
+            # identity can never silently become a selectable recommendation.
+            eligible = ()
+            reviewable = ()
         reviewable_reasons = {
             candidate.candidate_id: candidate_rejection_reasons(candidate, state)
             for candidate in reviewable[: state.request.top_k]
@@ -1281,6 +1331,9 @@ class TopKNode(Node[GraphState]):
                     "all local and proxy strategies exhausted without a traceable resolvable candidate",
                 ))
         state.stage = Stage.TERMINAL
+        state.pipeline_funnel = replace(
+            state.pipeline_funnel, returned_candidates=len(top)
+        )
         state.event(Stage.TOP_K, f"returned {len(top)} top-k candidates with status {state.recommendation.status.value}", {
             "selected_candidate_ids": tuple(candidate.candidate_id for candidate in top),
             "diagnostic_candidate_ids": tuple(
@@ -1319,6 +1372,9 @@ class TopKNode(Node[GraphState]):
             "raw_related_hits": tuple(observation.to_dict() for observation in state.recall_observations),
             "record_qualifications": tuple(item.to_dict() for item in state.qualifications),
             "candidate_admissions": tuple(item.to_dict() for item in state.candidate_admissions),
+            "qualification_diagnostics": tuple(
+                item.to_dict() for item in state.qualification_diagnostics
+            ),
             "transformation_steps": tuple(step.to_dict() for step in state.transformation_steps),
             "link_attempts": tuple(attempt.to_dict() for attempt in state.link_attempts),
             "excluded": tuple({
@@ -1327,5 +1383,6 @@ class TopKNode(Node[GraphState]):
                 "origin": item.origin.value,
                 "reasons": item.reasons,
             } for item in state.excluded_candidates),
+            "pipeline_funnel": state.pipeline_funnel.to_dict(),
         })
         return state
