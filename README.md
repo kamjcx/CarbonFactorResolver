@@ -53,6 +53,48 @@ cfr serve --host 127.0.0.1 --port 8000
 
 Open `http://127.0.0.1:8000` for Query, Benchmark, and Compare views. See [architecture](docs/CFR_ARCHITECTURE.md), [evaluation methodology](docs/CFR_EVALUATION_METHODOLOGY.md), [external-source policy](docs/CFR_EXTERNAL_SOURCE_POLICY.md), and the [aluminium root-cause case study](docs/CFR_ALUMINIUM_RETRIEVAL_ROOT_CAUSE.md).
 
+## Portfolio validation challenge
+
+The developer-only Portfolio Challenge V1 contains 60 public-synthetic cases across raw
+materials, finished products, energy, transport, processes, confusable entities,
+`MORE_INPUT`, and safe abstention. It compares exact/alias retrieval, a lexical baseline,
+and the unmodified CFR pipeline. It does not approve or write formal factors.
+
+```bash
+uv run --extra test python tools/portfolio_validation.py \
+  --output outputs/portfolio_validation
+uv run --extra test --extra api pytest -q \
+  tests/test_portfolio_validation.py \
+  tests/test_portfolio_fault_injection.py \
+  tests/test_model_boundary_properties.py \
+  tests/test_portfolio_concurrency_workflow.py
+```
+
+The run emits a manifest, candidate-level CSV, JSON, one Full-CFR trace per case,
+English/Chinese reports, and SVG charts. CI publishes these generated files as an
+artifact; locally generated outputs remain ignored by Git.
+
+Current recovered baseline (60 cases, 40 retrieval positives):
+
+| Method | Top-1 | Recall@5 | Wrong-candidate rate | Boundary | Subject |
+|---|---:|---:|---:|---:|---:|
+| Exact + alias | 95.0% | 95.0% | 7.32% (3/41) | 0% | 0% |
+| Lexical | 100% | 100% | 86.53% (257/297) | 18.86% | 28.96% |
+| Full CFR | 67.5% | 67.5% | 18.18% (6/33) | 0% | 0% |
+
+The safety rate scores every returned candidate, including candidates emitted for
+negative or `MORE_INPUT` cases. This corrects an earlier evaluator defect that reported
+Full CFR as 0% wrong by scoring retrieval-positive rows only. The challenge has 59 unique
+request payloads and mostly exact/alias-positive synthetic cases, so it is a regression
+and safety diagnostic—not evidence of unseen-query generalization.
+
+Fault injection currently freezes three known production findings as strict expected
+failures: local-catalogue timeout/connection failures can return HTTP 500, and connector
+health may echo sensitive exception text. Until separately repaired and retested, this
+validation is useful for portfolio diagnosis but is not a production-readiness claim.
+The governance audit additionally found that a human `REJECTED` record can be overwritten
+by a later approval; the current test proves only that rejection blocks immediate locking.
+
 ## Quick start
 
 ```python
