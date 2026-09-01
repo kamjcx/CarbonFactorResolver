@@ -50,6 +50,8 @@ jobs:
         run: uv run --extra test cfr benchmark run data/benchmarks/factorbench_v1.jsonl > factorbench-run.json
       - name: Run FactorBench V2
         run: uv run --extra test cfr benchmark run data/benchmarks/factorbench_v2.jsonl > factorbench-v2-run.json
+      - name: Run FactorBench V3
+        run: uv run --extra test cfr benchmark run data/benchmarks/factorbench_v3.jsonl > factorbench-v3-run.json
       - name: Run Frozen Unit Regression Set
         run: uv run --extra test python tools/unit_holdout.py --compact > frozen-unit-regression.json
       - name: Run Portfolio Challenge

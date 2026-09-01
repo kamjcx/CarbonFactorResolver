@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Callable, Mapping, Sequence
 from urllib.request import urlopen
 
@@ -255,11 +255,23 @@ class HttpCatalogFactorRepository:
         records = payload.get("records")
         if not isinstance(records, list):
             raise ValueError("factor catalog response lacks records")
-        policy_key = ",".join(
-            f"{policy.policy_id}:{policy.production_approval_id or ''}"
-            for policy in self.dataset_policies
+        policy_key = hashlib.sha256(json.dumps(
+            [asdict(policy) for policy in self.dataset_policies],
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        raw_records_digest = hashlib.sha256(json.dumps(
+            records,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")).hexdigest()
+        cache_key = (
+            f"{anchor.identity}:{self.material_registry.sha256}:"
+            f"{policy_key}:{raw_records_digest}"
         )
-        cache_key = f"{anchor.identity}:{self.material_registry.sha256}:{policy_key}"
         if self._cached_index is None or self._cached_index_key != cache_key:
             converted_items: list[SourceRecord] = []
             conversion_diagnostics: list[RecordConversionDiagnostic] = []
@@ -547,6 +559,12 @@ class HttpCatalogFactorRepository:
             "epd_indicator": FactorKind.EPD_INDICATOR,
             "emission_limit": FactorKind.EMISSION_LIMIT,
             "emission-limit": FactorKind.EMISSION_LIMIT,
+            "energy_factor": FactorKind.ENERGY_FACTOR,
+            "energy-factor": FactorKind.ENERGY_FACTOR,
+            "combustion_factor": FactorKind.COMBUSTION_FACTOR,
+            "combustion-factor": FactorKind.COMBUSTION_FACTOR,
+            "transport_factor": FactorKind.TRANSPORT_FACTOR,
+            "transport-factor": FactorKind.TRANSPORT_FACTOR,
             "derived_proxy": FactorKind.DERIVED_PROXY_FACTOR,
         }
         factor_kind = kind_aliases.get(raw_kind, FactorKind.OTHER)

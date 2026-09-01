@@ -8,6 +8,8 @@ fixtures and contracts; they are not a claim of accuracy across all real-world f
 - **FactorBench V1** is immutable historical evidence. Its `wrong-unit-53` historical label
   remains `supplier_data_required`.
 - **FactorBench V2** applies the versioned unit adjudication without rewriting V1.
+- **FactorBench V3** distinguishes true zero-recall from records recalled and then rejected
+  for indicator, declared-product, or boundary incompatibility. V1/V2 remain immutable.
 - **Portfolio Challenge V1** is a closed regression/safety diagnostic, not an unseen-query
   benchmark. Its recorded result is 39/40 answerable Top-1 with zero boundary and subject
   escapes.
@@ -17,10 +19,15 @@ fixtures and contracts; they are not a claim of accuracy across all real-world f
 - **Sealed Portfolio Holdout** is created only after the RC code, configuration and public
   fixtures are frozen. Its first-run artifacts remain immutable.
 
-The rc.1 sealed gate passed but its release was invalidated by a failing remote CI evidence
-step. A wholly new rc.2 dataset then achieved 100% pre-gate recall, abstention, safety and
-replay but only 83.33% Answerable Top-1, below the 90% release threshold. The rc.2 inputs and
-answers remain unchanged and the v0.14 decision is NO-GO.
+The rc.1 and rc.2 outcomes remain immutable historical evidence. RC3 exposed a release-gate
+defect, RC4 proved the corrected gate fails closed, and RC5 exposed a missing catalogue-anchor
+preflight. None of their answers or first-run outputs was rewritten.
+
+RC6 used a wholly new 48-case public-synthetic dataset after runtime/evaluator freeze. Its
+preserved first run passed 48/48 complete case contracts, with 100% Answerable Top-1,
+pre-gate recall, abstention correctness and deterministic replay; boundary, subject, unit,
+forbidden-candidate and unhandled-HTTP-500 counts were all zero. These are sealed-fixture
+results, not a real-world accuracy claim.
 
 Release thresholds, denominators, raw result hashes and environment information are recorded
 in the RC manifest and sealed-evaluation report. Latency is descriptive for the recorded test

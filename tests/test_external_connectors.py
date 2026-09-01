@@ -49,6 +49,45 @@ async def test_fixture_returns_no_answer_instead_of_a_guess():
     assert await FixtureExternalConnector().discover(intent("unobtainium foam")) == ()
 
 
+async def test_declared_product_substring_cannot_create_a_reviewed_alias():
+    item = {
+        "source_id": "substring-bypass",
+        "material_name": "foo material concentrate",
+        "factor_value": 1.0,
+        "factor_unit": "kgCO2e/kg",
+        "indicator": "GWP-total",
+        "declared_product": "not foo material waste",
+        "boundary": "product stage",
+        "boundary_modules": ["A1"],
+        "source_locator": "https://example.invalid/substring-bypass",
+        "evidence_locator": "https://example.invalid/substring-bypass#GWP",
+        "subject_type": "raw_material",
+        "source_quality_status": "VERIFIED",
+        "admission_eligible": True,
+    }
+    content = json.dumps(item, sort_keys=True, separators=(",", ":")).encode()
+    digest = hashlib.sha256(content).hexdigest()
+    ref = ExternalDiscoveryRef(
+        "substring-bypass",
+        "test",
+        "https://example.invalid/substring-bypass",
+        "structured_epd",
+        digest,
+    )
+    document = ExternalDocument(
+        ref,
+        content,
+        digest,
+        __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+    )
+
+    records = await StructuredEPDEvidenceExtractor().extract(document, intent("foo material"))
+
+    assert records[0].metadata["aliases"] == "[]"
+    assert records[0].metadata["match_strategy"] == "related_candidate_recall"
+    assert records[0].metadata["match_proof"] == "catalogue_name_or_alias"
+
+
 async def test_missing_openepd_credentials_are_explicit_and_nonblocking(monkeypatch):
     monkeypatch.delenv("OPENEPD_API_KEY", raising=False)
     monkeypatch.delenv("OPENEPD_BASE_URL", raising=False)

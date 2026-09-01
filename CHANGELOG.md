@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.14.0-rc.6 - 2026-09-02
+
+- Preserve RC5 as NO-GO after a malformed 62-character sealed database anchor caused all
+  requests to fail closed before retrieval.
+- Validate sealed catalogue database anchors as exactly 64 lowercase hexadecimal characters
+  during pre-runtime loading.
+- Require a wholly new RC6 sealed dataset and first run.
+- Passed the preserved RC6 first run: 48/48 full case contracts, 100% Top-1/recall/
+  abstention/replay, and zero safety or HTTP-500 violations.
+
+## 0.14.0-rc.5 - 2026-09-02
+
+- Preserve RC4 as NO-GO after 36/48 complete frozen case contracts passed.
+- Keep reviewed aliases and applicability alternatives in `reference_review_required` rather
+  than silently promoting them to primary recommendations.
+- Suppress the misleading `ADMISSION_REJECTED` reason when a request gap already produces
+  `MORE_INPUT_NEEDED`; genuine hard-rejected records retain the governance reason.
+- Require a wholly new RC5 sealed dataset and first run.
+
+## 0.14.0-rc.4 - 2026-09-02
+
+- Fail the sealed release gate unless every frozen case satisfies its full HTTP/status/reason/
+  candidate/trace contract, in addition to the aggregate safety thresholds.
+- Preserve the RC3 first run as a NO-GO: 35/48 full case contracts passed even though the
+  previous aggregate-only gate incorrectly reported success.
+- Require a wholly new sealed dataset for RC4; no RC3 expectation or runtime result is rewritten.
+
+## 0.14.0-rc.3 - 2026-09-02
+
+- Added a versioned electricity entity and reviewed `铝金属` alias, repairing the four
+  immutable rc.2 diagnostic mismatches without changing rc.2 evidence.
+- Added end-to-end admission for structured energy, combustion and transport factor kinds,
+  with explicit non-material subject confirmation.
+- Made geography/year applicability outrank source preference and prevented mismatched or
+  stale records from being presented as primary recommendations.
+- Unified local/external qualification and admission diagnostics; conflicting duplicate
+  source IDs now fail closed.
+- Anchored semantic-index and HTTP cache identity to decision-relevant record content and
+  made unordered JSON serialization deterministic.
+- Added FactorBench V3 admission adjudications while retaining V1/V2 unchanged.
+
+RC3 remains a release candidate until a wholly new sealed first run and remote CI pass.
+
 ## 0.14.0-rc.2 - 2026-09-02
 
 - Replaced the failing Compose-container lookup in the image-digest evidence step with a

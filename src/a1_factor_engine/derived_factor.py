@@ -78,6 +78,9 @@ def tier_for(candidate: Candidate) -> ResultTier:
             FactorKind.LIFECYCLE_FACTOR,
             FactorKind.EPD_INDICATOR,
             FactorKind.DERIVED_PROXY_FACTOR,
+            FactorKind.ENERGY_FACTOR,
+            FactorKind.COMBUSTION_FACTOR,
+            FactorKind.TRANSPORT_FACTOR,
         }
         or candidate.source.indicator not in {"GWP-total", "gwp-total"}
     ):

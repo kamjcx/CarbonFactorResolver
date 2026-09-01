@@ -64,6 +64,16 @@ def load_catalog(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or not isinstance(payload.get("records"), list):
         raise ValueError("sealed catalogue must be an object with records")
+    database = payload.get("database")
+    if not isinstance(database, dict):
+        raise ValueError("sealed catalogue must include database metadata")
+    database_sha256 = database.get("sha256")
+    if not (
+        isinstance(database_sha256, str)
+        and len(database_sha256) == 64
+        and all(character in "0123456789abcdef" for character in database_sha256)
+    ):
+        raise ValueError("sealed catalogue database SHA-256 must be 64 lowercase hex characters")
     ids = [str(record.get("record_id", "")) for record in payload["records"]]
     if not all(ids) or len(ids) != len(set(ids)):
         raise ValueError("sealed catalogue record_id values must be non-empty and unique")
@@ -196,6 +206,9 @@ def aggregate(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "answerable_case_count": len(answerable),
         "abstention_case_count": len(abstentions),
         "passed_count": sum(bool(item["passed"]) for item in results),
+        "case_contract_pass_rate": (
+            sum(bool(item["passed"]) for item in results) / len(results) if results else 0.0
+        ),
         "answerable_top_1": rate(answerable, "top_1"),
         "retrieval_recall_before_gate": rate(answerable, "retrieval_recall"),
         "abstention_correctness": rate(abstentions, "abstention"),
@@ -212,6 +225,7 @@ def aggregate(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 def release_gate(metrics: Mapping[str, Any]) -> dict[str, Any]:
     checks = {
+        "case_contract": metrics["case_contract_pass_rate"] == 1.0,
         "answerable_top_1": metrics["answerable_top_1"] >= 0.90,
         "retrieval_recall_before_gate": metrics["retrieval_recall_before_gate"] >= 0.95,
         "abstention_correctness": metrics["abstention_correctness"] >= 0.90,
@@ -231,7 +245,7 @@ async def run_sealed(cases_path: Path, catalog_path: Path) -> dict[str, Any]:
     results = [await evaluate_case(case, catalog) for case in cases]
     metrics = aggregate(results)
     return {
-        "schema_version": "cfr-sealed-evaluation/v1",
+        "schema_version": "cfr-sealed-evaluation/v2",
         "created_at": datetime.now(UTC).isoformat(),
         "git_sha": _git_sha(cases_path.resolve().parents[2]),
         "cases_sha256": sha256_file(cases_path),
@@ -257,4 +271,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

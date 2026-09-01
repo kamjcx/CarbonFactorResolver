@@ -130,10 +130,10 @@ async def test_factorbench_run_is_deterministic_and_captures_reproducibility_anc
 
     assert first.run_id == second.run_id
     assert first.dataset_sha256 == second.dataset_sha256
-    assert first.registry_version == "material-semantic-registry/2.2.0"
+    assert first.registry_version == "material-semantic-registry/2.2.1"
     assert len(first.registry_sha256) == 64
     assert first.git_sha
-    assert first.package_version == "0.14.0rc2"
+    assert first.package_version == "0.14.0rc6"
     assert len(first.catalog_anchors) == 4
     assert len(first.semantic_index_anchors) == 4
     assert first.energy_anchors == ()
@@ -143,10 +143,9 @@ async def test_factorbench_run_is_deterministic_and_captures_reproducibility_anc
     assert first.aggregates.entity_accuracy == 1.0
     assert first.aggregates.recall_at_1 == 1.0
     assert first.aggregates.correct_more_input == 1.0
-    # The frozen wrong-unit-53 label still expects supplier_data_required.
-    # Unit Contract v1 deliberately returns unresolved for that system error;
-    # the frozen answer is retained and the one adjudication delta stays visible.
-    assert first.aggregates.correct_abstention == 8 / 9
+    # V1 remains immutable. Current admission contracts expose four historical
+    # adjudication deltas: one unit-system case plus three recalled-but-rejected records.
+    assert first.aggregates.correct_abstention == 5 / 9
     assert first.aggregates.external_retrieval_success == 1.0
     assert first.aggregates.evidence_completeness == 1.0
     assert all(result.error is None for result in first.results)
@@ -176,6 +175,28 @@ async def test_factorbench_v2_adjudicates_wrong_unit_without_changing_v1() -> No
     assert result.observed_reason_codes == result.expected_reason_codes == (
         "UNIT_DIMENSION_MISMATCH",
     )
+
+
+@pytest.mark.asyncio
+async def test_factorbench_v3_adjudicates_recalled_admission_failures() -> None:
+    v2_path = ROOT / "data" / "benchmarks" / "factorbench_v2.jsonl"
+    v3_path = ROOT / "data" / "benchmarks" / "factorbench_v3.jsonl"
+    changed = {"wrong-indicator-54", "wrong-product-55", "wrong-boundary-56"}
+    v2 = {case.case_id: case for case in load_cases(v2_path)}
+    v3 = {case.case_id: case for case in load_cases(v3_path)}
+
+    assert v2.keys() == v3.keys()
+    for case_id in changed:
+        assert v2[case_id].expected_status == "supplier_data_required"
+        assert v3[case_id].expected_status == "unresolved"
+        assert v3[case_id].expected_reason_codes == ("ADMISSION_REJECTED",)
+    for case_id in v2.keys() - changed:
+        assert v2[case_id] == v3[case_id]
+
+    run = await FactorBenchRunner(v3_path, timer=lambda: 0.0).run()
+    assert run.aggregates.entity_accuracy == 1.0
+    assert run.aggregates.recall_at_5 == 1.0
+    assert run.aggregates.correct_abstention == 1.0
     assert run.aggregates.correct_abstention == 1.0
 
 

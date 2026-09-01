@@ -80,6 +80,19 @@ def _dimension(status: QualificationStatus, *reasons: str) -> QualificationDimen
     return QualificationDimension(status, tuple(reason for reason in reasons if reason))
 
 
+OPERATIONAL_FACTOR_SUBJECTS = {
+    FactorKind.ENERGY_FACTOR: FactorSubjectType.ENERGY,
+    FactorKind.COMBUSTION_FACTOR: FactorSubjectType.ENERGY,
+    FactorKind.TRANSPORT_FACTOR: FactorSubjectType.TRANSPORT,
+}
+EXPLICIT_NON_MATERIAL_SUBJECTS = frozenset({
+    FactorSubjectType.ENERGY,
+    FactorSubjectType.TRANSPORT,
+    FactorSubjectType.PROCESS,
+    FactorSubjectType.WASTE,
+})
+
+
 def qualify_record(
     activity: NormalizedActivity,
     source: SourceRecord,
@@ -189,18 +202,38 @@ def qualify_record(
         else QualificationStatus.UNKNOWN
     )
 
+    expected_operational_subject = OPERATIONAL_FACTOR_SUBJECTS.get(source.factor_kind)
     if source.factor_kind == FactorKind.EMISSION_LIMIT:
         kind_dim = _dimension(QualificationStatus.MISMATCH, "emission limit is not an A1 lifecycle factor")
     elif source.factor_kind in {
         FactorKind.LIFECYCLE_FACTOR,
         FactorKind.EPD_INDICATOR,
         FactorKind.DERIVED_PROXY_FACTOR,
+        *OPERATIONAL_FACTOR_SUBJECTS,
     }:
         kind_dim = _dimension(QualificationStatus.PASS)
     else:
         kind_dim = _dimension(QualificationStatus.UNKNOWN, "factor kind is not explicitly classified")
 
-    if (
+    if expected_operational_subject and source.subject_type != expected_operational_subject:
+        subject_dim = _dimension(
+            QualificationStatus.MISMATCH,
+            f"{source.factor_kind.value} requires subject {expected_operational_subject.value!r}",
+        )
+    elif expected_operational_subject and activity.subject_type == FactorSubjectType.UNKNOWN:
+        subject_dim = _dimension(
+            QualificationStatus.UNKNOWN,
+            f"request subject must be {expected_operational_subject.value!r} for {source.factor_kind.value}",
+        )
+    elif (
+        activity.subject_type == FactorSubjectType.UNKNOWN
+        and source.subject_type in EXPLICIT_NON_MATERIAL_SUBJECTS
+    ):
+        subject_dim = _dimension(
+            QualificationStatus.UNKNOWN,
+            f"request subject must explicitly confirm {source.subject_type.value!r}",
+        )
+    elif (
         activity.subject_type != FactorSubjectType.UNKNOWN
         and source.subject_type != FactorSubjectType.UNKNOWN
         and activity.subject_type != source.subject_type
@@ -251,8 +284,7 @@ def qualify_record(
     if not source.declared_product:
         declared_dim = _dimension(QualificationStatus.UNKNOWN, "declared product is unspecified")
     elif (
-        text(target.canonical_name) in text(source.declared_product)
-        or text(source.declared_product) in text(target.canonical_name)
+        text(target.canonical_name) == text(source.declared_product)
         or declared_entity_compatible
         or reviewed_alias_match
     ):
@@ -352,9 +384,10 @@ def qualify_record(
     exclusions = list(hard_identity_exclusions)
     if kind_dim.status == QualificationStatus.MISMATCH:
         exclusions.append("factor_kind_mismatch")
-    if (
+    if subject_dim.status != QualificationStatus.PASS and (
         activity.subject_type != FactorSubjectType.UNKNOWN
-        and subject_dim.status != QualificationStatus.PASS
+        or expected_operational_subject
+        or source.subject_type in EXPLICIT_NON_MATERIAL_SUBJECTS
     ):
         exclusions.append("subject_type_mismatch")
     if quality_dim.status != QualificationStatus.PASS:

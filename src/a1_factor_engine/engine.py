@@ -27,9 +27,11 @@ from .models import (
     ApprovalRecord,
     ApprovalStatus,
     Candidate,
+    CandidateExclusion,
     CandidateOrigin,
     GapType,
     LockedResolution,
+    QualificationDiagnostic,
     Recommendation,
     RequestGap,
     RequestGapType,
@@ -39,6 +41,7 @@ from .models import (
     ResolutionTrace,
     ResultTier,
     RouterType,
+    SourceRecord,
 )
 from .nodes import (
     CandidatePoolNode,
@@ -71,6 +74,8 @@ from .ports import (
     ReferenceFlowRepositoryPort,
     ResolutionStorePort,
 )
+from .qualification import EXPLICIT_NON_MATERIAL_SUBJECTS, OPERATIONAL_FACTOR_SUBJECTS
+from .semantic_index import source_record_decision_digest
 
 
 @dataclass
@@ -178,18 +183,96 @@ class A1ResolutionGraph:
                         "source_id": str(reference.get("source_id", "")),
                         "reason_code": type(exc).__name__,
                     })
+        unique_records: dict[str, SourceRecord] = {}
+        conflicting_ids: set[str] = set()
+        for record in records:
+            previous = unique_records.get(record.source_id)
+            if previous is None:
+                unique_records[record.source_id] = record
+            elif source_record_decision_digest(previous) != source_record_decision_digest(record):
+                conflicting_ids.add(record.source_id)
+        if conflicting_ids:
+            for source_id in sorted(conflicting_ids):
+                state.excluded_candidates.append(CandidateExclusion(
+                    source_id=source_id,
+                    origin=CandidateOrigin.EXTERNAL,
+                    reasons=("conflicting_duplicate_source_id",),
+                ))
+            state.event(Stage.EVIDENCE_EXTRACTION, "conflicting duplicate external source IDs rejected", {
+                "source_ids": tuple(sorted(conflicting_ids)),
+                "reason_code": "CONFLICTING_DUPLICATE_SOURCE_ID",
+            })
+        records = [
+            record for source_id, record in unique_records.items()
+            if source_id not in conflicting_ids
+        ]
         state.external_records = tuple(records)
         state.event(Stage.EVIDENCE_EXTRACTION, "external evidence extraction completed", {
             "record_count": len(records),
             "source_ids": tuple(record.source_id for record in records),
         })
         if records:
+            qualifications = []
+            admissions = []
+            observations = list(state.recall_observations)
             candidates, exclusions = await evaluate_records(
                 state.normalized, records, CandidateOrigin.EXTERNAL,
-                self.understanding, registry=self.material_registry,
+                self.understanding,
+                qualification_sink=qualifications,
+                admission_sink=admissions,
+                observation_sink=observations,
+                registry=self.material_registry,
+            )
+            state.qualifications = (*state.qualifications, *qualifications)
+            state.candidate_admissions = (*state.candidate_admissions, *admissions)
+            state.recall_observations = tuple(observations)
+            dimensions = (
+                "identity", "factor_kind", "subject_type", "source_quality",
+                "indicator", "declared_product", "boundary", "unit",
+            )
+            state.qualification_diagnostics = (
+                *state.qualification_diagnostics,
+                *(
+                    QualificationDiagnostic(
+                        source_id=item.source_id,
+                        dimension=dimension,
+                        status=getattr(item, dimension).status.value,
+                        reason_codes=getattr(item, dimension).reasons,
+                    )
+                    for item in qualifications
+                    for dimension in dimensions
+                ),
             )
             state.external_candidates = candidates
             state.excluded_candidates.extend(exclusions)
+            if state.normalized.subject_type.value == "unknown":
+                external_subjects = tuple(dict.fromkeys(
+                    OPERATIONAL_FACTOR_SUBJECTS.get(record.factor_kind) or record.subject_type
+                    for record in records
+                    if (
+                        OPERATIONAL_FACTOR_SUBJECTS.get(record.factor_kind)
+                        or record.subject_type in EXPLICIT_NON_MATERIAL_SUBJECTS
+                    )
+                ))
+                if external_subjects and not any(
+                    gap.field == "subject_type" for gap in state.request_gaps
+                ):
+                    subject_gap = RequestGap(
+                        gap_id=f"{state.request.request_id}:subject_type",
+                        gap_type=RequestGapType.INPUT_SPECIFICATION,
+                        field="subject_type",
+                        reason="a non-material factor requires an explicit compatible subject type",
+                        required=True,
+                        options=tuple(subject.value for subject in external_subjects),
+                    )
+                    state.request_gaps = tuple((*state.request_gaps, subject_gap))
+                    state.required_fields = tuple(dict.fromkeys((*state.required_fields, "subject_type")))
+                    state.request_resolution_plan = RequestResolutionPlan(
+                        request_id=state.request.request_id,
+                        gaps=state.request_gaps,
+                        next_question=state.request_gaps[0],
+                        provisional_options=state.provisional_options,
+                    )
             identity = state.normalized.identity_resolution
             if identity and identity.selected_product_entity_id is None:
                 product_routes = {

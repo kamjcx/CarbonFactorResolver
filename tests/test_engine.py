@@ -147,6 +147,61 @@ def test_subject_and_source_quality_are_hard_qualification_dimensions() -> None:
     assert quality_result.primary_exclusion == "source_quality_not_admissible"
 
 
+def test_electricity_entity_allows_compatible_declared_product_descriptor_difference() -> None:
+    activity = NormalizedActivity(
+        request_id="structured-energy",
+        canonical_name="dawn synthetic electricity",
+        aliases=(), quantity_kg=None, geography=None, year=2025,
+        product_form=None, composition=None, production_process=None,
+        subject_type=FactorSubjectType.ENERGY,
+        boundary="A1-A3", target_factor_unit="kgCO2e/kWh",
+    )
+    source = SourceRecord(
+        source_id="structured-energy", source_type=FactorSourceType.LOCAL_DATABASE,
+        provider="synthetic", locator="evidence://structured-energy",
+        material_name="dawn synthetic electricity", factor_value=0.412,
+        factor_unit="kgCO2e/kWh", factor_kind=FactorKind.LIFECYCLE_FACTOR,
+        subject_type=FactorSubjectType.ENERGY,
+        indicator="GWP-total", declared_product="dawn electricity",
+        boundary="cradle-to-gate", boundary_modules=("A1", "A2", "A3"),
+        metadata={"match_strategy": LinkStrategy.EXACT.value},
+    )
+
+    result = qualify_record(activity, source)
+
+    assert result.declared_product.status.value == "pass"
+    assert result.eligible is True
+
+
+def test_electricity_entity_does_not_accept_a_different_energy_carrier() -> None:
+    activity = NormalizedActivity(
+        request_id="structured-negative",
+        canonical_name="dawn synthetic electricity",
+        aliases=(), quantity_kg=None, geography=None, year=2025,
+        product_form=None, composition=None, production_process=None,
+        subject_type=FactorSubjectType.ENERGY,
+        boundary="A1-A3", target_factor_unit="kgCO2e/kWh",
+    )
+    source = SourceRecord(
+        source_id="structured-negative", source_type=FactorSourceType.LOCAL_DATABASE,
+        provider="synthetic", locator="evidence://structured-negative",
+        material_name="dawn synthetic electricity", factor_value=0.412,
+        factor_unit="kgCO2e/kWh", factor_kind=FactorKind.LIFECYCLE_FACTOR,
+        subject_type=FactorSubjectType.ENERGY,
+        indicator="GWP-total", declared_product="dawn synthetic gas",
+        boundary="cradle-to-gate", boundary_modules=("A1", "A2", "A3"),
+        metadata={"match_strategy": LinkStrategy.EXACT.value},
+    )
+
+    result = qualify_record(activity, source)
+
+    assert result.declared_product.status.value == "mismatch"
+    assert result.eligible is False
+    assert "declared_product_mismatch" in {
+        result.primary_exclusion, *result.additional_exclusions,
+    }
+
+
 def test_explicit_subject_request_rejects_source_with_unknown_subject() -> None:
     activity = NormalizedActivity(
         request_id="unknown-subject",
@@ -267,6 +322,11 @@ def test_entity_first_parser_assigns_roles_without_treating_type_or_form_as_enti
     assert ("钢纤维", SemanticRole.PRODUCT_FORM) in roles
     assert steel_fiber.identity.base_entity_id == "mat.alloy.steel"
 
+    generic_aluminium = DEFAULT_MATERIAL_REGISTRY.resolve("通用铝金属")
+    assert generic_aluminium.identity.base_entity_id == "mat.element.aluminium"
+    assert generic_aluminium.identity.product_entity_id is None
+    assert generic_aluminium.identity_resolution.outcome == IdentityOutcome.RESOLVED
+
     magnesia = DEFAULT_MATERIAL_REGISTRY.resolve("95%高纯镁砂")
     assert magnesia.mention.purity == pytest.approx(95.0)
     assert magnesia.mention.grade_modifiers == ("高纯",)
@@ -312,7 +372,7 @@ async def test_semantic_index_does_not_recall_silicon_or_alumina_for_metallic_al
     explanation = result.trace.explain()
     assert explanation["material_identity"]["base_entity_id"] == "mat.element.aluminium"
     assert explanation["local_retrieval"]["record_count"] == 0
-    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.2.0"
+    assert explanation["local_retrieval"]["semantic_index_anchor"]["registry_version"] == "material-semantic-registry/2.2.1"
 
 
 @pytest.mark.asyncio
@@ -341,6 +401,31 @@ async def test_generic_aluminium_requires_route_choice_when_primary_and_secondar
     assert all(item["retrieval_strategy"] == LinkStrategy.RELATED.value for item in admissions)
     assert all(item["admitted"] and not item["observation_only"] for item in admissions)
     assert all(item["identity_proof_ids"] for item in admissions)
+
+
+@pytest.mark.asyncio
+async def test_generic_aluminium_natural_word_order_requires_route_choice() -> None:
+    records = (
+        replace(record(
+            "natural-primary-al", "原铝", 10.0,
+            declared_product="原铝", boundary_modules=("A1", "A2", "A3"),
+        ), subject_type=FactorSubjectType.RAW_MATERIAL),
+        replace(record(
+            "natural-secondary-al", "再生铝", 1.0,
+            declared_product="再生铝", boundary_modules=("A1", "A2", "A3"),
+        ), subject_type=FactorSubjectType.RAW_MATERIAL),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository(records)
+    ).resolve(ResolutionRequest(
+        material_name="通用铝金属", quantity=1,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+
+    assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    choice = result.trace.explain()["required_choice"]
+    assert choice["field"] == "route"
+    assert set(choice["options"]) == {"primary", "secondary", "unknown"}
 
 
 @pytest.mark.parametrize(
