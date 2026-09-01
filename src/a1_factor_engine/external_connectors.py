@@ -499,25 +499,19 @@ class StructuredEPDEvidenceExtractor:
         except ValueError as exc:
             raise InvalidExternalEvidence("source_type is not supported") from exc
         request_name = _normalise(intent.canonical_name)
-        declared_product_match = bool(
-            request_name and request_name in _normalise(declared_product)
-        )
-        reviewed_aliases = tuple(dict.fromkeys((
-            *aliases,
-            *((intent.canonical_name,) if declared_product_match else ()),
-        )))
+        reviewed_aliases = tuple(dict.fromkeys(aliases))
         metadata = {
             "parser_version": self.parser_version,
             "evidence_locator": evidence_locator,
             "snapshot_sha256": document.snapshot_sha256 or "",
             "license": str(item.get("license", "public-or-synthetic")),
             "aliases": json.dumps(reviewed_aliases, ensure_ascii=False),
-            "match_proof": "declared_product" if declared_product_match else "catalogue_name_or_alias",
+            "match_proof": "catalogue_name_or_alias",
             "match_strategy": (
                 "exact_link"
                 if request_name == _normalise(material_name)
                 else "synonym_link"
-                if request_name in alias_names or declared_product_match
+                if request_name in alias_names
                 else "related_candidate_recall"
             ),
         }

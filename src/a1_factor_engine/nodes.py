@@ -81,6 +81,7 @@ from .qualification import (
 )
 from .reference_flow_resolution import resolve_reference_flow
 from .resolution_planner import build_resolution_plan
+from .semantic_index import CatalogIntegrityError
 from .unit_resolution import resolve_unit_scale
 from .units import (
     CATALOG_FACTOR_UNIT_INVALID,
@@ -728,6 +729,20 @@ class LocalRetrievalNode(Node[GraphState]):
             raise ValueError("normalized activity lacks RetrievalIntent")
         try:
             result = await self.repository.search(state.normalized.retrieval_intent)
+        except CatalogIntegrityError as exc:
+            state.local_records = ()
+            state.excluded_candidates.append(CandidateExclusion(
+                source_id="local-catalog-integrity",
+                origin=CandidateOrigin.LOCAL,
+                reasons=("conflicting_duplicate_source_id",),
+            ))
+            state.event(Stage.LOCAL_RETRIEVAL, "local factor catalogue integrity conflict", {
+                "reason_code": "CONFLICTING_DUPLICATE_SOURCE_ID",
+                "exception_type": type(exc).__name__,
+                "repository_type": type(self.repository).__name__,
+                "record_count": 0,
+            })
+            return state
         except OSError as exc:
             # Catalogue transport failures are evidence about availability, not
             # permission to invent or admit a factor.  Keep the failure visible

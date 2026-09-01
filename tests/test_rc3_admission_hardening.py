@@ -15,7 +15,11 @@ from a1_factor_engine import (
     ResultTier,
     SourceRecord,
 )
-from a1_factor_engine.adapters import HttpCatalogFactorRepository, InMemoryFactorRepository
+from a1_factor_engine.adapters import (
+    CatalogDatasetPolicy,
+    HttpCatalogFactorRepository,
+    InMemoryFactorRepository,
+)
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import DatabaseVersionAnchor
 from a1_factor_engine.semantic_index import SemanticFactorIndex
@@ -264,11 +268,12 @@ async def test_conflicting_duplicate_local_source_ids_fail_closed() -> None:
         subject_type=FactorSubjectType.ENERGY,
     ))
 
-    assert result.status == ResolutionStatus.SUPPLIER_DATA_REQUIRED
+    assert result.status == ResolutionStatus.UNRESOLVED
     assert result.candidates == ()
+    assert result.reason_codes == ("CONFLICTING_DUPLICATE_SOURCE_ID",)
     retrieval = result.trace.latest("local_retrieval")
     assert retrieval is not None
-    assert retrieval.details["reason_code"] == "CatalogIntegrityError"
+    assert retrieval.details["reason_code"] == "CONFLICTING_DUPLICATE_SOURCE_ID"
 
 
 @pytest.mark.asyncio
@@ -303,6 +308,51 @@ async def test_http_catalog_cache_rebuilds_when_payload_changes_under_same_ancho
 
     assert first.records[0].factor_value == 0.4
     assert second.records[0].factor_value == 0.5
+    assert first.semantic_index_anchor != second.semantic_index_anchor
+
+
+@pytest.mark.asyncio
+async def test_http_catalog_cache_rebuilds_when_decision_policy_changes() -> None:
+    payload = {
+        "catalog_version": "rc3",
+        "database": {"name": "rc3", "sha256": "cd" * 32},
+        "records": [{
+            "record_id": "policy-cache-energy",
+            "category": "energy_factor",
+            "name": "policy cache electricity",
+            "primary_value": 0.4,
+            "primary_unit": "kgCO2e/kWh",
+            "source": "synthetic",
+            "subject_type": "energy",
+            "source_quality_status": "VERIFIED",
+            "admission_eligible": True,
+            "indicator": "GWP-total",
+            "declared_product": "policy cache electricity",
+            "boundary": "cradle-to-gate",
+            "boundary_modules": ["A1", "A2", "A3"],
+        }],
+    }
+    policy_cn = CatalogDatasetPolicy(
+        policy_id="same-policy-id",
+        record_categories=("energy_factor",),
+        geography="CN",
+        year=2024,
+    )
+    repository = HttpCatalogFactorRepository(
+        fetch_json=lambda _url: payload,
+        dataset_policies=(policy_cn,),
+    )
+    intent = DEFAULT_MATERIAL_REGISTRY.resolve("policy cache electricity").retrieval_intent
+    assert intent is not None
+
+    first = await repository.search(intent)
+    repository.dataset_policies = (
+        replace(policy_cn, geography="US", year=2025),
+    )
+    second = await repository.search(intent)
+
+    assert (first.records[0].geography, first.records[0].year) == ("CN", 2024)
+    assert (second.records[0].geography, second.records[0].year) == ("US", 2025)
     assert first.semantic_index_anchor != second.semantic_index_anchor
 
 
