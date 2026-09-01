@@ -32,6 +32,7 @@ class FactorBenchCase:
     expected_required_choices: tuple[str, ...] = ()
     expected_hard_exclusions: tuple[str, ...] = ()
     expected_trace_stages: tuple[str, ...] = ()
+    expected_reason_codes: tuple[str, ...] = ()
     external_fixture: str | None = None
 
     def __post_init__(self) -> None:
@@ -80,6 +81,9 @@ class FactorBenchCase:
             expected_trace_stages=_tuple_of_strings(
                 value["expected_trace_stages"], "expected_trace_stages"
             ),
+            expected_reason_codes=_tuple_of_strings(
+                value.get("expected_reason_codes"), "expected_reason_codes"
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,6 +99,7 @@ class FactorBenchCase:
             "expected_required_choices": list(self.expected_required_choices),
             "expected_hard_exclusions": list(self.expected_hard_exclusions),
             "expected_trace_stages": list(self.expected_trace_stages),
+            "expected_reason_codes": list(self.expected_reason_codes),
         }
         if self.external_fixture is not None:
             result["external_fixture"] = self.external_fixture
@@ -116,6 +121,8 @@ class FactorBenchCaseResult:
     expected_hard_exclusions: tuple[str, ...]
     observed_trace_stages: tuple[str, ...]
     missing_trace_stages: tuple[str, ...]
+    expected_reason_codes: tuple[str, ...]
+    observed_reason_codes: tuple[str, ...]
     evidence_coverage: float
     latency_ms: float
     used_external_fixture: bool = False
@@ -141,6 +148,8 @@ class FactorBenchCaseResult:
             "expected_hard_exclusions": list(self.expected_hard_exclusions),
             "observed_trace_stages": list(self.observed_trace_stages),
             "missing_trace_stages": list(self.missing_trace_stages),
+            "expected_reason_codes": list(self.expected_reason_codes),
+            "observed_reason_codes": list(self.observed_reason_codes),
             "evidence_coverage": self.evidence_coverage,
             "latency_ms": self.latency_ms,
             "used_external_fixture": self.used_external_fixture,

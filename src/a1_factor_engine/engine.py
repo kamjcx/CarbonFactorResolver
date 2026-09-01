@@ -427,6 +427,9 @@ class A1FactorResolutionEngine:
                 raise ValueError("REFERENCE_ONLY candidates require reference_override mode and a non-empty reason")
         elif candidate.result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS and mode == ApprovalMode.STANDARD:
             raise ValueError("USABLE_WITH_ASSUMPTIONS candidates require assumption_acceptance mode")
+        existing_approval = await self.store.get_approval(request_id, candidate_id)
+        if existing_approval is not None and existing_approval.status == ApprovalStatus.REJECTED:
+            raise ValueError("rejected candidate cannot be approved in the same resolution run")
         approval = ApprovalRecord(request_id, candidate_id, reviewer, ApprovalStatus.APPROVED, note, mode=mode)
         await self.store.save_approval(approval)
         await self._append_trace(request_id, "human_approval", "candidate approved", {

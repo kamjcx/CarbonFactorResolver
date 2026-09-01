@@ -1,11 +1,11 @@
-# CFR Unit System v1 Holdout
+# CFR Frozen Unit Regression Set v1
 
 Status: **EXPECTED ANSWERS FROZEN BEFORE FIRST RESOLVER RUN**
 
-This independent QA holdout exercises the frozen `cfr-unit-system/v1` contract through
-the public resolution engine and the HTTP-catalog adapter. It is intentionally isolated
-from existing benchmark and catalogue fixtures. Expected answers are authored in the
-benchmark rows; the runner is read-only and exits non-zero on any mismatch.
+This 28-case **Frozen Unit Regression Set** exercises the frozen `cfr-unit-system/v1`
+contract through the public resolution engine and HTTP-catalog adapter. Its inputs and
+answers remain immutable, but it is no longer described as an independent holdout because
+runtime code was modified after the first run in response to four failures.
 
 ## Frozen inputs
 
@@ -72,3 +72,7 @@ results are reported in the implementation handoff.
   derive the request denominator; `Nm3` identity does not request state-conversion evidence;
   unqualified VOLUME-to-MASS conflicts fail with `UNIT_DIMENSION_MISMATCH`; controlled
   reference-flow resolution remains available when the request supplies product-form context.
+
+The honest public summary is therefore: **independent first run 24/28; post-fix frozen
+regression 28/28**. Only a new dataset authored after an RC freeze may be called a sealed or
+independent holdout.

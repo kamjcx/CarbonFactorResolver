@@ -1,6 +1,29 @@
 # CarbonFactorResolver
 
-CarbonFactorResolver（CFR，碳因子解析引擎）是独立、框架无关的 Python 3.11+ Graph Engineering 引擎，用于对原材料、能源与工艺相关的碳因子进行有证据约束的检索、语义匹配、代理解析和审计追溯。
+CarbonFactorResolver (CFR) is a structured carbon-factor retrieval and qualification
+engine. It combines hybrid retrieval with deterministic checks for units, lifecycle
+boundaries, factor subjects and provenance, then explains a candidate, asks for more input,
+or safely refuses to answer.
+
+**Portfolio benchmark:** 39/40 answerable Top-1 cases, with 0 boundary, subject and
+unit-dimension violations in the frozen public-synthetic regression suites. This is a
+closed Portfolio Benchmark result—not a claim of 97.5% accuracy across real-world carbon
+factor queries.
+
+```bash
+docker compose up --build -d
+curl http://127.0.0.1:8000/healthz
+curl -X POST http://127.0.0.1:8000/api/v1/resolve \
+  -H "Content-Type: application/json" \
+  -d '{"material_name":"primary aluminium ingot","quantity":1,"quantity_unit":"t","production_process":"primary aluminium production"}'
+```
+
+The public repository uses only small project-authored synthetic fixtures. It does not ship
+ecoinvent, customer records, or any commercial factor database.
+
+**Release status:** `v0.14.0-rc.2` is a NO-GO for final release because its independently
+frozen sealed run achieved 83.33% Answerable Top-1 against a 90% gate. All safety, abstention,
+recall, replay and HTTP-500 gates passed. See [Release Readiness](docs/RELEASE_READINESS_V0.14.md).
 
 ## Product Scope
 
@@ -41,7 +64,9 @@ The developer-only offline acceptance harness under `tools/` may parse controlle
 
 ## End-to-end demo
 
-Version 0.13.1 adds exact lifecycle-stage qualification, subject and source-quality admission gates, a developer-only offline acceptance harness, and an independently frozen real-query holdout. The default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
+Version 0.14.0-rc.2 adds exact lifecycle-stage, subject, source-quality and unit qualification,
+release hardening, versioned evaluation adjudication and reproducible portfolio evidence. The
+default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
 
 ```bash
 pip install -e ".[test,api]"
@@ -51,7 +76,9 @@ cfr benchmark run data/benchmarks/factorbench_v1.jsonl
 cfr serve --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000` for Query, Benchmark, and Compare views. See [architecture](docs/CFR_ARCHITECTURE.md), [evaluation methodology](docs/CFR_EVALUATION_METHODOLOGY.md), [external-source policy](docs/CFR_EXTERNAL_SOURCE_POLICY.md), and the [aluminium root-cause case study](docs/CFR_ALUMINIUM_RETRIEVAL_ROOT_CAUSE.md).
+Open `http://127.0.0.1:8000` for Query, Benchmark, and Compare views. Start with
+[Architecture](ARCHITECTURE.md), [Evaluation](EVALUATION.md), [Limitations](LIMITATIONS.md),
+[Data License](DATA_LICENSE.md), and [Security](SECURITY.md).
 
 ## Portfolio validation challenge
 
@@ -88,12 +115,10 @@ Full CFR as 0% wrong by scoring retrieval-positive rows only. The challenge has 
 request payloads and mostly exact/alias-positive synthetic cases, so it is a regression
 and safety diagnostic—not evidence of unseen-query generalization.
 
-Fault injection currently freezes three known production findings as strict expected
-failures: local-catalogue timeout/connection failures can return HTTP 500, and connector
-health may echo sensitive exception text. Until separately repaired and retested, this
-validation is useful for portfolio diagnosis but is not a production-readiness claim.
-The governance audit additionally found that a human `REJECTED` record can be overwritten
-by a later approval; the current test proves only that rejection blocks immediate locking.
+Release hardening contains local-catalogue timeout and connection failures without returning
+HTTP 500, redacts connector-health and request-validation exceptions, and keeps transport
+failures visible through stable Trace reason codes. A human `REJECTED` candidate cannot be
+approved later in the same immutable resolution run.
 
 ## Unit System v1
 

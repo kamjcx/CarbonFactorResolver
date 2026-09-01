@@ -1,0 +1,247 @@
+{
+  "source_first_run_sha256": "49b8844aefa234104eb326b04e6fa98bbd1c84789a35bea92c427663155aae3f",
+  "schema_version": "cfr-redacted-demo-traces/v1",
+  "traces": [
+    {
+      "case_id": "R2-ALIAS-102",
+      "category": "alias",
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R2-MOON-ALUMINA"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [
+          "R2-MOON-ALUMINA"
+        ],
+        "retrieved_source_ids": [
+          "R2-MOON-ALUMINA"
+        ]
+      },
+      "trace": {
+        "normalize": {
+          "canonical_name": "月岭氧化铝粉",
+          "material_identity": {
+            "canonical_name": "月岭氧化铝粉",
+            "base_entity_id": "mat.compound.alumina",
+            "product_entity_id": null,
+            "product_family_id": "family.alumina_products",
+            "entity_type": "OXIDE",
+            "chemical_formula": "Al2O3",
+            "constituent_entity_ids": [],
+            "head_material": "alumina",
+            "material_family": "alumina_products",
+            "category": "MANUFACTURED_MINERAL",
+            "product_form": "powder",
+            "grade": null,
+            "composition": null,
+            "surface_coating": null,
+            "manufacturing_route": [],
+            "application": null,
+            "unresolved_attributes": [],
+            "rationale": "entity-first semantic registry material-semantic-registry/2.2.0: materials=('material.alumina/v2',), process=unmatched, form=form.powder/v2, grade=unmatched",
+            "confidence": 0.9
+          },
+          "effective_target_factor_unit": "kgCO2e/kg",
+          "activity_dimension": "MASS",
+          "request_gaps": []
+        },
+        "local_retrieval": {
+          "record_count": 1,
+          "records": [
+            {
+              "source_id": "R2-MOON-ALUMINA",
+              "material_name": "moonridge alumina powder",
+              "factor_value": 1.73,
+              "factor_unit": "kgCO2e/kg"
+            }
+          ],
+          "raw_related_hits": []
+        },
+        "top_k": {
+          "status": "recommendation_ready",
+          "selected_candidate_ids": [
+            "local:R2-MOON-ALUMINA"
+          ],
+          "reviewable_candidate_ids": [],
+          "required_fields": [],
+          "reason_codes": [],
+          "required_choice": null
+        }
+      }
+    },
+    {
+      "case_id": "R2-UNIT-201",
+      "category": "unit",
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R2-MOON-ALUMINA"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [
+          "R2-MOON-ALUMINA"
+        ],
+        "retrieved_source_ids": [
+          "R2-MOON-ALUMINA"
+        ]
+      },
+      "trace": {
+        "normalize": {
+          "canonical_name": "moonridge alumina powder",
+          "material_identity": {
+            "canonical_name": "moonridge alumina powder",
+            "base_entity_id": "mat.compound.alumina",
+            "product_entity_id": null,
+            "product_family_id": "family.alumina_products",
+            "entity_type": "OXIDE",
+            "chemical_formula": "Al2O3",
+            "constituent_entity_ids": [],
+            "head_material": "alumina",
+            "material_family": "alumina_products",
+            "category": "MANUFACTURED_MINERAL",
+            "product_form": "powder",
+            "grade": null,
+            "composition": null,
+            "surface_coating": null,
+            "manufacturing_route": [],
+            "application": null,
+            "unresolved_attributes": [],
+            "rationale": "entity-first semantic registry material-semantic-registry/2.2.0: materials=('material.alumina/v2',), process=unmatched, form=form.powder/v2, grade=unmatched",
+            "confidence": 0.9
+          },
+          "effective_target_factor_unit": "kgCO2e/t",
+          "activity_dimension": "MASS",
+          "request_gaps": []
+        },
+        "local_retrieval": {
+          "record_count": 1,
+          "records": [
+            {
+              "source_id": "R2-MOON-ALUMINA",
+              "material_name": "moonridge alumina powder",
+              "factor_value": 1.73,
+              "factor_unit": "kgCO2e/kg"
+            }
+          ],
+          "raw_related_hits": []
+        },
+        "top_k": {
+          "status": "recommendation_ready",
+          "selected_candidate_ids": [
+            "local:R2-MOON-ALUMINA:unit-converted"
+          ],
+          "reviewable_candidate_ids": [],
+          "required_fields": [],
+          "reason_codes": [],
+          "required_choice": null
+        }
+      }
+    },
+    {
+      "case_id": "R2-MORE-401",
+      "category": "more_input",
+      "expected": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "follow_up": "more-input",
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": [
+          "R2-HARBOR-PRIMARY",
+          "R2-MEADOW-SECONDARY"
+        ]
+      },
+      "trace": {
+        "normalize": {
+          "canonical_name": "metallic aluminium feedstock",
+          "material_identity": {
+            "canonical_name": "metallic aluminium feedstock",
+            "base_entity_id": "mat.element.aluminium",
+            "product_entity_id": null,
+            "product_family_id": "family.aluminium_products",
+            "entity_type": "ELEMENTAL_METAL",
+            "chemical_formula": "Al",
+            "constituent_entity_ids": [],
+            "head_material": "aluminium",
+            "material_family": "aluminium_products",
+            "category": "METAL",
+            "product_form": null,
+            "grade": null,
+            "composition": null,
+            "surface_coating": null,
+            "manufacturing_route": [],
+            "application": null,
+            "unresolved_attributes": [],
+            "rationale": "entity-first semantic registry material-semantic-registry/2.2.0: materials=('material.aluminium/v2',), process=unmatched, form=unmatched, grade=unmatched",
+            "confidence": 0.9
+          },
+          "effective_target_factor_unit": "kgCO2e/kg",
+          "activity_dimension": "MASS",
+          "request_gaps": []
+        },
+        "local_retrieval": {
+          "record_count": 2,
+          "records": [
+            {
+              "source_id": "R2-HARBOR-PRIMARY",
+              "material_name": "harbor primary aluminium billet",
+              "factor_value": 8.12,
+              "factor_unit": "kgCO2e/kg"
+            },
+            {
+              "source_id": "R2-MEADOW-SECONDARY",
+              "material_name": "meadow secondary aluminium billet",
+              "factor_value": 0.71,
+              "factor_unit": "kgCO2e/kg"
+            }
+          ],
+          "raw_related_hits": [
+            "R2-HARBOR-PRIMARY",
+            "R2-MEADOW-SECONDARY"
+          ]
+        },
+        "top_k": {
+          "status": "more_input_needed",
+          "selected_candidate_ids": [],
+          "reviewable_candidate_ids": [],
+          "required_fields": [
+            "route"
+          ],
+          "reason_codes": [],
+          "required_choice": {
+            "field": "route",
+            "options": [
+              "primary",
+              "secondary",
+              "unknown"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

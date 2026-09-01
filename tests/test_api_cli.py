@@ -158,3 +158,51 @@ def test_fastapi_returns_not_found_for_unknown_resolution():
         assert client.get("/api/v1/resolutions/missing").status_code == 404
         assert client.get("/api/v1/traces/missing").status_code == 404
         assert client.get("/api/v1/diagnostics/missing").status_code == 404
+
+
+def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redacted():
+    from fastapi.testclient import TestClient
+
+    from a1_factor_engine.api import (
+        BENCHMARK_COMPARISON_FAILED,
+        BENCHMARK_RUN_FAILED,
+        INVALID_RESOLUTION_REQUEST,
+        create_app,
+    )
+
+    secret = "portfolio-secret-must-not-leak"
+
+    class InvalidEngine(FakeEngine):
+        async def resolve(self, _payload):
+            raise ValueError(f"token={secret} internal://catalog.py:42")
+
+    class InvalidRunner:
+        async def run(self, _path):
+            raise ValueError(f"token={secret} internal://benchmark.py:7")
+
+        def compare(self, _base, _candidate):
+            raise ValueError(f"token={secret} internal://compare.py:8")
+
+    app = create_app(engine=InvalidEngine(), benchmark_runner=InvalidRunner())
+    openapi = app.openapi()
+    documented = openapi["paths"]["/api/v1/resolve"]["post"]["responses"]["400"]
+    assert documented["content"]["application/json"]["example"]["detail"][
+        "reason_code"
+    ] == INVALID_RESOLUTION_REQUEST
+
+    with TestClient(app) as client:
+        resolved = client.post("/api/v1/resolve", json={"material_name": "steel"})
+        benchmark = client.post("/api/v1/benchmarks/runs", json={"path": "cases.jsonl"})
+
+    assert resolved.json()["detail"]["reason_code"] == INVALID_RESOLUTION_REQUEST
+    assert benchmark.json()["detail"]["reason_code"] == BENCHMARK_RUN_FAILED
+    assert secret not in resolved.text + benchmark.text
+
+    runner = InvalidRunner()
+    runner.runs = []
+    app = create_app(engine=FakeEngine(), benchmark_runner=runner)
+    app.state.benchmark_runs.update({"base": {}, "candidate": {}})
+    with TestClient(app) as client:
+        compared = client.get("/api/v1/benchmarks/compare?base=base&candidate=candidate")
+    assert compared.json()["detail"]["reason_code"] == BENCHMARK_COMPARISON_FAILED
+    assert secret not in compared.text

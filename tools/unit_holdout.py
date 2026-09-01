@@ -1,4 +1,4 @@
-"""Run the frozen Unit System v1 holdout without mutating its expected answers."""
+"""Run the Frozen Unit Regression Set without mutating its expected answers."""
 
 from __future__ import annotations
 
@@ -30,24 +30,24 @@ def lf_sha256(path: Path) -> str:
 def load_cases(path: Path = BENCHMARK) -> list[dict[str, Any]]:
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
     if len(rows) < 20:
-        raise ValueError("Unit holdout must contain at least 20 cases")
+        raise ValueError("Frozen Unit Regression Set must contain at least 20 cases")
     ids = [str(row["case_id"]) for row in rows]
     if len(ids) != len(set(ids)):
-        raise ValueError("Unit holdout case IDs must be unique")
+        raise ValueError("Frozen Unit Regression Set case IDs must be unique")
     return rows
 
 
 def load_catalog(path: Path = CATALOG) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload.get("records"), list):
-        raise ValueError("Unit holdout catalog must contain records")
+        raise ValueError("Frozen Unit Regression Set catalog must contain records")
     return payload
 
 
 def verify_frozen_inputs() -> dict[str, str]:
     observed = {"benchmark": lf_sha256(BENCHMARK), "catalog": lf_sha256(CATALOG)}
     if observed != FROZEN_LF_SHA256:
-        raise ValueError(f"frozen Unit holdout hash mismatch: {observed!r}")
+        raise ValueError(f"Frozen Unit Regression Set hash mismatch: {observed!r}")
     return observed
 
 
@@ -145,7 +145,7 @@ async def run_holdout() -> dict[str, Any]:
         },
     }
     return {
-        "schema_version": "unit-holdout-result/v1",
+        "schema_version": "frozen-unit-regression-result/v1",
         "frozen_lf_sha256": hashes,
         "metrics": metrics,
         "results": results,

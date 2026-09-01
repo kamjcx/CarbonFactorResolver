@@ -2737,7 +2737,7 @@ async def test_http_catalog_preserves_live_source_path_and_sha_aliases():
             "indicator": "GWP-total",
             "boundary": "cradle-to-gate",
             "production_process": "electric arc furnace",
-            "source_path": r"D:\evidence\standard.pdf",
+            "source_path": "fixture-evidence/standard.pdf",
             "source_sha256": "a" * 64,
             "primary_label": "产品碳足迹因子",
             "scope": "raw_material",
@@ -2754,7 +2754,7 @@ async def test_http_catalog_preserves_live_source_path_and_sha_aliases():
     ).resolve(request())
 
     source = result.reviewable_candidates[0].source
-    assert source.locator == r"D:\evidence\standard.pdf"
+    assert source.locator == "fixture-evidence/standard.pdf"
     assert source.provenance.source_document_sha256 == "a" * 64
     assert source.metadata["primary_label"] == "产品碳足迹因子"
     assert source.metadata["includes_process"] == "True"

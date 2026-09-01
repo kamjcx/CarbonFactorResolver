@@ -48,6 +48,8 @@ def _result(
         expected_hard_exclusions=hard_exclusions,
         observed_trace_stages=("normalize", "top_k"),
         missing_trace_stages=(),
+        expected_reason_codes=(),
+        observed_reason_codes=(),
         evidence_coverage=evidence,
         latency_ms=latency,
         used_external_fixture=external,
@@ -131,7 +133,7 @@ async def test_factorbench_run_is_deterministic_and_captures_reproducibility_anc
     assert first.registry_version == "material-semantic-registry/2.2.0"
     assert len(first.registry_sha256) == 64
     assert first.git_sha
-    assert first.package_version == "0.13.1"
+    assert first.package_version == "0.14.0rc2"
     assert len(first.catalog_anchors) == 4
     assert len(first.semantic_index_anchors) == 4
     assert first.energy_anchors == ()
@@ -155,6 +157,26 @@ async def test_factorbench_run_is_deterministic_and_captures_reproducibility_anc
     stable_second["baseline_comparison"] = None
     assert stable_first == stable_second
     assert all(delta == 0.0 for delta in compare_runs(first, second).values())
+
+
+@pytest.mark.asyncio
+async def test_factorbench_v2_adjudicates_wrong_unit_without_changing_v1() -> None:
+    v2_path = ROOT / "data" / "benchmarks" / "factorbench_v2.jsonl"
+    v1_case = next(case for case in load_cases(DATASET) if case.case_id == "wrong-unit-53")
+    v2_case = next(case for case in load_cases(v2_path) if case.case_id == "wrong-unit-53")
+
+    assert v1_case.expected_status == "supplier_data_required"
+    assert v1_case.expected_reason_codes == ()
+    assert v2_case.expected_status == "unresolved"
+    assert v2_case.expected_reason_codes == ("UNIT_DIMENSION_MISMATCH",)
+
+    run = await FactorBenchRunner(v2_path, timer=lambda: 0.0).run()
+    result = next(item for item in run.results if item.case_id == "wrong-unit-53")
+    assert result.observed_status == result.expected_status == "unresolved"
+    assert result.observed_reason_codes == result.expected_reason_codes == (
+        "UNIT_DIMENSION_MISMATCH",
+    )
+    assert run.aggregates.correct_abstention == 1.0
 
 
 def test_compare_runs_reports_candidate_minus_baseline():

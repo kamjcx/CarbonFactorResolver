@@ -69,7 +69,7 @@ revision   = 14
 数据库文件对应：
 
 ```text
-D:\carbon-data\emission_factors.db
+<private-data-root>/emission_factors.db
 ```
 
 该锚点用于说明本报告结论对应哪个正式目录版本。数据库更新后，应使用等价请求重新运行并比较 Trace。
