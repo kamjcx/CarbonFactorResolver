@@ -1,6 +1,6 @@
 # CFR RC3 Sealed Holdout Specification
 
-Status: FROZEN after runtime/config commit `5b085f4f33efadef706fe5b51c74bad3030d68fb`
+Status: FROZEN after runtime/config commit `d5abf8e0c110e692e79d99d02f9e9d8de7347bb5`
 
 The RC3 sealed set is a wholly new public-synthetic dataset. It must not reuse rc.1/rc.2
 case IDs, source IDs, product names, numeric values, catalogue version, database anchor,
