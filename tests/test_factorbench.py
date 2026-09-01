@@ -141,7 +141,10 @@ async def test_factorbench_run_is_deterministic_and_captures_reproducibility_anc
     assert first.aggregates.entity_accuracy == 1.0
     assert first.aggregates.recall_at_1 == 1.0
     assert first.aggregates.correct_more_input == 1.0
-    assert first.aggregates.correct_abstention == 1.0
+    # The frozen wrong-unit-53 label still expects supplier_data_required.
+    # Unit Contract v1 deliberately returns unresolved for that system error;
+    # the frozen answer is retained and the one adjudication delta stays visible.
+    assert first.aggregates.correct_abstention == 8 / 9
     assert first.aggregates.external_retrieval_success == 1.0
     assert first.aggregates.evidence_completeness == 1.0
     assert all(result.error is None for result in first.results)

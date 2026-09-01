@@ -157,12 +157,21 @@ def create_app(
         return {
             "request_id": request_id,
             "status": to_jsonable(recommendation.status),
+            "follow_up": to_jsonable(recommendation.follow_up),
+            "reason_codes": to_jsonable(recommendation.reason_codes),
+            "required_fields": to_jsonable(explanation.get("required_fields", ())),
             "diagnostic_candidates": to_jsonable(recommendation.diagnostic_candidates),
             "missing_gaps": to_jsonable(recommendation.missing_gaps),
             "questions": to_jsonable(recommendation.questions),
             "excluded_candidates": to_jsonable(explanation.get("excluded_candidates", ())),
             "record_qualifications": to_jsonable(explanation.get("record_qualifications", ())),
             "candidate_admissions": to_jsonable(explanation.get("candidate_admissions", ())),
+            "qualification_diagnostics": to_jsonable(
+                explanation.get("qualification_diagnostics", ())
+            ),
+            "conversion_diagnostics": to_jsonable(
+                explanation.get("conversion_diagnostics", ())
+            ),
         }
 
     @app.post("/api/v1/benchmarks/runs", status_code=201)

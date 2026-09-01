@@ -80,7 +80,18 @@ from .qualification import (
 from .reference_flow_resolution import resolve_reference_flow
 from .resolution_planner import build_resolution_plan
 from .unit_resolution import resolve_unit_scale
-from .units import convert_factor, convert_mass, is_mass_unit
+from .units import (
+    CATALOG_FACTOR_UNIT_INVALID,
+    UNIT_CONVERSION_EVIDENCE_REQUIRED,
+    UNIT_DIMENSION_MISMATCH,
+    UNIT_SYNTAX_UNSUPPORTED,
+    ActivityDimension,
+    UnitConversionError,
+    convert_activity_decimal,
+    parse_activity_unit,
+    parse_factor_unit,
+    plan_factor_conversion,
+)
 
 
 def _text(value: str | None) -> str:
@@ -271,9 +282,38 @@ def _candidate(
     material_class: MaterialClass | None = None,
 ) -> tuple[Candidate | None, str | None]:
     try:
-        value = convert_factor(source.factor_value, source.factor_unit, activity.target_factor_unit)
-    except ValueError as exc:
-        return None, f"unsupported factor unit: {exc}"
+        factor_plan = plan_factor_conversion(
+            source.factor_unit,
+            activity.target_factor_unit,
+            evidence=activity.unit_conversion_evidence,
+        )
+        if (
+            factor_plan.reason_code == UNIT_DIMENSION_MISMATCH
+            and activity.target_factor_unit_derived
+            and (
+                activity.activity_dimension == "COUNT"
+                or activity.activity_dimension == "VOLUME" and bool(activity.product_form)
+            )
+            and parse_factor_unit(source.factor_unit).activity_unit.dimension
+            == ActivityDimension.MASS
+        ):
+            value = source.factor_value
+            candidate_factor_unit = source.factor_unit
+            resolved_quantity = None
+        else:
+            value = float(factor_plan.convert(source.factor_value))
+            candidate_factor_unit = activity.target_factor_unit
+            target_denominator = parse_factor_unit(activity.target_factor_unit).activity_unit.canonical_unit
+            resolved_quantity = float(convert_activity_decimal(
+                activity.original_quantity,
+                activity.original_quantity_unit,
+                target_denominator,
+                evidence=activity.unit_conversion_evidence,
+            ))
+    except UnitConversionError as exc:
+        return None, exc.reason_code
+    except ValueError:
+        return None, UNIT_SYNTAX_UNSUPPORTED
     dimensions = _evaluate_dimensions(activity, source, origin, material_class)
     weights = _proxy_weights(material_class) if origin == CandidateOrigin.PROXY else WEIGHTS_DIRECT
     score = round(sum(weights[key] * dimensions[key] for key in weights), 6)
@@ -301,7 +341,7 @@ def _candidate(
         resolution_type = ResolutionType.DIRECT_ALIAS
     elif match_strategy == LinkStrategy.RELATED.value:
         resolution_type = ResolutionType.CLASS_GENERIC_PROXY
-    elif source.factor_unit.casefold().replace(" ", "") != activity.target_factor_unit.casefold().replace(" ", ""):
+    elif source.factor_unit.casefold().replace(" ", "") != candidate_factor_unit.casefold().replace(" ", ""):
         resolution_type = ResolutionType.UNIT_CONVERTED
     else:
         resolution_type = ResolutionType.DIRECT_EXACT
@@ -311,7 +351,7 @@ def _candidate(
         source=source,
         provenance=source.provenance,
         factor_value=value,
-        factor_unit=activity.target_factor_unit,
+        factor_unit=candidate_factor_unit,
         score=score,
         reasons=tuple(reasons),
         limitations=tuple(dict.fromkeys(limitations)),
@@ -324,8 +364,7 @@ def _candidate(
         base_source_ids=(source.source_id,),
         resolved_quantity_kg=activity.quantity_kg,
         total_emissions_kgco2e=(
-            activity.quantity_kg * convert_factor(value, activity.target_factor_unit, "kgCO2e/kg")
-            if activity.quantity_kg is not None else None
+            resolved_quantity * value if resolved_quantity is not None else None
         ),
     )
     return finalize_candidate(candidate), None
@@ -450,10 +489,47 @@ class NormalizeNode(Node[GraphState]):
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.NORMALIZE
         interpretation = await self.understanding.interpret(state.request)
-        quantity_kg = (
-            convert_mass(state.request.quantity, state.request.quantity_unit, "kg")
-            if is_mass_unit(state.request.quantity_unit) else None
-        )
+        unit_reason_codes: list[str] = []
+        quantity_kg = None
+        quantity_base = None
+        quantity_base_unit = None
+        activity_dimension = None
+        effective_target = state.request.target_factor_unit
+        try:
+            activity_unit = parse_activity_unit(state.request.quantity_unit)
+            activity_dimension = activity_unit.dimension.value
+            base_units = {
+                ActivityDimension.MASS: "kg",
+                ActivityDimension.ENERGY: "kWh",
+                ActivityDimension.VOLUME: "m3",
+                ActivityDimension.TRANSPORT_WORK: "tkm",
+                ActivityDimension.COUNT: "item",
+            }
+            quantity_base_unit = base_units[activity_unit.dimension]
+            if activity_unit.canonical_unit == "Nm3" and state.request.unit_conversion_evidence is None:
+                quantity_base_unit = "Nm3"
+                quantity_base = state.request.quantity
+            else:
+                quantity_base = float(convert_activity_decimal(
+                    state.request.quantity,
+                    state.request.quantity_unit,
+                    quantity_base_unit,
+                    evidence=state.request.unit_conversion_evidence,
+                ))
+            if activity_unit.dimension == ActivityDimension.MASS:
+                quantity_kg = quantity_base
+            if effective_target is None:
+                effective_target = f"kgCO2e/{activity_unit.canonical_unit}"
+            parsed_target = parse_factor_unit(effective_target)
+            if parsed_target.activity_unit.dimension != activity_unit.dimension:
+                unit_reason_codes.append(UNIT_DIMENSION_MISMATCH)
+        except UnitConversionError as exc:
+            unit_reason_codes.append(exc.reason_code)
+        except ValueError:
+            unit_reason_codes.append(UNIT_SYNTAX_UNSUPPORTED)
+        if effective_target is None:
+            effective_target = f"kgCO2e/{state.request.quantity_unit}"
+        state.unit_reason_codes = tuple(dict.fromkeys(unit_reason_codes))
         canonical = normalize_text(interpretation.canonical_name)
         alias_fields = tuple(normalize_text(alias) for alias in interpretation.aliases)
         product_form = normalize_text(interpretation.product_form or state.request.product_form)
@@ -539,7 +615,7 @@ class NormalizeNode(Node[GraphState]):
             production_process=resolved_process,
             subject_type=subject_type,
             boundary=boundary.value,
-            target_factor_unit=state.request.target_factor_unit,
+            target_factor_unit=effective_target,
             normalization_rule_ids=tuple(dict.fromkeys(rule_ids)),
             original_quantity=state.request.quantity,
             original_quantity_unit=state.request.quantity_unit,
@@ -554,6 +630,12 @@ class NormalizeNode(Node[GraphState]):
             material_mention=registry_resolution.mention,
             identity_resolution=registry_resolution.identity_resolution,
             retrieval_intent=registry_resolution.retrieval_intent,
+            quantity_base=quantity_base,
+            quantity_base_unit=quantity_base_unit,
+            activity_dimension=activity_dimension,
+            unit_reason_codes=state.unit_reason_codes,
+            unit_conversion_evidence=state.request.unit_conversion_evidence,
+            target_factor_unit_derived=state.request.target_factor_unit is None,
         )
         state.trace.normalized_business_fingerprint = normalized_business_fingerprint(state.normalized)
         state.request_gaps = request_gaps
@@ -576,6 +658,12 @@ class NormalizeNode(Node[GraphState]):
             "original_quantity": state.normalized.original_quantity,
             "original_quantity_unit": state.normalized.original_quantity_unit,
             "target_factor_unit": state.normalized.target_factor_unit,
+            "effective_target_factor_unit": state.normalized.target_factor_unit,
+            "target_factor_unit_derived": state.request.target_factor_unit is None,
+            "quantity_base": state.normalized.quantity_base,
+            "quantity_base_unit": state.normalized.quantity_base_unit,
+            "activity_dimension": state.normalized.activity_dimension,
+            "unit_reason_codes": state.unit_reason_codes,
             "normalization_rule_ids": state.normalized.normalization_rule_ids,
             "material_identity": identity.to_dict(),
             "material_mention": (
@@ -713,6 +801,33 @@ class LocalEvaluateNode(Node[GraphState]):
                 )
                 for item in state.qualifications
                 for dimension in dimensions
+            )
+            request_unit_diagnostics: tuple[dict[str, object], ...] = tuple({
+                "source_id": "request",
+                "reason_code": code,
+                "source_unit": state.request.quantity_unit,
+                "target_unit": state.normalized.target_factor_unit,
+            } for code in state.unit_reason_codes)
+            record_unit_diagnostics: tuple[dict[str, object], ...] = tuple({
+                "source_id": item.source_id,
+                "reason_code": reason,
+                "source_unit": next(
+                    (record.factor_unit for record in state.local_records if record.source_id == item.source_id),
+                    None,
+                ),
+                "target_unit": state.normalized.target_factor_unit,
+            }
+            for item in state.qualifications
+            for reason in item.unit.reasons
+            if reason in {
+                UNIT_SYNTAX_UNSUPPORTED,
+                CATALOG_FACTOR_UNIT_INVALID,
+                UNIT_DIMENSION_MISMATCH,
+                UNIT_CONVERSION_EVIDENCE_REQUIRED,
+            })
+            state.unit_conversion_diagnostics = (
+                *request_unit_diagnostics,
+                *record_unit_diagnostics,
             )
             state.candidate_admissions = tuple(admissions)
             state.recall_observations = tuple(observations)
@@ -1207,6 +1322,31 @@ class TopKNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.TOP_K
+        stable_unit_codes = (
+            UNIT_SYNTAX_UNSUPPORTED,
+            CATALOG_FACTOR_UNIT_INVALID,
+            UNIT_DIMENSION_MISMATCH,
+            UNIT_CONVERSION_EVIDENCE_REQUIRED,
+        )
+        observed_unit_codes = set(state.unit_reason_codes)
+        observed_unit_codes.update(
+            reason
+            for item in state.qualifications
+            for reason in item.unit.reasons
+            if reason in stable_unit_codes
+        )
+        observed_unit_codes.update(
+            reason
+            for item in state.excluded_candidates
+            for reason in item.reasons
+            if reason in stable_unit_codes
+        )
+        reason_codes = tuple(code for code in stable_unit_codes if code in observed_unit_codes)
+        if UNIT_CONVERSION_EVIDENCE_REQUIRED in reason_codes:
+            state.required_fields = tuple(dict.fromkeys((
+                *state.required_fields,
+                "unit_conversion_evidence",
+            )))
         eligible = tuple(c for c in state.ranked_candidates if candidate_is_sufficient(c, state))
         reviewable = tuple(
             candidate
@@ -1217,6 +1357,9 @@ class TopKNode(Node[GraphState]):
         if state.request_gaps:
             # Discovery candidates remain in Trace, but incomplete request
             # identity can never silently become a selectable recommendation.
+            eligible = ()
+            reviewable = ()
+        if state.unit_reason_codes:
             eligible = ()
             reviewable = ()
         reviewable_reasons = {
@@ -1296,6 +1439,7 @@ class TopKNode(Node[GraphState]):
                 missing_gaps=unresolved_gaps,
                 questions=questions,
                 accounting_assignments=unique_assignments,
+                reason_codes=reason_codes,
             )
         else:
             from .models import FollowUp, Recommendation, ResolutionStatus
@@ -1304,7 +1448,16 @@ class TopKNode(Node[GraphState]):
             # diagnostics remain only in Trace/exclusions and are never returned.
             reviewable_top = reviewable[: state.request.top_k]
             top = ()
-            if state.required_fields:
+            if UNIT_CONVERSION_EVIDENCE_REQUIRED in reason_codes:
+                follow_up = FollowUp.MORE_INPUT
+                status = ResolutionStatus.MORE_INPUT_NEEDED
+            elif UNIT_SYNTAX_UNSUPPORTED in reason_codes or UNIT_DIMENSION_MISMATCH in reason_codes:
+                follow_up = FollowUp.UNRESOLVED
+                status = ResolutionStatus.UNRESOLVED
+            elif CATALOG_FACTOR_UNIT_INVALID in reason_codes:
+                follow_up = FollowUp.DATA_GOVERNANCE
+                status = ResolutionStatus.UNRESOLVED
+            elif state.required_fields:
                 follow_up = FollowUp.MORE_INPUT
                 status = ResolutionStatus.MORE_INPUT_NEEDED
                 top = ()
@@ -1349,6 +1502,7 @@ class TopKNode(Node[GraphState]):
                 missing_gaps=unresolved_gaps,
                 questions=questions,
                 accounting_assignments=unique_assignments,
+                reason_codes=reason_codes,
             )
             if not state.required_fields and not reviewable_top:
                 state.link_attempts.append(LinkAttempt(
@@ -1383,6 +1537,8 @@ class TopKNode(Node[GraphState]):
                 if state.recommendation.resolution_strength else None
             ),
             "required_fields": state.required_fields,
+            "reason_codes": reason_codes,
+            "conversion_diagnostics": state.unit_conversion_diagnostics,
             "material_identity": state.normalized.material_identity.to_dict() if state.normalized and state.normalized.material_identity else None,
             "request_gaps": tuple({
                 "gap_id": gap.gap_id, "gap_type": gap.gap_type.value, "field": gap.field,

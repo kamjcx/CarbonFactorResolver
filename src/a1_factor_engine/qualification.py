@@ -21,7 +21,17 @@ from .models import (
     SourceQualityStatus,
     SourceRecord,
 )
-from .units import convert_factor, parse_factor_unit
+from .units import (
+    CATALOG_FACTOR_UNIT_INVALID,
+    UNIT_DIMENSION_MISMATCH,
+    UNIT_SYNTAX_UNSUPPORTED,
+    CatalogFactorUnitError,
+    UnitSyntaxError,
+    convert_factor,
+    parse_catalog_factor_unit,
+    parse_factor_unit,
+    plan_factor_conversion,
+)
 
 
 def text(value: str | None) -> str:
@@ -297,9 +307,31 @@ def qualify_record(
         boundary_dim = _dimension(QualificationStatus.UNKNOWN, "boundary is unspecified")
 
     parsed_unit = None
+    unit_exclusion = None
     try:
-        parsed_unit = parse_factor_unit(source.factor_unit)
-        unit_dim = _dimension(QualificationStatus.PASS)
+        parsed_unit = parse_catalog_factor_unit(source.factor_unit)
+        parse_factor_unit(activity.target_factor_unit)
+        conversion = plan_factor_conversion(
+            source.factor_unit,
+            activity.target_factor_unit,
+            evidence=activity.unit_conversion_evidence,
+        )
+        reference_flow_bridge = bool(
+            conversion.reason_code == UNIT_DIMENSION_MISMATCH
+            and activity.target_factor_unit_derived
+            and (
+                activity.activity_dimension == "COUNT"
+                or activity.activity_dimension == "VOLUME" and bool(activity.product_form)
+            )
+            and parsed_unit.activity_unit.dimension.value == "MASS"
+        )
+        if reference_flow_bridge:
+            unit_dim = _dimension(QualificationStatus.PASS, "reference_flow_resolution_required")
+        elif conversion.reason_code:
+            unit_exclusion = conversion.reason_code
+            unit_dim = _dimension(QualificationStatus.MISMATCH, conversion.reason_code)
+        else:
+            unit_dim = _dimension(QualificationStatus.PASS)
         if parsed_unit.reference_product_qualifier and declared_dim.status != QualificationStatus.PASS:
             if not source.declared_product:
                 declared_dim = _dimension(
@@ -310,8 +342,12 @@ def qualify_record(
                 QualificationStatus.UNKNOWN,
                 "product qualifier requires a compatible declared product",
             )
-    except ValueError as exc:
-        unit_dim = _dimension(QualificationStatus.MISMATCH, str(exc))
+    except CatalogFactorUnitError:
+        unit_exclusion = CATALOG_FACTOR_UNIT_INVALID
+        unit_dim = _dimension(QualificationStatus.MISMATCH, CATALOG_FACTOR_UNIT_INVALID)
+    except UnitSyntaxError:
+        unit_exclusion = UNIT_SYNTAX_UNSUPPORTED
+        unit_dim = _dimension(QualificationStatus.MISMATCH, UNIT_SYNTAX_UNSUPPORTED)
 
     exclusions = list(hard_identity_exclusions)
     if kind_dim.status == QualificationStatus.MISMATCH:
@@ -337,7 +373,7 @@ def qualify_record(
     ):
         exclusions.append("unit_qualifier_requires_validation")
     if unit_dim.status == QualificationStatus.MISMATCH:
-        exclusions.append("unit_syntax_mismatch")
+        exclusions.append(unit_exclusion or UNIT_SYNTAX_UNSUPPORTED)
 
     policy_checks: dict[str, QualificationDimension] = {}
     if policy == QualificationPolicy.GRADE_ANCHOR:

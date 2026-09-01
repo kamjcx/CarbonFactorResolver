@@ -10,11 +10,14 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import Enum
 from math import isfinite
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
 from uuid import uuid4
+
+from .units import UnitConversionEvidence
 
 
 def _now() -> datetime:
@@ -1215,7 +1218,10 @@ class ResolutionTrace:
             "parameter_databases": tuple(parameter_databases[key] for key in sorted(parameter_databases)),
             "local_retrieval": dict(local.details) if local else None,
             "retrieval_diagnostics": tuple(local.details.get("retrieval_diagnostics", ())) if local else (),
-            "conversion_diagnostics": tuple(local.details.get("conversion_diagnostics", ())) if local else (),
+            "conversion_diagnostics": (
+                tuple(top_k.details.get("conversion_diagnostics", ())) if top_k
+                else tuple(local.details.get("conversion_diagnostics", ())) if local else ()
+            ),
             "pipeline_funnel": (
                 dict(top_k.details.get("pipeline_funnel") or {}) if top_k
                 else dict(local.details.get("pipeline_funnel") or {}) if local else {}
@@ -1233,6 +1239,7 @@ class ResolutionTrace:
             "assumptions": tuple(re_evaluate.details.get("assumptions", ())) if re_evaluate else (),
             "warnings": tuple(re_evaluate.details.get("warnings", ())) if re_evaluate else (),
             "required_fields": tuple(top_k.details.get("required_fields", ())) if top_k else (),
+            "reason_codes": tuple(top_k.details.get("reason_codes", ())) if top_k else (),
             "material_identity": dict(top_k.details.get("material_identity") or {}) if top_k and top_k.details.get("material_identity") else None,
             "request_gaps": tuple(top_k.details.get("request_gaps", ())) if top_k else (),
             "raw_related_hits": tuple(top_k.details.get("raw_related_hits", ())) if top_k else (),
@@ -1276,6 +1283,16 @@ def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
         "subject_type": request.subject_type.value,
         "boundary": request.boundary,
         "target_factor_unit": request.target_factor_unit,
+        "unit_conversion_evidence": (
+            {
+                "evidence_id": request.unit_conversion_evidence.evidence_id,
+                "version": request.unit_conversion_evidence.version,
+                "source_canonical_unit": request.unit_conversion_evidence.source_canonical_unit,
+                "target_canonical_unit": request.unit_conversion_evidence.target_canonical_unit,
+                "multiplier": str(request.unit_conversion_evidence.multiplier),
+            }
+            if request.unit_conversion_evidence else None
+        ),
         "top_k": request.top_k,
         "min_score": request.min_score,
     }
@@ -1322,6 +1339,9 @@ def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
         ),
         "boundary": normalized(activity.boundary),
         "target_factor_unit": normalized(activity.target_factor_unit),
+        "quantity_base": activity.quantity_base,
+        "quantity_base_unit": normalized(activity.quantity_base_unit),
+        "activity_dimension": activity.activity_dimension,
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -1452,7 +1472,8 @@ class ResolutionRequest:
     production_process: Optional[str] = None
     subject_type: FactorSubjectType = FactorSubjectType.UNKNOWN
     boundary: str = "cradle-to-gate"
-    target_factor_unit: str = "kgCO2e/kg"
+    target_factor_unit: Optional[str] = None
+    unit_conversion_evidence: UnitConversionEvidence | None = None
     top_k: int = 3
     request_id: str = field(default_factory=lambda: str(uuid4()))
     min_score: float = 0.65
@@ -1476,7 +1497,13 @@ class ResolutionRequest:
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "ResolutionRequest":
-        return cls(**dict(value))
+        payload = dict(value)
+        evidence = payload.get("unit_conversion_evidence")
+        if isinstance(evidence, Mapping):
+            evidence_payload = dict(evidence)
+            evidence_payload["multiplier"] = Decimal(str(evidence_payload["multiplier"]))
+            payload["unit_conversion_evidence"] = UnitConversionEvidence(**evidence_payload)
+        return cls(**payload)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1516,6 +1543,12 @@ class NormalizedActivity:
     material_mention: MaterialMention | None = None
     identity_resolution: IdentityResolution | None = None
     retrieval_intent: RetrievalIntent | None = None
+    quantity_base: Optional[float] = None
+    quantity_base_unit: Optional[str] = None
+    activity_dimension: Optional[str] = None
+    unit_reason_codes: tuple[str, ...] = ()
+    unit_conversion_evidence: UnitConversionEvidence | None = None
+    target_factor_unit_derived: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1641,6 +1674,7 @@ class Recommendation:
     missing_gaps: tuple[ResolutionGap, ...] = ()
     questions: tuple[str, ...] = ()
     accounting_assignments: tuple[AccountingAssignment, ...] = ()
+    reason_codes: tuple[str, ...] = ()
     created_at: datetime = field(default_factory=_now)
 
     def __post_init__(self) -> None:

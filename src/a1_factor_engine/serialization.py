@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -20,6 +21,8 @@ def to_jsonable(value: Any) -> Any:
 
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
+    if isinstance(value, Decimal):
+        return str(value)
     if isinstance(value, Enum):
         return to_jsonable(value.value)
     if isinstance(value, (datetime, date)):
