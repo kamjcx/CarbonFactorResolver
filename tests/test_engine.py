@@ -661,6 +661,8 @@ def request(**changes) -> ResolutionRequest:
         boundary="cradle-to-gate",
     )
     values.update(changes)
+    if "target_factor_unit" not in changes and values["quantity_unit"] in {"kg", "t"}:
+        values["target_factor_unit"] = "kgCO2e/kg"
     return ResolutionRequest(**values)
 
 

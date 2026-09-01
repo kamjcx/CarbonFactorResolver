@@ -132,6 +132,8 @@ class GraphState:
     semantic_index_anchor: SemanticIndexAnchor | None = None
     retrieval_diagnostics: tuple[RetrievalDiagnostic, ...] = ()
     conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = ()
+    unit_reason_codes: tuple[str, ...] = ()
+    unit_conversion_diagnostics: tuple[dict[str, object], ...] = ()
     pipeline_funnel: PipelineFunnel = field(default_factory=PipelineFunnel)
     recommendation: Recommendation | None = None
     events: list[AuditEvent] = field(default_factory=list)

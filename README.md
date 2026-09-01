@@ -80,7 +80,7 @@ Current recovered baseline (60 cases, 40 retrieval positives):
 |---|---:|---:|---:|---:|---:|
 | Exact + alias | 95.0% | 95.0% | 7.32% (3/41) | 0% | 0% |
 | Lexical | 100% | 100% | 86.53% (257/297) | 18.86% | 28.96% |
-| Full CFR | 67.5% | 67.5% | 18.18% (6/33) | 0% | 0% |
+| Full CFR | 97.5% | 97.5% | 13.33% (6/45) | 0% | 0% |
 
 The safety rate scores every returned candidate, including candidates emitted for
 negative or `MORE_INPUT` cases. This corrects an earlier evaluator defect that reported
@@ -94,6 +94,22 @@ health may echo sensitive exception text. Until separately repaired and retested
 validation is useful for portfolio diagnosis but is not a production-readiness claim.
 The governance audit additionally found that a human `REJECTED` record can be overwritten
 by a later approval; the current test proves only that rejection blocks immediate locking.
+
+## Unit System v1
+
+CFR qualifies factor denominators by dimension before ranking. The versioned Decimal
+registry covers mass (`g`, `kg`, `t`), energy (`kWh`, `MWh`, `MJ`, `GJ`), volume
+(`m3`, `L`, `Nm3`), transport work (`tkm`, `kgkm`), and controlled count units. If
+`target_factor_unit` is omitted, CFR derives an effective target from the request activity
+unit (for example, `t` derives `kgCO2e/t`) and records that decision
+in Trace.
+
+Unit-system failures are machine-readable and never silently become supplier-data gaps:
+`UNIT_SYNTAX_UNSUPPORTED`, `CATALOG_FACTOR_UNIT_INVALID`,
+`UNIT_DIMENSION_MISMATCH`, and `UNIT_CONVERSION_EVIDENCE_REQUIRED`. `m3 ↔ Nm3`
+requires a direction-specific, versioned evidence record. See
+[Unit System Contract v1](docs/CFR_UNIT_SYSTEM_CONTRACT_V1.md) and the
+[API contract change](docs/CFR_UNIT_SYSTEM_API_CONTRACT_CHANGE_V1.md).
 
 ## Quick start
 

@@ -12,7 +12,7 @@ from .models import (
     RouterType,
 )
 from .qualification import source_identity
-from .units import is_mass_unit
+from .units import parse_activity_unit, parse_factor_unit
 
 
 def _norm(value: object) -> str:
@@ -57,20 +57,36 @@ def analyze_candidate_gaps(
         ))
 
     if source.factor_unit.casefold().replace(" ", "") != activity.target_factor_unit.casefold().replace(" ", ""):
-        add(
-            GapType.UNIT_SCALE, activity.target_factor_unit, source.factor_unit, 0.1,
-            "factor unit requires deterministic scale conversion", RouterType.UNIT_SCALE,
-        )
-    if is_mass_unit(activity.original_quantity_unit) and _norm(activity.original_quantity_unit) != "kg":
-        add(
-            GapType.UNIT_SCALE, "kg", activity.original_quantity_unit, 0.1,
-            "activity quantity requires deterministic mass-unit conversion", RouterType.UNIT_SCALE,
-        )
-    if activity.quantity_kg is None:
-        add(
-            GapType.REFERENCE_FLOW, "mass", activity.original_quantity_unit, 1.0,
-            "activity reference flow is not a mass unit", RouterType.REFERENCE_FLOW,
-        )
+        try:
+            source_factor_unit = parse_factor_unit(source.factor_unit)
+            target_factor_unit = parse_factor_unit(activity.target_factor_unit)
+            if source_factor_unit.activity_unit.dimension == target_factor_unit.activity_unit.dimension:
+                add(
+                    GapType.UNIT_SCALE, activity.target_factor_unit, source.factor_unit, 0.1,
+                    "factor unit requires deterministic scale conversion", RouterType.UNIT_SCALE,
+                )
+        except ValueError:
+            pass
+    try:
+        original_unit = parse_activity_unit(activity.original_quantity_unit)
+        target_unit = parse_factor_unit(candidate.factor_unit).activity_unit
+        if original_unit.canonical_unit != target_unit.canonical_unit:
+            if original_unit.dimension == target_unit.dimension:
+                add(
+                    GapType.UNIT_SCALE, target_unit.canonical_unit, original_unit.canonical_unit, 0.1,
+                    "activity quantity requires deterministic same-dimension conversion",
+                    RouterType.UNIT_SCALE,
+                )
+            else:
+                add(
+                    GapType.REFERENCE_FLOW, target_unit.dimension.value,
+                    original_unit.dimension.value, 1.0,
+                    "activity reference flow requires controlled conversion evidence",
+                    RouterType.REFERENCE_FLOW,
+                )
+    except ValueError:
+        # Unit qualification owns unsupported syntax and dimensional failures.
+        pass
     if _different(activity.production_process, source.production_process):
         add(
             GapType.PROCESS_VARIANT, activity.production_process, source.production_process, 0.8,

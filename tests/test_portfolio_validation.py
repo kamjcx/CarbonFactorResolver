@@ -79,9 +79,10 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
         "CFR-PV-001", "CFR-PV-002", "CFR-PV-003"
     }
     assert all(finding["status"] == "OPEN" for finding in result["known_findings"])
-    assert full["wrong_candidate_rate"] == 6 / 33
+    assert full["wrong_candidate_rate"] == 6 / 45
     assert full["wrong_candidate_count"] == 6
-    assert full["returned_candidate_count"] == 33
+    assert full["returned_candidate_count"] == 45
+    assert full["top_1_correct_count"] == 39
     assert full["boundary_violation_rate"] == 0
     assert full["subject_violation_rate"] == 0
     assert lexical["recall_at_5"] >= full["recall_at_5"]
@@ -99,6 +100,28 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
     full_rows = [row for row in csv_rows if row["method"] == "full_cfr" and row["candidate_id"]]
     assert len(full_rows) == full["returned_candidate_count"]
     assert sum(row["classification"] != "acceptable" for row in full_rows) == full["wrong_candidate_count"]
+    unit_expected = {
+        "ENE-01": "pc:grid-electricity-cn",
+        "ENE-02": "pc:photovoltaic-electricity-cn",
+        "ENE-03": "pc:natural-gas-combustion",
+        "TRN-01": "pc:road-freight",
+        "TRN-02": "pc:rail-freight",
+        "TRN-03": "pc:sea-freight",
+        "TRN-04": "pc:inland-waterway",
+        "TRN-05": "pc:air-freight",
+        "CNF-05": "pc:photovoltaic-electricity-cn",
+        "CNF-06": "pc:grid-electricity-cn",
+        "CNF-07": "pc:rail-freight",
+        "CNF-08": "pc:road-freight",
+    }
+    by_case = {row["case_id"]: row for row in result["runs"]["full_cfr"]["results"]}
+    assert all(
+        by_case[case_id]["observed_decision"] == "retrieve"
+        and source_id in by_case[case_id]["observed_ids"]
+        for case_id, source_id in unit_expected.items()
+    )
+    assert by_case["FIN-05"]["observed_status"] == "more_input_needed"
+    assert by_case["FIN-05"]["observed_ids"] == []
 
 
 def test_error_is_not_counted_as_abstention() -> None:

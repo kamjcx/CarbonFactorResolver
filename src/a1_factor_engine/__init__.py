@@ -107,6 +107,25 @@ from .models import (
     TransformationStep,
 )
 from .process_adjustment import stoichiometric_carbon_emission_kgco2e_per_kg
+from .units import (
+    CATALOG_FACTOR_UNIT_INVALID,
+    UNIT_CONVERSION_EVIDENCE_REQUIRED,
+    UNIT_DIMENSION_MISMATCH,
+    UNIT_SYNTAX_UNSUPPORTED,
+    ActivityDimension,
+    ActivityUnitSpec,
+    ImpactUnitSpec,
+    ParsedFactorUnit,
+    UnitConversionEvidence,
+    UnitConversionResult,
+    convert_activity_decimal,
+    convert_factor_decimal,
+    parse_activity_unit,
+    parse_catalog_factor_unit,
+    parse_factor_unit,
+    plan_activity_conversion,
+    plan_factor_conversion,
+)
 
 __all__ = [
     "A1FactorResolutionEngine",
@@ -209,4 +228,21 @@ __all__ = [
     "SourceRecord",
     "SourceQualityStatus",
     "TransformationStep",
+    "ActivityDimension",
+    "ActivityUnitSpec",
+    "ImpactUnitSpec",
+    "ParsedFactorUnit",
+    "UnitConversionEvidence",
+    "UnitConversionResult",
+    "UNIT_SYNTAX_UNSUPPORTED",
+    "CATALOG_FACTOR_UNIT_INVALID",
+    "UNIT_DIMENSION_MISMATCH",
+    "UNIT_CONVERSION_EVIDENCE_REQUIRED",
+    "parse_activity_unit",
+    "parse_factor_unit",
+    "parse_catalog_factor_unit",
+    "plan_activity_conversion",
+    "plan_factor_conversion",
+    "convert_activity_decimal",
+    "convert_factor_decimal",
 ]
