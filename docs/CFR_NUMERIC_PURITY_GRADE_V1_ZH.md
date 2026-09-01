@@ -1,7 +1,7 @@
 # CFR 实体作用域数字纯度牌号 V1
 
 > 对应实现：A1 Factor Resolution Engine `0.8.0`  
-> 语义注册表：`material-semantic-registry/2.1.0`  
+> 语义注册表：`material-semantic-registry/2.2.0`
 > 文档日期：2026-08-21
 
 ## 1. 目标与边界

@@ -28,7 +28,14 @@ htmlcov/
 *.backup
 *.dump
 *.log
-data/
+data/*
+!data/benchmarks/
+!data/benchmarks/*.jsonl
+!data/fixtures/
+!data/fixtures/catalog/
+!data/fixtures/catalog/*.json
+!data/fixtures/external/
+!data/fixtures/external/*.json
 datasets/
 exports/
 outputs/

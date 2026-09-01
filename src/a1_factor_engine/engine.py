@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .adapters import (
     DeterministicMaterialUnderstanding,
@@ -27,9 +27,13 @@ from .models import (
     ApprovalRecord,
     ApprovalStatus,
     Candidate,
+    CandidateOrigin,
     GapType,
     LockedResolution,
     Recommendation,
+    RequestGap,
+    RequestGapType,
+    RequestResolutionPlan,
     ResolutionRequest,
     ResolutionStatus,
     ResolutionTrace,
@@ -54,8 +58,11 @@ from .nodes import (
     TopKNode,
     UnitScaleResolutionNode,
     ValidateNode,
+    evaluate_records,
 )
 from .ports import (
+    ExternalSourceConnectorPort,
+    FactorEvidenceExtractorPort,
     FactorRepositoryPort,
     GradeSeriesRepositoryPort,
     MaterialUnderstandingPort,
@@ -78,6 +85,8 @@ class A1ResolutionGraph:
     grade_series: GradeSeriesRepositoryPort
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
     rule_suggestions: MaterialRuleSuggestionPort = NullMaterialRuleSuggestion()
+    external_connectors: Sequence[ExternalSourceConnectorPort] = ()
+    external_extractor: FactorEvidenceExtractorPort | None = None
 
     def __post_init__(self) -> None:
         self.validate = ValidateNode()
@@ -130,6 +139,104 @@ class A1ResolutionGraph:
             resolved.extend(state.resolution_candidates)
         state.resolution_candidates = tuple(resolved)
 
+    async def _discover_external(self, state: GraphState) -> None:
+        if not self.external_connectors or self.external_extractor is None or state.normalized is None:
+            return
+        intent = state.normalized.retrieval_intent
+        if intent is None:
+            return
+        records = []
+        for connector in self.external_connectors:
+            try:
+                references = await connector.discover(intent)
+            except Exception as exc:
+                state.event(Stage.EXTERNAL_DISCOVERY, "external connector discovery unavailable", {
+                    "connector": type(connector).__name__,
+                    "reference_count": 0,
+                    "source_ids": (),
+                    "reason_code": type(exc).__name__,
+                })
+                continue
+            state.event(Stage.EXTERNAL_DISCOVERY, "external connector discovery completed", {
+                "connector": type(connector).__name__, "reference_count": len(references),
+                "source_ids": tuple(str(item.get("source_id", "")) for item in references),
+            })
+            fetch = getattr(connector, "fetch", None)
+            if fetch is None:
+                continue
+            for reference in references:
+                try:
+                    document = await fetch(reference)
+                    state.event(Stage.EXTERNAL_FETCH, "external evidence document fetched", {
+                        "source_id": str(reference.get("source_id", "")),
+                        "content_sha256": str(document.get("content_sha256", "")),
+                    })
+                    extracted = await self.external_extractor.extract(document, intent)
+                    records.extend(extracted)
+                except Exception as exc:
+                    state.event(Stage.EXTERNAL_FETCH, "external evidence rejected", {
+                        "source_id": str(reference.get("source_id", "")),
+                        "reason_code": type(exc).__name__,
+                    })
+        state.external_records = tuple(records)
+        state.event(Stage.EVIDENCE_EXTRACTION, "external evidence extraction completed", {
+            "record_count": len(records),
+            "source_ids": tuple(record.source_id for record in records),
+        })
+        if records:
+            candidates, exclusions = await evaluate_records(
+                state.normalized, records, CandidateOrigin.EXTERNAL,
+                self.understanding, registry=self.material_registry,
+            )
+            state.external_candidates = candidates
+            state.excluded_candidates.extend(exclusions)
+            identity = state.normalized.identity_resolution
+            if identity and identity.selected_product_entity_id is None:
+                product_routes = {
+                    "mat.product.primary_aluminium": "primary",
+                    "mat.product.secondary_aluminium": "secondary",
+                }
+                process_routes = {
+                    "primary aluminium production": "primary",
+                    "secondary aluminium production": "secondary",
+                }
+                variants = tuple(dict.fromkeys(
+                    product_routes.get(item.source.metadata.get("product_entity_id", ""))
+                    or process_routes.get((item.source.production_process or "").casefold())
+                    for item in candidates
+                    if (
+                        product_routes.get(item.source.metadata.get("product_entity_id", ""))
+                        or process_routes.get((item.source.production_process or "").casefold())
+                    )
+                ))
+                if len(variants) > 1 and not any(gap.field == "route" for gap in state.request_gaps):
+                    route_gap = RequestGap(
+                        gap_id=f"{state.request.request_id}:route",
+                        gap_type=RequestGapType.INPUT_SPECIFICATION,
+                        field="route",
+                        reason=(
+                            "the generic material identity has multiple product-route variants; "
+                            "select a route before choosing a factor"
+                        ),
+                        required=True,
+                        options=variants + ("unknown",),
+                    )
+                    state.request_gaps = tuple((*state.request_gaps, route_gap))
+                    state.required_fields = tuple(dict.fromkeys((*state.required_fields, "route")))
+                    state.request_resolution_plan = RequestResolutionPlan(
+                        request_id=state.request.request_id,
+                        gaps=state.request_gaps,
+                        next_question=route_gap,
+                        provisional_options=state.provisional_options,
+                    )
+            state.event(Stage.EXTERNAL_QUALIFICATION, "external records qualified", {
+                "qualified_count": len(candidates),
+                "excluded": tuple({"source_id": item.source_id, "reasons": item.reasons} for item in exclusions),
+            })
+            state.event(Stage.EXTERNAL_CANDIDATE, "external candidates entered existing resolution graph", {
+                "candidate_ids": tuple(item.candidate_id for item in candidates),
+            })
+
     async def run(self, request: ResolutionRequest) -> GraphState:
         state = GraphState(request=request)
         await self.validate.run(state)
@@ -146,6 +253,11 @@ class A1ResolutionGraph:
 
         await self.local.run(state)
         await self.local_evaluate.run(state)
+        if state.request_gaps:
+            # Discovery is evidence, not selection. A broad request such as
+            # generic aluminium must still show available route variants while
+            # the terminal decision remains MORE_INPUT_NEEDED.
+            await self._discover_external(state)
         if state.request_gaps and state.resolution_candidates:
             # A broad family request cannot silently choose a subtype record;
             # retain its raw/qualification evidence and ask the smallest
@@ -184,7 +296,15 @@ class A1ResolutionGraph:
                 "reason": "formal local and bounded related-candidate retrieval produced no evaluable candidates after record qualification",
             })
 
-        needs_class_proxy = not state.required_fields and (
+        if not state.resolution_candidates and not state.request_gaps:
+            await self._discover_external(state)
+            if state.external_candidates:
+                state.resolution_candidates = state.external_candidates
+                await self.gap_analysis.run(state)
+                await self.planner.run(state)
+                await self._resolve_current_candidates(state)
+
+        needs_class_proxy = not state.required_fields and not state.external_candidates and (
             not state.resolution_candidates or any(
                 any(gap.gap_type == GapType.MATERIAL_ABSENT for gap in candidate.gaps)
                 for candidate in state.resolution_candidates
@@ -228,6 +348,8 @@ class A1FactorResolutionEngine:
         grade_series: GradeSeriesRepositoryPort | None = None,
         material_registry: MaterialSemanticRegistryPort | None = None,
         rule_suggestions: MaterialRuleSuggestionPort | None = None,
+        external_connectors: Sequence[ExternalSourceConnectorPort] = (),
+        external_extractor: FactorEvidenceExtractorPort | None = None,
         store: ResolutionStorePort | None = None,
     ) -> None:
         self.store = store or InMemoryResolutionStore()
@@ -240,6 +362,8 @@ class A1FactorResolutionEngine:
             grade_series or NullGradeSeriesRepository(),
             material_registry or DEFAULT_MATERIAL_REGISTRY,
             rule_suggestions or NullMaterialRuleSuggestion(),
+            external_connectors,
+            external_extractor,
         )
 
     async def resolve(self, request: ResolutionRequest | Mapping[str, object]) -> Recommendation:

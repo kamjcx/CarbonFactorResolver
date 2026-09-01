@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 from .matching import normalize_text
@@ -9,12 +10,15 @@ from .material_registry import DEFAULT_MATERIAL_REGISTRY, MaterialSemanticRegist
 from .models import (
     CandidateQualification,
     FactorKind,
+    FactorSubjectType,
+    LinkStrategy,
     MaterialCategory,
     MaterialIdentity,
     NormalizedActivity,
     QualificationDimension,
     QualificationPolicy,
     QualificationStatus,
+    SourceQualityStatus,
     SourceRecord,
 )
 from .units import convert_factor, parse_factor_unit
@@ -93,6 +97,20 @@ def qualify_record(
     hard_identity_exclusions: list[str] = []
     strategy = source.metadata.get("match_strategy", "exact_link")
     exact_primary_name = text(activity.canonical_name) == text(source.material_name)
+    raw_aliases = source.metadata.get("aliases", "")
+    try:
+        parsed_aliases = json.loads(raw_aliases) if isinstance(raw_aliases, str) else raw_aliases
+    except json.JSONDecodeError:
+        parsed_aliases = ()
+    source_aliases = (
+        {text(str(alias)) for alias in parsed_aliases}
+        if isinstance(parsed_aliases, (list, tuple))
+        else set()
+    )
+    reviewed_alias_match = (
+        strategy == LinkStrategy.SYNONYM.value
+        and text(activity.canonical_name) in source_aliases
+    )
 
     def compare_identity(field: str, target_value: object, observed_value: object, *, always_hard: bool) -> None:
         if target_value in (None, "") or observed_value in (None, "") or target_value == observed_value:
@@ -129,7 +147,7 @@ def qualify_record(
             )
             hard_identity_exclusions.append("base_entity_id_mismatch")
     elif policy == QualificationPolicy.DIRECT and not target.base_entity_id and not observed.base_entity_id:
-        if exact_primary_name and strategy == "exact_link":
+        if (exact_primary_name and strategy == LinkStrategy.EXACT.value) or reviewed_alias_match:
             # A formal catalogue primary-name exact match is valid for this
             # Direct record only; it does not enable Related or Proxy recall.
             pass
@@ -138,11 +156,26 @@ def qualify_record(
             hard_identity_exclusions.append("identity_proof_missing")
     compare_identity("material_family", target.material_family, observed.material_family, always_hard=False)
     compare_identity("head_material", target.head_material, observed.head_material, always_hard=False)
+    compare_identity(
+        "product_entity_id",
+        target.product_entity_id,
+        observed.product_entity_id,
+        always_hard=True,
+    )
+    if target.product_entity_id and not observed.product_entity_id:
+        identity_reasons.append("source product_entity_id is missing for a product-specific request")
+        hard_identity_exclusions.append("product_entity_id_missing")
+    compare_identity(
+        "product_form",
+        target.product_form,
+        observed.product_form,
+        always_hard=False,
+    )
     identity_status = (
         QualificationStatus.MISMATCH
         if identity_reasons
         else QualificationStatus.PASS
-        if observed.base_entity_id or exact_primary_name or target.category != MaterialCategory.UNKNOWN
+        if observed.base_entity_id or exact_primary_name or reviewed_alias_match or target.category != MaterialCategory.UNKNOWN
         else QualificationStatus.UNKNOWN
     )
 
@@ -157,6 +190,30 @@ def qualify_record(
     else:
         kind_dim = _dimension(QualificationStatus.UNKNOWN, "factor kind is not explicitly classified")
 
+    if (
+        activity.subject_type != FactorSubjectType.UNKNOWN
+        and source.subject_type != FactorSubjectType.UNKNOWN
+        and activity.subject_type != source.subject_type
+    ):
+        subject_dim = _dimension(
+            QualificationStatus.MISMATCH,
+            f"factor subject {source.subject_type.value!r} is not request subject {activity.subject_type.value!r}",
+        )
+    elif source.subject_type == FactorSubjectType.UNKNOWN:
+        subject_dim = _dimension(QualificationStatus.UNKNOWN, "factor subject type is unspecified")
+    else:
+        subject_dim = _dimension(QualificationStatus.PASS)
+
+    if not source.admission_eligible or source.source_quality_status == SourceQualityStatus.REJECTED:
+        quality_dim = _dimension(
+            QualificationStatus.MISMATCH,
+            f"source quality status {source.source_quality_status.value} is not admission eligible",
+        )
+    elif source.source_quality_status == SourceQualityStatus.NEEDS_REVIEW:
+        quality_dim = _dimension(QualificationStatus.UNKNOWN, "source quality requires human review")
+    else:
+        quality_dim = _dimension(QualificationStatus.PASS)
+
     if source.indicator in ("GWP-total", "gwp-total"):
         indicator_dim = _dimension(QualificationStatus.PASS)
     elif source.indicator in (None, ""):
@@ -167,12 +224,27 @@ def qualify_record(
             f"indicator {source.indicator!r} is not GWP-total",
         )
 
+    declared_identity = (
+        material_identity(source.declared_product, registry=registry)
+        if source.declared_product else None
+    )
+    declared_entity_compatible = bool(
+        declared_identity
+        and target.base_entity_id
+        and declared_identity.base_entity_id == target.base_entity_id
+        and (
+            not target.product_entity_id
+            or not declared_identity.product_entity_id
+            or declared_identity.product_entity_id == target.product_entity_id
+        )
+    )
     if not source.declared_product:
         declared_dim = _dimension(QualificationStatus.UNKNOWN, "declared product is unspecified")
     elif (
         text(target.canonical_name) in text(source.declared_product)
         or text(source.declared_product) in text(target.canonical_name)
-        or (target.head_material and target.head_material == observed.head_material)
+        or declared_entity_compatible
+        or reviewed_alias_match
     ):
         declared_dim = _dimension(QualificationStatus.PASS)
     else:
@@ -182,25 +254,35 @@ def qualify_record(
         )
 
     target_boundary = text(activity.boundary).replace(" ", "-")
-    required_modules: set[str] = set()
-    if target_boundary in {"cradle-to-gate", "a1-a3", "a1–a3"}:
-        required_modules = {"A1", "A2", "A3"}
-    elif target_boundary == "a1":
-        required_modules = {"A1"}
+    boundary_aliases = {
+        "a1": frozenset({"A1"}),
+        "a2": frozenset({"A2"}),
+        "a3": frozenset({"A3"}),
+        "a1-a3": frozenset({"A1", "A2", "A3"}),
+        "a1–a3": frozenset({"A1", "A2", "A3"}),
+        "cradle-to-gate": frozenset({"A1", "A2", "A3"}),
+    }
+    required_modules = boundary_aliases.get(target_boundary)
     observed_modules = {str(module).strip().upper() for module in source.boundary_modules if str(module).strip()}
-    if observed_modules:
+    if required_modules is None:
+        boundary_dim = _dimension(
+            QualificationStatus.MISMATCH,
+            f"unsupported request boundary {activity.boundary!r}",
+        )
+    elif observed_modules:
         boundary_dim = (
             _dimension(QualificationStatus.PASS)
-            if not required_modules or required_modules.issubset(observed_modules)
+            if required_modules is not None and required_modules == observed_modules
             else _dimension(
                 QualificationStatus.MISMATCH,
-                f"boundary modules {sorted(observed_modules)!r} do not cover {sorted(required_modules)!r}",
+                f"boundary modules {sorted(observed_modules)!r} are not exact request modules "
+                f"{sorted(required_modules) if required_modules is not None else [activity.boundary]!r}",
             )
         )
     elif source.boundary:
         observed_boundary = text(source.boundary).replace(" ", "-")
         equivalent = observed_boundary == target_boundary or (
-            required_modules == {"A1", "A2", "A3"}
+            required_modules == frozenset({"A1", "A2", "A3"})
             and observed_boundary in {"a1-a3", "a1–a3", "cradle-to-gate"}
         )
         boundary_dim = (
@@ -234,6 +316,13 @@ def qualify_record(
     exclusions = list(hard_identity_exclusions)
     if kind_dim.status == QualificationStatus.MISMATCH:
         exclusions.append("factor_kind_mismatch")
+    if (
+        activity.subject_type != FactorSubjectType.UNKNOWN
+        and subject_dim.status != QualificationStatus.PASS
+    ):
+        exclusions.append("subject_type_mismatch")
+    if quality_dim.status != QualificationStatus.PASS:
+        exclusions.append("source_quality_not_admissible")
     if indicator_dim.status == QualificationStatus.MISMATCH:
         exclusions.append("indicator_mismatch")
     if declared_dim.status == QualificationStatus.MISMATCH and policy == QualificationPolicy.DIRECT:
@@ -302,6 +391,7 @@ def qualify_record(
             policy_checks["reference_unit"] = _dimension(QualificationStatus.MISMATCH, str(exc))
         strict_dimensions = {
             "factor_kind": kind_dim,
+            "source_quality": quality_dim,
             "indicator": indicator_dim,
             "declared_product": declared_dim,
             "boundary": boundary_dim,
@@ -317,6 +407,8 @@ def qualify_record(
         source_id=source.source_id,
         identity=_dimension(identity_status, *identity_reasons),
         factor_kind=kind_dim,
+        subject_type=subject_dim,
+        source_quality=quality_dim,
         indicator=indicator_dim,
         declared_product=declared_dim,
         boundary=boundary_dim,

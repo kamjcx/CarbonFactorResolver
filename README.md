@@ -2,6 +2,57 @@
 
 CarbonFactorResolver（CFR，碳因子解析引擎）是独立、框架无关的 Python 3.11+ Graph Engineering 引擎，用于对原材料、能源与工艺相关的碳因子进行有证据约束的检索、语义匹配、代理解析和审计追溯。
 
+## Product Scope
+
+### In Scope
+
+CarbonFactorResolver receives a structured `FactorQuery` / `ResolutionRequest` and performs:
+
+- entity resolution for materials, energy, transport, processes, and other factor subjects;
+- retrieval from local catalogues and structured external factor sources;
+- qualification, factor resolution, deterministic ranking, and explanation;
+- human review support and immutable factor locking.
+
+`FactorQuery` is the upstream integration concept; adapters map it to the single runtime contract, `ResolutionRequest`. It is not a second request model and cannot contain file uploads.
+
+### Out of Scope
+
+CarbonFactorResolver does **not** perform:
+
+- PDF, DOCX, Excel, image, or scanned-document parsing;
+- OCR;
+- enterprise-document interpretation;
+- BOM, activity-data, or procurement-ledger extraction;
+- full product-carbon-footprint calculation;
+- Word/PDF report generation; or
+- automatic writes to, or automatic approval in, a formal factor catalogue.
+
+### Upstream/Downstream Integration
+
+Document understanding and activity-data extraction belong upstream to Document Intelligence or `carbon-report`. Product-footprint calculation and report generation belong downstream to `carbon-report`. The production boundary is:
+
+```mermaid
+flowchart LR
+    A[Document Intelligence / carbon-report] -->|structured ResolutionRequest| B[CarbonFactorResolver]
+    B -->|reviewed / locked factor| C[carbon-report calculation and report generation]
+```
+
+The developer-only offline acceptance harness under `tools/` may parse controlled test documents to construct isolated fixtures. It is not part of the production runtime or CFR API and does not make document parsing a CarbonFactorResolver capability.
+
+## End-to-end demo
+
+Version 0.13.1 adds exact lifecycle-stage qualification, subject and source-quality admission gates, a developer-only offline acceptance harness, and an independently frozen real-query holdout. The default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
+
+```bash
+pip install -e ".[test,api]"
+cfr resolve --material "aluminium" --quantity 1 --unit t
+cfr resolve --material "primary aluminium ingot" --quantity 1 --unit t --process "primary aluminium production"
+cfr benchmark run data/benchmarks/factorbench_v1.jsonl
+cfr serve --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000` for Query, Benchmark, and Compare views. See [architecture](docs/CFR_ARCHITECTURE.md), [evaluation methodology](docs/CFR_EVALUATION_METHODOLOGY.md), [external-source policy](docs/CFR_EXTERNAL_SOURCE_POLICY.md), and the [aluminium root-cause case study](docs/CFR_ALUMINIUM_RETRIEVAL_ROOT_CAUSE.md).
+
 ## Quick start
 
 ```python
@@ -16,6 +67,8 @@ record = SourceRecord(
     composition="carbon steel", production_process="electric arc furnace",
     boundary="cradle-to-gate", citation="EPD-001",
     factor_kind=FactorKind.EPD_INDICATOR, indicator="GWP-total",
+    subject_type="finished_product", source_quality_status="verified",
+    admission_eligible=True,
 )
 engine = A1FactorResolutionEngine(
     local_retrieval=InMemoryFactorRepository([record]),
@@ -144,7 +197,7 @@ Version 0.12.0 uses a separate read-only SQLite evidence database for process-ro
 The supplied standard can be imported locally without committing either the PDF or generated database:
 
 ```powershell
-pip install -e ".[energy-import]"
+pip install -e ".[energy-db-build]"
 python tools/import_refractory_energy_standard.py `
   path\to\T_CHNRISC_0008_2025.pdf `
   path\to\energy_parameters.db `
@@ -241,7 +294,7 @@ The V1 store rejects a duplicate `request_id` and atomically saves the initial R
 - Unknown factor kind or indicator can be inspected but cannot become Primary.
 - HTTP catalogue records preserve original document locator, SHA-256, page, table and row when the API supplies them; the engine never invents missing provenance.
 - Supplier source quality depends on verification, audit and documentation evidence rather than the supplier label alone.
-- The GitHub Actions workflow runs Python 3.11 lock, test, compile and Ruff I/F checks.
+- The GitHub Actions workflow runs Python 3.11 lock verification, coverage tests, compile, full Ruff, mypy, FactorBench, package build, and a container health gate.
 
 ## Upstream engineering influences
 
@@ -251,7 +304,7 @@ The refinement adopts selected ideas rather than copying any upstream runtime:
 - [Amazon carbon-assessment-with-ml](https://github.com/amazon-science/carbon-assessment-with-ml): bounded candidate retrieval and ranked recommendation from Flamingo/Parakeet. V1 keeps candidate IDs bounded while deterministic formulas and human approval remain authoritative.
 - [Brightway2-io](https://github.com/brightway-lca/brightway2-io): sequential linking strategies and preserved unlinked state. V1 exposes the complete strategy ledger and terminates explicitly at unresolved instead of silently relinking.
 
-The dedicated External Retrieval/Evaluate graph lane remains intentionally absent. Formal database, EPD or literature provenance can still enter through repository ports; Proxy is a fallback after direct local retrieval, not a shortcut around it.
+The structured factor-source discovery/fetch/validation lane runs after insufficient local evidence and before proxy fallback. It accepts only hash-pinned structured records and reuses the same qualification, approval, and locking path; search snippets and unstructured documents cannot originate factors.
 
 ## Version 0.12 diagnostic and process-accounting contract
 

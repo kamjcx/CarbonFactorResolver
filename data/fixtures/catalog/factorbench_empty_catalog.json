@@ -1,0 +1,8 @@
+{
+  "catalog_version": "factorbench-synthetic-empty/v1",
+  "database": {
+    "name": "factorbench-public-synthetic-empty",
+    "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "records": []
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Factor Resolution Console</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+</head>
+<body>
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">A1 EVIDENCE SYSTEM</p>
+      <h1>Factor Resolution Console</h1>
+    </div>
+    <span id="service-status" class="status">checking service</span>
+  </header>
+
+  <main>
+    <nav class="tabs" aria-label="Dashboard sections">
+      <button class="tab active" data-tab="query">Query</button>
+      <button class="tab" data-tab="benchmark">Benchmark</button>
+      <button class="tab" data-tab="compare">Compare</button>
+    </nav>
+
+    <section id="query" class="panel active">
+      <div class="panel-heading">
+        <div><p class="kicker">ONE REQUEST</p><h2>Trace a factor decision</h2></div>
+        <p>Inspect what entered the pipeline, what was removed, and why the terminal result was reached.</p>
+      </div>
+      <form id="query-form" class="input-grid">
+        <label>Material<input name="material_name" required placeholder="steel coil"></label>
+        <label>Quantity<input name="quantity" required type="number" min="0" step="any" value="1000"></label>
+        <label>Unit<input name="quantity_unit" required value="kg"></label>
+        <label>Process<input name="production_process" placeholder="electric arc furnace"></label>
+        <button type="submit">Resolve factor</button>
+      </form>
+      <div id="query-error" class="error" role="alert"></div>
+      <div class="pipeline" aria-label="Resolution pipeline">
+        <article><small>01</small><h3>Identity</h3><p id="pipe-identity">—</p></article>
+        <article><small>02</small><h3>Hits</h3><p id="pipe-hits">—</p></article>
+        <article><small>03</small><h3>Drops</h3><p id="pipe-drops">—</p></article>
+        <article><small>04</small><h3>Qualification</h3><p id="pipe-qualification">—</p></article>
+        <article><small>05</small><h3>Candidates</h3><p id="pipe-candidates">—</p></article>
+        <article class="terminal"><small>06</small><h3>Terminal</h3><p id="pipe-terminal">—</p></article>
+      </div>
+      <div class="table-card">
+        <div class="table-title"><h3>Candidate evidence</h3><span id="request-id">No request yet</span></div>
+        <div class="table-scroll"><table><thead><tr><th>Source</th><th>Factor</th><th>Score</th><th>Tier</th><th>Reason</th></tr></thead><tbody id="candidate-rows"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="benchmark" class="panel">
+      <div class="panel-heading"><div><p class="kicker">FACTORBENCH</p><h2>Run an evaluation set</h2></div><p>Runs are kept in this process for quick development comparisons.</p></div>
+      <form id="benchmark-form" class="inline-form"><label>Dataset path<input name="path" required placeholder="factorbench.jsonl"></label><button type="submit">Run benchmark</button></form>
+      <div id="benchmark-error" class="error" role="alert"></div>
+      <div class="metric-grid" id="metric-grid"></div>
+      <div class="table-card"><div class="table-title"><h3>Metrics</h3><span id="benchmark-run-id">No run yet</span></div><div class="table-scroll"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody id="metric-rows"></tbody></table></div></div>
+    </section>
+
+    <section id="compare" class="panel">
+      <div class="panel-heading"><div><p class="kicker">REGRESSION GATE</p><h2>Compare two runs</h2></div><p>Positive and negative movement stay visible; the dashboard never approves a run.</p></div>
+      <form id="compare-form" class="input-grid compare-form"><label>Base run ID<input name="base" required></label><label>Candidate run ID<input name="candidate" required></label><button type="submit">Compare runs</button></form>
+      <div id="compare-error" class="error" role="alert"></div>
+      <div class="table-card"><div class="table-title"><h3>Metric deltas</h3><span>candidate − base</span></div><div class="table-scroll"><table><thead><tr><th>Metric</th><th>Delta</th><th>Signal</th></tr></thead><tbody id="regression-rows"></tbody></table></div></div>
+    </section>
+  </main>
+  <script src="/assets/dashboard.js?v=0.13.0" defer></script>
+</body>
+</html>

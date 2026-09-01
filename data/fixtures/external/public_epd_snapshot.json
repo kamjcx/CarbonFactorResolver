@@ -1,0 +1,28 @@
+{
+  "snapshot_version": "public-structured-epd-v1",
+  "records": [
+    {
+      "source_id": "public-epd-alumina-demo-001",
+      "document_kind": "structured_epd",
+      "subject_type": "raw_material",
+      "source_quality_status": "VERIFIED",
+      "admission_eligible": true,
+      "source_type": "epd",
+      "material_name": "alumina",
+      "aliases": ["aluminium oxide", "aluminum oxide"],
+      "factor_value": 1.3,
+      "factor_unit": "kgCO2e/kg",
+      "indicator": "GWP-total",
+      "declared_product": "1 kg alumina",
+      "boundary": "product stage",
+      "boundary_modules": ["A1", "A2", "A3"],
+      "geography": "Demonstration dataset",
+      "year": 2023,
+      "source_locator": "https://example.invalid/public-epd/alumina-demo-001",
+      "evidence_locator": "https://example.invalid/public-epd/alumina-demo-001#GWP-total-A1-A3",
+      "citation": "Synthetic public-structure snapshot; not an EPD claim.",
+      "excerpt": "Non-licensed demonstration content.",
+      "license": "CC0-synthetic-demo"
+    }
+  ]
+}

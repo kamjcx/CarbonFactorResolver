@@ -7,6 +7,8 @@ import json
 from dataclasses import dataclass, field, replace
 from typing import Sequence
 
+from rapidfuzz.fuzz import ratio
+
 from .matching import normalize_text
 from .material_registry import MaterialSemanticRegistryPort
 from .models import (
@@ -47,6 +49,13 @@ def _with_strategy(record: SourceRecord, strategy: LinkStrategy, index_version: 
         "match_strategy": strategy.value,
         "semantic_index_version": index_version,
     })
+
+
+def _lexical_score(query: str, value: str) -> float:
+    q_tokens = set(query.split()) | {query[index:index + 2] for index in range(max(0, len(query) - 1))}
+    v_tokens = set(value.split()) | {value[index:index + 2] for index in range(max(0, len(value) - 1))}
+    overlap = len(q_tokens & v_tokens) / max(1, len(q_tokens | v_tokens))
+    return max(overlap, (ratio(query, value) / 100) * 0.5)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +136,35 @@ class SemanticFactorIndex:
                 if record.source_id not in used
                 and record.metadata.get("identity_outcome") == IdentityOutcome.RESOLVED.value
                 and record.metadata.get("base_entity_id") == intent.base_entity_id
+                and (
+                    not intent.allowed_product_entity_ids
+                    or record.metadata.get("product_entity_id") in intent.allowed_product_entity_ids
+                )
             )
+
+        admitted_ids = {record.source_id for record in (*exact, *synonym, *related)}
+        lexical_ranked = tuple(sorted(
+            (
+                (record, _lexical_score(query, _norm(record.material_name)))
+                for record in self.records
+                if record.source_id not in admitted_ids and query
+            ),
+            key=lambda item: (-item[1], item[0].source_id),
+        ))
+        lexical_observations = tuple(
+            RecallObservation(
+                source_id=record.source_id,
+                material_name=record.material_name,
+                retrieval_strategy=LinkStrategy.RELATED,
+                retrieval_basis=("lexical_recall_only", f"score={score:.6f}"),
+                identity_compatibility="not_proven",
+                factor_kind=record.factor_kind,
+                eligible_for_candidate_pool=False,
+                primary_exclusion="lexical_similarity_is_not_identity_authority",
+            )
+            for record, score in lexical_ranked[:5]
+            if score >= 0.35
+        )
 
         attempts = (
             self._attempt(
@@ -164,5 +201,18 @@ class SemanticFactorIndex:
                 eligible_for_candidate_pool=True,
             )
             for record in related
-        )
-        return SemanticIndexQueryResult((*exact, *synonym, *related), attempts, observations, self.anchor)
+        ) + lexical_observations
+        ranked = []
+        for record in (*exact, *synonym, *related):
+            channel = record.metadata.get("match_strategy", LinkStrategy.RELATED.value)
+            rank = next(
+                index for index, item in enumerate((*exact, *synonym, *related), start=1)
+                if item.source_id == record.source_id
+            )
+            ranked.append(replace(record, metadata={
+                **record.metadata,
+                "retrieval_channels": channel,
+                "rrf_score": f"{1 / (60 + rank):.12f}",
+                "identity_confidence": "1.0" if record.metadata.get("base_entity_id") == intent.base_entity_id else "0.0",
+            }))
+        return SemanticIndexQueryResult(tuple(ranked), attempts, observations, self.anchor)

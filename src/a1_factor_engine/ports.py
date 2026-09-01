@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 from .models import (
     ApprovalRecord,
@@ -38,6 +38,28 @@ class MaterialUnderstandingPort(Protocol):
 
 class FactorRepositoryPort(Protocol):
     async def search(self, intent: RetrievalIntent) -> RetrievalResult: ...
+
+
+class ExternalSourceConnectorPort(Protocol):
+    async def discover(self, intent: RetrievalIntent) -> Sequence[Mapping[str, Any]]: ...
+
+    def health(self) -> Mapping[str, Any]: ...
+
+
+class ExternalDocumentFetchPort(Protocol):
+    async def fetch(self, reference: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
+
+class FactorEvidenceExtractorPort(Protocol):
+    async def extract(
+        self, document: Mapping[str, Any], intent: RetrievalIntent
+    ) -> Sequence[SourceRecord]: ...
+
+
+class ExternalCachePort(Protocol):
+    async def get(self, key: str) -> Mapping[str, Any] | None: ...
+
+    async def put(self, key: str, value: Mapping[str, Any]) -> None: ...
 
 
 class ProxyRepositoryPort(Protocol):
