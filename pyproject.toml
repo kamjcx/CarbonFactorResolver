@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carbon-factor-resolver"
-version = "0.14.0rc1"
+version = "0.14.0rc2"
 description = "Evidence-governed carbon-factor resolution for materials, energy and processes"
 requires-python = ">=3.11"
 license = "MIT"

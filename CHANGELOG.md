@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0-rc.2 - 2026-09-02
+
+- Replaced the failing Compose-container lookup in the image-digest evidence step with a
+  direct inspection of the successfully built image.
+- Preserved the complete rc.1 sealed first-run metrics and hashes; rc.1 remains a release
+  NO-GO because remote CI was not green.
+- Requires a wholly new sealed holdout before rc.2 can be promoted.
+
 ## 0.14.0-rc.1 - 2026-09-02
 
 - Merged the Portfolio Challenge and Unit System work onto a clean `main` baseline.

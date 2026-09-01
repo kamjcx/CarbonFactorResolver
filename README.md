@@ -60,7 +60,7 @@ The developer-only offline acceptance harness under `tools/` may parse controlle
 
 ## End-to-end demo
 
-Version 0.14.0-rc.1 adds exact lifecycle-stage, subject, source-quality and unit qualification,
+Version 0.14.0-rc.2 adds exact lifecycle-stage, subject, source-quality and unit qualification,
 release hardening, versioned evaluation adjudication and reproducible portfolio evidence. The
 default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
 

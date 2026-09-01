@@ -17,7 +17,7 @@ are not rewritten.
 
 This adjudication affects only `wrong-unit-53`. It does not change candidate identity, ordering,
 factor values, boundaries, subjects, aliases, or any other benchmark case. The V2 contract first
-applies to CFR `0.14.0-rc.1`.
+applies to CFR `0.14.0-rc.1` and later release candidates.
 
 The original case is retained so reviewers can reproduce the historical 8/9 abstention score and
 compare it with the V2 contract result. Any later change requires another versioned adjudication.

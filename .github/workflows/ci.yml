@@ -75,7 +75,7 @@ jobs:
       - name: Build image
         run: docker compose build
       - name: Record image digest
-        run: docker compose images -q resolver | xargs docker image inspect --format='{{.Id}}' > docker-image-digest.txt
+        run: docker image inspect carbonfactorresolver-resolver --format='{{.Id}}' > docker-image-digest.txt
       - name: Start and verify health
         run: |
           docker compose up -d
