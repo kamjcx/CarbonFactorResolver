@@ -284,8 +284,7 @@ def qualify_record(
     if not source.declared_product:
         declared_dim = _dimension(QualificationStatus.UNKNOWN, "declared product is unspecified")
     elif (
-        text(target.canonical_name) in text(source.declared_product)
-        or text(source.declared_product) in text(target.canonical_name)
+        text(target.canonical_name) == text(source.declared_product)
         or declared_entity_compatible
         or reviewed_alias_match
     ):

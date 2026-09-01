@@ -433,3 +433,28 @@ async def test_conflicting_duplicate_external_source_ids_fail_closed() -> None:
         and "conflicting_duplicate_source_id" in item["reasons"]
         for item in result.trace.explain()["excluded_candidates"]
     )
+
+
+@pytest.mark.asyncio
+async def test_exact_unknown_name_cannot_bypass_incompatible_declared_product() -> None:
+    record = source(
+        "unknown-exact",
+        "foo material",
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+        unit="kgCO2e/kg",
+        declared_product="not foo material waste",
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository((record,))
+    ).resolve(ResolutionRequest(
+        material_name="foo material",
+        quantity=1,
+        quantity_unit="kg",
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+
+    assert result.status == ResolutionStatus.UNRESOLVED
+    assert result.candidates == ()
+    assert result.reason_codes == ("ADMISSION_REJECTED",)
+    qualification = result.trace.explain()["record_qualifications"][0]
+    assert qualification["declared_product"]["status"] == "mismatch"
