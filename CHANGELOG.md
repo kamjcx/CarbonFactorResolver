@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0-rc.4 - 2026-09-02
+
+- Fail the sealed release gate unless every frozen case satisfies its full HTTP/status/reason/
+  candidate/trace contract, in addition to the aggregate safety thresholds.
+- Preserve the RC3 first run as a NO-GO: 35/48 full case contracts passed even though the
+  previous aggregate-only gate incorrectly reported success.
+- Require a wholly new sealed dataset for RC4; no RC3 expectation or runtime result is rewritten.
+
 ## 0.14.0-rc.3 - 2026-09-02
 
 - Added a versioned electricity entity and reviewed `铝金属` alias, repairing the four

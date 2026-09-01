@@ -103,7 +103,7 @@ wheels = [
 
 [[package]]
 name = "carbon-factor-resolver"
-version = "0.14.0rc3"
+version = "0.14.0rc4"
 source = { editable = "." }
 dependencies = [
     { name = "rapidfuzz" },

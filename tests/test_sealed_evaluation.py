@@ -53,7 +53,28 @@ def test_metric_denominators_empty_populations_and_unknown_safety_dimension() ->
     metrics = aggregate([answerable])
     assert metrics["answerable_top_1"] == 1.0
     assert metrics["abstention_correctness"] == 0.0
+    assert metrics["case_contract_pass_rate"] == 1.0
     assert release_gate(metrics)["passed"] is False
+
+
+def test_release_gate_rejects_partial_case_contract_even_when_aggregate_gates_pass() -> None:
+    metrics = {
+        "case_contract_pass_rate": 35 / 48,
+        "answerable_top_1": 1.0,
+        "retrieval_recall_before_gate": 1.0,
+        "abstention_correctness": 1.0,
+        "boundary_violation_count": 0,
+        "subject_violation_count": 0,
+        "unit_dimension_violation_count": 0,
+        "forbidden_candidate_escape_count": 0,
+        "deterministic_replay": 1.0,
+        "unhandled_http_500_count": 0,
+    }
+
+    gate = release_gate(metrics)
+
+    assert gate["passed"] is False
+    assert gate["checks"]["case_contract"] is False
 
 
 @pytest.mark.asyncio
@@ -76,7 +97,7 @@ async def test_runner_scores_top1_recall_abstention_forbidden_and_replay(tmp_pat
     catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
     cases_path = tmp_path / "cases.jsonl"
     _write_jsonl(cases_path, [
-        _case("hit"),
+        _case("hit", expected_status="reference_review_required"),
         _case(
             "miss", request={"material_name": "absent comet dust", "quantity": 1},
             expected_status="supplier_data_required", acceptable_source_ids=[],
@@ -85,10 +106,11 @@ async def test_runner_scores_top1_recall_abstention_forbidden_and_replay(tmp_pat
 
     payload = await run_sealed(cases_path, catalog_path)
     assert payload["metrics"]["case_count"] == 2
+    assert payload["schema_version"] == "cfr-sealed-evaluation/v2"
+    assert payload["metrics"]["case_contract_pass_rate"] == 1.0
     assert payload["metrics"]["answerable_top_1"] == 1.0
     assert payload["metrics"]["retrieval_recall_before_gate"] == 1.0
     assert payload["metrics"]["abstention_correctness"] == 1.0
     assert payload["metrics"]["deterministic_replay"] == 1.0
     assert payload["metrics"]["unhandled_http_500_count"] == 0
     assert all(row["trace"] for row in payload["results"])
-

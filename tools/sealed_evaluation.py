@@ -196,6 +196,9 @@ def aggregate(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "answerable_case_count": len(answerable),
         "abstention_case_count": len(abstentions),
         "passed_count": sum(bool(item["passed"]) for item in results),
+        "case_contract_pass_rate": (
+            sum(bool(item["passed"]) for item in results) / len(results) if results else 0.0
+        ),
         "answerable_top_1": rate(answerable, "top_1"),
         "retrieval_recall_before_gate": rate(answerable, "retrieval_recall"),
         "abstention_correctness": rate(abstentions, "abstention"),
@@ -212,6 +215,7 @@ def aggregate(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 def release_gate(metrics: Mapping[str, Any]) -> dict[str, Any]:
     checks = {
+        "case_contract": metrics["case_contract_pass_rate"] == 1.0,
         "answerable_top_1": metrics["answerable_top_1"] >= 0.90,
         "retrieval_recall_before_gate": metrics["retrieval_recall_before_gate"] >= 0.95,
         "abstention_correctness": metrics["abstention_correctness"] >= 0.90,
@@ -231,7 +235,7 @@ async def run_sealed(cases_path: Path, catalog_path: Path) -> dict[str, Any]:
     results = [await evaluate_case(case, catalog) for case in cases]
     metrics = aggregate(results)
     return {
-        "schema_version": "cfr-sealed-evaluation/v1",
+        "schema_version": "cfr-sealed-evaluation/v2",
         "created_at": datetime.now(UTC).isoformat(),
         "git_sha": _git_sha(cases_path.resolve().parents[2]),
         "cases_sha256": sha256_file(cases_path),
@@ -257,4 +261,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
