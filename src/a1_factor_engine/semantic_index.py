@@ -24,6 +24,10 @@ from .models import (
 )
 
 
+class CatalogIntegrityError(OSError):
+    """Raised when a catalogue cannot provide deterministic source identity."""
+
+
 def _norm(value: str | None) -> str:
     return normalize_text(value).value
 
@@ -58,6 +62,43 @@ def _lexical_score(query: str, value: str) -> float:
     return max(overlap, (ratio(query, value) / 100) * 0.5)
 
 
+def source_record_decision_digest(record: SourceRecord) -> str:
+    """Hash all stable record fields that can affect retrieval or admission."""
+
+    payload = {
+        "source_id": record.source_id,
+        "source_type": record.source_type.value,
+        "provider": record.provider,
+        "locator": record.locator,
+        "material_name": record.material_name,
+        "factor_value": record.factor_value,
+        "factor_unit": record.factor_unit,
+        "geography": record.geography,
+        "year": record.year,
+        "product_form": record.product_form,
+        "composition": record.composition,
+        "production_process": record.production_process,
+        "boundary": record.boundary,
+        "citation": record.citation,
+        "excerpt": record.excerpt,
+        "metadata": {str(key): str(value) for key, value in sorted(record.metadata.items())},
+        "factor_kind": record.factor_kind.value,
+        "subject_type": record.subject_type.value,
+        "source_quality_status": record.source_quality_status.value,
+        "admission_eligible": record.admission_eligible,
+        "indicator": record.indicator,
+        "declared_product": record.declared_product,
+        "boundary_modules": record.boundary_modules,
+        "catalog_locator": record.catalog_locator,
+        "source_document_sha256": record.source_document_sha256,
+        "page": record.page,
+        "table": record.table,
+        "row": record.row,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class SemanticIndexQueryResult:
     records: tuple[SourceRecord, ...]
@@ -75,12 +116,19 @@ class SemanticFactorIndex:
 
     def __post_init__(self) -> None:
         enriched = tuple(self.registry.enrich_source(record) for record in self.records)
+        unique: dict[str, SourceRecord] = {}
+        for record in enriched:
+            previous = unique.get(record.source_id)
+            if previous is None:
+                unique[record.source_id] = record
+            elif source_record_decision_digest(previous) != source_record_decision_digest(record):
+                raise CatalogIntegrityError(
+                    f"conflicting duplicate source_id: {record.source_id}"
+                )
+        enriched = tuple(unique.values())
         self.records = enriched
         digest_payload = "|".join(
-            f"{record.source_id}:{record.metadata.get('base_entity_id', '')}:"
-            f"{record.metadata.get('product_entity_id', '')}:"
-            f"{record.metadata.get('grade_schema_id', '')}:"
-            f"{record.metadata.get('grade', '')}"
+            source_record_decision_digest(record)
             for record in sorted(enriched, key=lambda item: item.source_id)
         )
         content_digest = hashlib.sha256(digest_payload.encode("utf-8")).hexdigest()[:16]

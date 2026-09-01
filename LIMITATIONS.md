@@ -7,6 +7,8 @@ carbon footprint.
 - Public fixtures are intentionally small and synthetic; catalogue coverage is not
   representative of ecoinvent or any commercial database.
 - Retrieval quality depends on structured source coverage and supplied query attributes.
+- Non-material factors require an explicit subject. Geography and year differences are
+  surfaced as applicability limitations; CFR does not infer legal/regulatory applicability.
 - `MORE_INPUT` and refusal are expected outcomes when identity, unit, boundary, subject, or
   evidence is insufficient.
 - Human review is required before locking a factor. Locked factors still require downstream
@@ -18,4 +20,3 @@ carbon footprint.
 
 Roadmap items such as broader ontologies, document intelligence, report generation, complex UI,
 and automatic formal-catalogue workflows are deliberately outside this release.
-

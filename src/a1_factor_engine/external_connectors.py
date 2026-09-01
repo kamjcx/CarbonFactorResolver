@@ -489,19 +489,42 @@ class StructuredEPDEvidenceExtractor:
 
         terms = _intent_terms(intent)
         names = {_normalise(str(item.get("material_name", "")))}
-        names.update(_normalise(str(alias)) for alias in item.get("aliases", ()))
+        aliases = tuple(str(alias).strip() for alias in item.get("aliases", ()) if str(alias).strip())
+        alias_names = {_normalise(alias) for alias in aliases}
+        names.update(alias_names)
         if not _terms_overlap(terms, names):
             return ()
         try:
             source_type = FactorSourceType(str(item.get("source_type", FactorSourceType.EPD.value)))
         except ValueError as exc:
             raise InvalidExternalEvidence("source_type is not supported") from exc
+        request_name = _normalise(intent.canonical_name)
+        declared_product_match = bool(
+            request_name and request_name in _normalise(declared_product)
+        )
+        reviewed_aliases = tuple(dict.fromkeys((
+            *aliases,
+            *((intent.canonical_name,) if declared_product_match else ()),
+        )))
         metadata = {
             "parser_version": self.parser_version,
             "evidence_locator": evidence_locator,
             "snapshot_sha256": document.snapshot_sha256 or "",
             "license": str(item.get("license", "public-or-synthetic")),
+            "aliases": json.dumps(reviewed_aliases, ensure_ascii=False),
+            "match_proof": "declared_product" if declared_product_match else "catalogue_name_or_alias",
+            "match_strategy": (
+                "exact_link"
+                if request_name == _normalise(material_name)
+                else "synonym_link"
+                if request_name in alias_names or declared_product_match
+                else "related_candidate_recall"
+            ),
         }
+        try:
+            factor_kind = FactorKind(str(item.get("factor_kind", FactorKind.EPD_INDICATOR.value)))
+        except ValueError as exc:
+            raise InvalidExternalEvidence("factor_kind is not supported") from exc
         return (
             SourceRecord(
                 source_id=source_id,
@@ -513,13 +536,15 @@ class StructuredEPDEvidenceExtractor:
                 factor_unit=factor_unit,
                 geography=str(item.get("geography", "")).strip() or None,
                 year=int(item["year"]) if item.get("year") is not None else None,
+                product_form=str(item.get("product_form", "")).strip() or None,
+                composition=str(item.get("composition", "")).strip() or None,
                 production_process=str(item.get("production_process", "")).strip() or None,
                 boundary=boundary,
                 citation=str(item.get("citation", "")).strip(),
                 excerpt=str(item.get("excerpt", "")).strip(),
                 retrieved_at=document.retrieved_at,
                 metadata=metadata,
-                factor_kind=FactorKind.EPD_INDICATOR,
+                factor_kind=factor_kind,
                 subject_type=subject_type,
                 source_quality_status=quality_status,
                 admission_eligible=admission_eligible,

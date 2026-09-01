@@ -181,13 +181,20 @@ def analyze_candidate_gaps(
     elif activity.boundary and not source.boundary:
         add(GapType.BOUNDARY, activity.boundary, None, 0.4, "reference boundary is unspecified")
     if _different(activity.geography, source.geography):
-        add(GapType.GEOGRAPHY, activity.geography, source.geography, 0.4, "geographies differ")
+        add(GapType.GEOGRAPHY, activity.geography, source.geography, 1.0, "geographies differ")
     elif activity.geography and not source.geography:
-        add(GapType.GEOGRAPHY, activity.geography, None, 0.3, "reference geography is unspecified")
+        add(GapType.GEOGRAPHY, activity.geography, None, 0.5, "reference geography is unspecified")
     if activity.year is not None and source.year is not None and activity.year != source.year:
-        add(GapType.TEMPORAL, activity.year, source.year, min(1.0, abs(activity.year - source.year) / 10), "reference year differs")
+        year_delta = abs(activity.year - source.year)
+        add(
+            GapType.TEMPORAL,
+            activity.year,
+            source.year,
+            0.3 if year_delta <= 3 else min(1.0, 0.5 + (year_delta - 3) / 14),
+            "reference year differs",
+        )
     elif activity.year is not None and source.year is None:
-        add(GapType.TEMPORAL, activity.year, None, 0.3, "reference year is unspecified")
+        add(GapType.TEMPORAL, activity.year, None, 0.5, "reference year is unspecified")
     if _different(activity.product_form, source.product_form):
         add(GapType.FORM, activity.product_form, source.product_form, 0.5, "product forms differ")
     elif activity.product_form and not source.product_form:

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.14.0-rc.3 - 2026-09-02
+
+- Added a versioned electricity entity and reviewed `铝金属` alias, repairing the four
+  immutable rc.2 diagnostic mismatches without changing rc.2 evidence.
+- Added end-to-end admission for structured energy, combustion and transport factor kinds,
+  with explicit non-material subject confirmation.
+- Made geography/year applicability outrank source preference and prevented mismatched or
+  stale records from being presented as primary recommendations.
+- Unified local/external qualification and admission diagnostics; conflicting duplicate
+  source IDs now fail closed.
+- Anchored semantic-index and HTTP cache identity to decision-relevant record content and
+  made unordered JSON serialization deterministic.
+- Added FactorBench V3 admission adjudications while retaining V1/V2 unchanged.
+
+RC3 remains a release candidate until a wholly new sealed first run and remote CI pass.
+
 ## 0.14.0-rc.2 - 2026-09-02
 
 - Replaced the failing Compose-container lookup in the image-digest evidence step with a

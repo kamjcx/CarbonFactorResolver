@@ -69,10 +69,12 @@ from .ports import (
 )
 from .process_adjustment import resolve_process_variant
 from .qualification import (
-    material_identity as _material_identity,
+    EXPLICIT_NON_MATERIAL_SUBJECTS,
+    OPERATIONAL_FACTOR_SUBJECTS,
+    qualify_record,
 )
 from .qualification import (
-    qualify_record,
+    material_identity as _material_identity,
 )
 from .qualification import (
     source_identity as _source_identity,
@@ -120,6 +122,19 @@ def _source_priority_rank(candidate: Candidate) -> int:
         return int(candidate.source.metadata.get("source_priority_rank", "100") or 100)
     except (TypeError, ValueError):
         return 100
+
+
+def _applicability_rank(candidate: Candidate) -> tuple[int, float]:
+    """Keep explicit geography/year compatibility ahead of source preference."""
+
+    applicability_gaps = tuple(
+        gap for gap in candidate.gaps
+        if gap.gap_type in {GapType.GEOGRAPHY, GapType.TEMPORAL}
+    )
+    if not applicability_gaps:
+        return (0, 0.0)
+    maximum = max(gap.severity for gap in applicability_gaps)
+    return (2 if maximum >= 0.5 else 1, maximum)
 
 
 def _canonical_product_form(value: str | None) -> str | None:
@@ -846,6 +861,31 @@ class LocalEvaluateNode(Node[GraphState]):
             state.recall_observations = tuple(observations)
             state.excluded_candidates.extend(exclusions)
             state.resolution_candidates = state.local_candidates
+            if state.normalized.subject_type == FactorSubjectType.UNKNOWN:
+                operational_subjects = tuple(dict.fromkeys(
+                    OPERATIONAL_FACTOR_SUBJECTS.get(record.factor_kind) or record.subject_type
+                    for record in state.local_records
+                    if (
+                        OPERATIONAL_FACTOR_SUBJECTS.get(record.factor_kind)
+                        or record.subject_type in EXPLICIT_NON_MATERIAL_SUBJECTS
+                    )
+                ))
+                if operational_subjects:
+                    subject_gap = RequestGap(
+                        gap_id=f"{state.request.request_id}:subject_type",
+                        gap_type=RequestGapType.INPUT_SPECIFICATION,
+                        field="subject_type",
+                        reason="an operational factor requires an explicit compatible subject type",
+                        required=True,
+                        options=tuple(subject.value for subject in operational_subjects),
+                    )
+                    state.request_gaps = tuple((*state.request_gaps, subject_gap))
+                    state.request_resolution_plan = RequestResolutionPlan(
+                        request_id=state.request.request_id,
+                        gaps=state.request_gaps,
+                        next_question=state.request_gaps[0],
+                        provisional_options=state.provisional_options,
+                    )
             identity_resolution = state.normalized.identity_resolution
             if (
                 identity_resolution
@@ -1297,6 +1337,7 @@ class RankNode(Node[GraphState]):
         state.ranked_candidates = tuple(
             sorted(state.candidate_pool, key=lambda c: (
                 TYPE_PRIORITY[c.resolution_type],
+                _applicability_rank(c),
                 _source_priority_rank(c),
                 -c.resolution_strength,
                 -c.score,
@@ -1355,6 +1396,17 @@ class TopKNode(Node[GraphState]):
             if reason in stable_unit_codes
         )
         reason_codes = tuple(code for code in stable_unit_codes if code in observed_unit_codes)
+        admission_rejected = bool(state.qualifications) and not any(
+            item.eligible for item in state.qualifications
+        )
+        if admission_rejected and not reason_codes:
+            reason_codes = (*reason_codes, "ADMISSION_REJECTED")
+        conflicting_external_id = any(
+            "conflicting_duplicate_source_id" in item.reasons
+            for item in state.excluded_candidates
+        )
+        if conflicting_external_id:
+            reason_codes = (*reason_codes, "CONFLICTING_DUPLICATE_SOURCE_ID")
         if UNIT_CONVERSION_EVIDENCE_REQUIRED in reason_codes:
             state.required_fields = tuple(dict.fromkeys((
                 *state.required_fields,
@@ -1470,6 +1522,9 @@ class TopKNode(Node[GraphState]):
             elif CATALOG_FACTOR_UNIT_INVALID in reason_codes:
                 follow_up = FollowUp.DATA_GOVERNANCE
                 status = ResolutionStatus.UNRESOLVED
+            elif "CONFLICTING_DUPLICATE_SOURCE_ID" in reason_codes:
+                follow_up = FollowUp.DATA_GOVERNANCE
+                status = ResolutionStatus.UNRESOLVED
             elif state.required_fields:
                 follow_up = FollowUp.MORE_INPUT
                 status = ResolutionStatus.MORE_INPUT_NEEDED
@@ -1483,6 +1538,9 @@ class TopKNode(Node[GraphState]):
             ):
                 follow_up = FollowUp.PROCESS_MODEL
                 status = ResolutionStatus.PROCESS_MODEL_REQUIRED
+            elif admission_rejected:
+                follow_up = FollowUp.DATA_GOVERNANCE
+                status = ResolutionStatus.UNRESOLVED
             else:
                 follow_up = FollowUp.SUPPLIER_DATA
                 status = ResolutionStatus.SUPPLIER_DATA_REQUIRED

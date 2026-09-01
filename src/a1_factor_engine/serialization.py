@@ -7,6 +7,7 @@ depending on FastAPI/Pydantic serialization details.
 
 from __future__ import annotations
 
+import json
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -31,7 +32,13 @@ def to_jsonable(value: Any) -> Any:
         return str(value)
     if isinstance(value, (Mapping, MappingProxyType)):
         return {str(key): to_jsonable(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list, set, frozenset)):
+    if isinstance(value, (set, frozenset)):
+        items = [to_jsonable(item) for item in value]
+        return sorted(
+            items,
+            key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        )
+    if isinstance(value, (tuple, list)):
         return [to_jsonable(item) for item in value]
     if is_dataclass(value) and not isinstance(value, type):
         return {field.name: to_jsonable(getattr(value, field.name)) for field in fields(value)}

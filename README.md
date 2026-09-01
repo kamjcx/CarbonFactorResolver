@@ -21,9 +21,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/resolve \
 The public repository uses only small project-authored synthetic fixtures. It does not ship
 ecoinvent, customer records, or any commercial factor database.
 
-**Release status:** `v0.14.0-rc.2` is a NO-GO for final release because its independently
-frozen sealed run achieved 83.33% Answerable Top-1 against a 90% gate. All safety, abstention,
-recall, replay and HTTP-500 gates passed. See [Release Readiness](docs/RELEASE_READINESS_V0.14.md).
+**Release status:** rc.2 remains an immutable NO-GO (83.33% Answerable Top-1). The separately
+scoped rc.3 repair is awaiting a wholly new sealed first run and remote CI; it is not yet a
+final release. See [Release Readiness](docs/RELEASE_READINESS_V0.14.md).
 
 ## Product Scope
 
@@ -64,7 +64,7 @@ The developer-only offline acceptance harness under `tools/` may parse controlle
 
 ## End-to-end demo
 
-Version 0.14.0-rc.2 adds exact lifecycle-stage, subject, source-quality and unit qualification,
+Version 0.14.0-rc.3 adds exact lifecycle-stage, subject, source-quality and unit qualification,
 release hardening, versioned evaluation adjudication and reproducible portfolio evidence. The
 default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
 
@@ -72,7 +72,7 @@ default demo uses only clearly labelled public-synthetic fixtures; it never auto
 pip install -e ".[test,api]"
 cfr resolve --material "aluminium" --quantity 1 --unit t
 cfr resolve --material "primary aluminium ingot" --quantity 1 --unit t --process "primary aluminium production"
-cfr benchmark run data/benchmarks/factorbench_v1.jsonl
+cfr benchmark run data/benchmarks/factorbench_v3.jsonl
 cfr serve --host 127.0.0.1 --port 8000
 ```
 
