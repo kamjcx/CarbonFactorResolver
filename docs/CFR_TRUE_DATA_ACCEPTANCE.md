@@ -1,5 +1,7 @@
 # True-data acceptance workflow
 
+> **Developer-only offline QA tool.** `tools/true_data_acceptance.py` is not part of the CarbonFactorResolver production runtime, is not exposed through any CFR API, and exists only to construct isolated test catalogues and frozen Holdout runs. Its controlled DOCX/PDF handling does not represent a CarbonFactorResolver file-parsing capability.
+
 `tools/true_data_acceptance.py` performs two deliberately separate read-only evaluations from paired two-page DOCX/PDF product-carbon-footprint reports:
 
 1. **TrueDataIngestionAcceptance** validates report extraction, evidence coordinates, quality admission, and closed-loop retrieval against an isolated catalogue built from the same extracted records.
@@ -20,7 +22,8 @@ Neither evaluation writes to a formal factor catalogue or approval store.
 ## Run
 
 ```powershell
-uv run --isolated --all-extras python tools/true_data_acceptance.py `
+uv run --isolated --extra acceptance-tools `
+  python tools/true_data_acceptance.py `
   <SOURCE_DIR> <NEW_OUTPUT_DIR> `
   --expected-pairs 18 `
   --holdout-manifest data/benchmarks/real_query_holdout_v1.jsonl

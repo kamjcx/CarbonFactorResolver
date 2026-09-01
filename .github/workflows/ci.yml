@@ -20,22 +20,26 @@ jobs:
         run: uv lock --check
       - name: Run tests
         run: >-
-          uv run --all-extras python -m pytest -q
+          uv run --extra test --extra api python -m pytest -q
           --cov=a1_factor_engine --cov-branch --cov-report=term-missing
           --cov-fail-under=85
       - name: Verify true-data harness coverage
         run: >-
-          uv run --all-extras python -m pytest -q tests/test_true_data_acceptance.py
+          uv run --extra test --extra acceptance-tools python -m pytest -q tests/test_true_data_acceptance.py
           --cov=tools.true_data_acceptance --cov-branch --cov-report=term-missing
           --cov-fail-under=30
+      - name: Verify energy database build dependencies
+        run: >-
+          uv run --extra energy-db-build python -c
+          "import openpyxl, pdfplumber; assert openpyxl and pdfplumber"
       - name: Compile sources
-        run: uv run --all-extras python -m compileall -q src tests tools
+        run: uv run --extra test python -m compileall -q src tests tools
       - name: Lint
-        run: uv run --all-extras ruff check .
+        run: uv run --extra test ruff check .
       - name: Type check
-        run: uv run --all-extras mypy src tools/true_data_acceptance.py
+        run: uv run --extra test mypy src tools/true_data_acceptance.py
       - name: Run FactorBench
-        run: uv run --all-extras cfr benchmark run data/benchmarks/factorbench_v1.jsonl > factorbench-run.json
+        run: uv run --extra test cfr benchmark run data/benchmarks/factorbench_v1.jsonl > factorbench-run.json
       - name: Build package
         run: uv build
 

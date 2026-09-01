@@ -5,6 +5,7 @@ WORKDIR /app
 
 COPY . /app
 RUN python -m pip install --no-cache-dir ".[api]" \
+    && python -c "import importlib.util; assert all(importlib.util.find_spec(name) is None for name in ('docx', 'openpyxl', 'pdfplumber'))" \
     && adduser --disabled-password --gecos "" --uid 10001 cfr
 
 USER cfr

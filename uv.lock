@@ -110,14 +110,17 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+acceptance-tools = [
+    { name = "pdfplumber" },
+    { name = "python-docx" },
+]
 api = [
     { name = "fastapi" },
     { name = "uvicorn" },
 ]
-energy-import = [
+energy-db-build = [
     { name = "openpyxl" },
     { name = "pdfplumber" },
-    { name = "python-docx" },
 ]
 test = [
     { name = "httpx" },
@@ -133,17 +136,18 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.115,<1" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27" },
     { name = "mypy", marker = "extra == 'test'", specifier = ">=1.14" },
-    { name = "openpyxl", marker = "extra == 'energy-import'", specifier = ">=3.1" },
-    { name = "pdfplumber", marker = "extra == 'energy-import'", specifier = ">=0.11" },
+    { name = "openpyxl", marker = "extra == 'energy-db-build'", specifier = ">=3.1" },
+    { name = "pdfplumber", marker = "extra == 'acceptance-tools'", specifier = ">=0.11" },
+    { name = "pdfplumber", marker = "extra == 'energy-db-build'", specifier = ">=0.11" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=6" },
-    { name = "python-docx", marker = "extra == 'energy-import'", specifier = ">=1.1" },
+    { name = "python-docx", marker = "extra == 'acceptance-tools'", specifier = ">=1.1" },
     { name = "rapidfuzz", specifier = ">=3.9,<4" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.9" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.30,<1" },
 ]
-provides-extras = ["test", "energy-import", "api"]
+provides-extras = ["test", "acceptance-tools", "energy-db-build", "api"]
 
 [[package]]
 name = "certifi"

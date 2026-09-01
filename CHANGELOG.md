@@ -2,6 +2,9 @@
 
 ## 0.13.1 - 2026-09-01
 
+- Clarified the production boundary: CFR accepts structured factor requests and records; document parsing, OCR, activity-data extraction, full footprint calculation, report generation, and automatic catalogue approval remain outside the product runtime.
+- Split developer-only document dependencies into `acceptance-tools` and `energy-db-build`; neither is installed by the default package, API extra, or production image.
+- Added architecture tests that prohibit document/OCR imports in `src`, enforce JSON-only resolution/OpenAPI, and verify production dependency isolation.
 - Enforced an exact A1/A2/A3/A1-A3 qualification matrix and removed subset-based stage leakage.
 - Added hard subject-type and source-quality admission gates so raw materials, finished products, energy, transport, process, and waste cannot silently cross-qualify.
 - Made missing quality/admission metadata fail closed for catalogue and external records.

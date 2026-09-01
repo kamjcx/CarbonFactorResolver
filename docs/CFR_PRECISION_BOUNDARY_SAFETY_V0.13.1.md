@@ -20,13 +20,15 @@ The v0.13.1 code gate is **PASS** for precision and boundary hardening. This dec
 
 `TrueDataIngestionAcceptance` is a closed-loop test of extraction, evidence, admission, and retrieval consistency. It is not described as a blind or unknown-query benchmark.
 
+The implementation under `tools/true_data_acceptance.py` is a developer-only offline QA harness. It is outside the CFR production runtime and API; its controlled file handling is not a CarbonFactorResolver product capability.
+
 `RealQueryHoldoutBenchmark` is independently frozen in `data/benchmarks/real_query_holdout_v1.jsonl`. It contains 32 human-authored business queries: 8 positive retrievals, 4 `MORE_INPUT` cases, and 20 abstention negatives.
 
 ## Verified local results
 
 | Gate | Result |
 |---|---:|
-| Package tests | 186 passed |
+| Package tests | 189 passed |
 | Package branch coverage | 85.59% |
 | True-data tool tests | 13 passed |
 | True-data tool branch coverage | 43.24% |

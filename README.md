@@ -2,9 +2,46 @@
 
 CarbonFactorResolver（CFR，碳因子解析引擎）是独立、框架无关的 Python 3.11+ Graph Engineering 引擎，用于对原材料、能源与工艺相关的碳因子进行有证据约束的检索、语义匹配、代理解析和审计追溯。
 
+## Product Scope
+
+### In Scope
+
+CarbonFactorResolver receives a structured `FactorQuery` / `ResolutionRequest` and performs:
+
+- entity resolution for materials, energy, transport, processes, and other factor subjects;
+- retrieval from local catalogues and structured external factor sources;
+- qualification, factor resolution, deterministic ranking, and explanation;
+- human review support and immutable factor locking.
+
+`FactorQuery` is the upstream integration concept; adapters map it to the single runtime contract, `ResolutionRequest`. It is not a second request model and cannot contain file uploads.
+
+### Out of Scope
+
+CarbonFactorResolver does **not** perform:
+
+- PDF, DOCX, Excel, image, or scanned-document parsing;
+- OCR;
+- enterprise-document interpretation;
+- BOM, activity-data, or procurement-ledger extraction;
+- full product-carbon-footprint calculation;
+- Word/PDF report generation; or
+- automatic writes to, or automatic approval in, a formal factor catalogue.
+
+### Upstream/Downstream Integration
+
+Document understanding and activity-data extraction belong upstream to Document Intelligence or `carbon-report`. Product-footprint calculation and report generation belong downstream to `carbon-report`. The production boundary is:
+
+```mermaid
+flowchart LR
+    A[Document Intelligence / carbon-report] -->|structured ResolutionRequest| B[CarbonFactorResolver]
+    B -->|reviewed / locked factor| C[carbon-report calculation and report generation]
+```
+
+The developer-only offline acceptance harness under `tools/` may parse controlled test documents to construct isolated fixtures. It is not part of the production runtime or CFR API and does not make document parsing a CarbonFactorResolver capability.
+
 ## End-to-end demo
 
-Version 0.13.1 adds exact lifecycle-stage qualification, subject and source-quality admission gates, a hardened true-data ingestion acceptance, and an independently frozen real-query holdout. The default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
+Version 0.13.1 adds exact lifecycle-stage qualification, subject and source-quality admission gates, a developer-only offline acceptance harness, and an independently frozen real-query holdout. The default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
 
 ```bash
 pip install -e ".[test,api]"
@@ -160,7 +197,7 @@ Version 0.12.0 uses a separate read-only SQLite evidence database for process-ro
 The supplied standard can be imported locally without committing either the PDF or generated database:
 
 ```powershell
-pip install -e ".[energy-import]"
+pip install -e ".[energy-db-build]"
 python tools/import_refractory_energy_standard.py `
   path\to\T_CHNRISC_0008_2025.pdf `
   path\to\energy_parameters.db `
@@ -267,7 +304,7 @@ The refinement adopts selected ideas rather than copying any upstream runtime:
 - [Amazon carbon-assessment-with-ml](https://github.com/amazon-science/carbon-assessment-with-ml): bounded candidate retrieval and ranked recommendation from Flamingo/Parakeet. V1 keeps candidate IDs bounded while deterministic formulas and human approval remain authoritative.
 - [Brightway2-io](https://github.com/brightway-lca/brightway2-io): sequential linking strategies and preserved unlinked state. V1 exposes the complete strategy ledger and terminates explicitly at unresolved instead of silently relinking.
 
-The external discovery/fetch/extraction/qualification lane now runs after insufficient local evidence and before proxy fallback. It accepts only hash-pinned structured evidence and reuses the same qualification, approval, and locking path; search snippets cannot originate factors.
+The structured factor-source discovery/fetch/validation lane runs after insufficient local evidence and before proxy fallback. It accepts only hash-pinned structured records and reuses the same qualification, approval, and locking path; search snippets and unstructured documents cannot originate factors.
 
 ## Version 0.12 diagnostic and process-accounting contract
 

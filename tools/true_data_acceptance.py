@@ -1,7 +1,8 @@
-"""Build and run a read-only acceptance benchmark from paired DOCX/PDF reports.
+"""Developer-only offline QA harness for paired DOCX/PDF reports.
 
 The command deliberately writes only to an explicit output directory. It does
-not update a catalogue, approval store, or any source report.
+not update a catalogue, approval store, or any source report. It is not part of
+the CarbonFactorResolver production runtime and is not exposed by the CFR API.
 """
 
 from __future__ import annotations
@@ -223,8 +224,7 @@ def extract_pair(pair: SourcePair) -> tuple[tuple[ExtractedFactor, ...], tuple[Q
         from docx import Document
     except ImportError as exc:  # pragma: no cover - environment diagnostic
         raise RuntimeError(
-            "true-data extraction requires the optional energy-import dependencies "
-            "plus python-docx"
+            "true-data extraction requires the optional acceptance-tools dependencies"
         ) from exc
 
     document = Document(pair.docx_path)
