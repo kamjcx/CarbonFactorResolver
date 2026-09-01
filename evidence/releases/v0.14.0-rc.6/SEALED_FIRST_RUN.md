@@ -2,8 +2,9 @@
 
 Status: **GO**
 
-Runtime/evaluator freeze: `1c8be4ca3ef0a1402a0ef343a024972e7a0e6320`.
-Input commit: `2d4cb669339908f5456643d1ebf94dcbf62b1f9a`.
+Runtime/evaluator freeze: `1c8be4ca3ef0a1402a0ef343a024972e7a0e6320`
+(rebased patch-equivalent `e87f146`). Input commit:
+`2d4cb669339908f5456643d1ebf94dcbf62b1f9a` (rebased patch-equivalent `702a8a2`).
 Raw output: `outputs/sealed_rc6_first_run.json`; SHA-256
 `b1437d68e3411f4ecccefb035804103801ead2aee45fe362c8b6745750ab0275`.
 

@@ -53,3 +53,6 @@ production-ready accounting system or as having 97.5% real-world accuracy.
 Merge only after remote `test` and `container` checks pass at the final branch SHA. Publish
 the wheel, source distribution, manifest, raw rc.6 result hash, and container digest. Do not
 publish licensed factor data, customer evidence, or claim production readiness.
+
+Historical first-run SHA values and their patch-equivalent post-merge/rebase commits are
+recorded in [CFR_RC_REBASE_MAP.md](CFR_RC_REBASE_MAP.md); raw evidence is never rewritten.
