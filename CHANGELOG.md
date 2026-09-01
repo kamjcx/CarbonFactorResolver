@@ -7,6 +7,8 @@
 - Validate sealed catalogue database anchors as exactly 64 lowercase hexadecimal characters
   during pre-runtime loading.
 - Require a wholly new RC6 sealed dataset and first run.
+- Passed the preserved RC6 first run: 48/48 full case contracts, 100% Top-1/recall/
+  abstention/replay, and zero safety or HTTP-500 violations.
 
 ## 0.14.0-rc.5 - 2026-09-02
 

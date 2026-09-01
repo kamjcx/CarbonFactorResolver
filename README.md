@@ -62,6 +62,11 @@ flowchart LR
 
 The developer-only offline acceptance harness under `tools/` may parse controlled test documents to construct isolated fixtures. It is not part of the production runtime or CFR API and does not make document parsing a CarbonFactorResolver capability.
 
+RC6 sealed portfolio result: 48/48 frozen case contracts, 100% Answerable Top-1, retrieval
+recall, abstention correctness and deterministic replay, with zero boundary, subject, unit,
+forbidden-candidate or HTTP-500 failures. This is a public-synthetic sealed-fixture result,
+not a claim of production readiness or universal real-world accuracy.
+
 ## End-to-end demo
 
 Version 0.14.0-rc.6 adds exact lifecycle-stage, subject, source-quality and unit qualification,

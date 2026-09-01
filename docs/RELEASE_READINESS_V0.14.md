@@ -2,11 +2,12 @@
 
 ## Decision
 
-`v0.14.0` release: **NO-GO**
+`v0.14.0` portfolio release: **GO**, subject to merge and remote CI remaining green
 
-The Release Hardening changes are internally complete, but the independently frozen rc.2
-sealed evaluation missed its Answerable Top-1 gate. No final tag or production-readiness claim
-is authorized.
+RC3–RC5 failures are preserved without rewriting their inputs or results. RC6 used a wholly
+new 48-case public-synthetic set and passed every frozen case contract and aggregate safety
+gate on its first run. This authorizes a portfolio/research-prototype release, not production
+carbon-accounting use or formal factor admission.
 
 ## Engineering gates
 
@@ -16,8 +17,8 @@ is authorized.
 | Three strict xfail adjudications | FIXED; 0 strict xfail |
 | Public HTTP 500 / exception disclosure | PASS |
 | Rejected-candidate approval monotonicity | PASS |
-| Core tests | 286 passed |
-| Core branch coverage | 86.90% |
+| Core tests | 309 passed |
+| Core branch coverage | 87.05% |
 | Evaluator critical-path branch coverage | 84.10% |
 | Offline true-data harness | 13 passed; 43.24% branch coverage (separate metric) |
 | FactorBench V1 | immutable historical 8/9 abstention |
@@ -33,6 +34,13 @@ is authorized.
   returned non-zero after a successful image build. That result is preserved and not reused.
 - rc.2 used a wholly new 40-case dataset and new catalogue. Safety, abstention, recall, replay
   and HTTP gates passed; Answerable Top-1 was 83.33% against a 90% threshold.
+- rc.3 exposed an aggregate-only gate defect: 35/48 full contracts passed while the obsolete
+  gate incorrectly reported success. The raw output is preserved and rc.3 is NO-GO.
+- rc.4 validated the corrected gate and failed closed at 36/48 full contracts.
+- rc.5 failed before retrieval because its database anchor was malformed; rc.6 added a static
+  preflight validator rather than repairing the frozen input.
+- rc.6 passed 48/48 full contracts, 100% Top-1/recall/abstention/replay, with zero boundary,
+  subject, unit, forbidden-candidate, or HTTP-500 failures.
 
 ## What may be claimed
 
@@ -40,9 +48,8 @@ CFR may be described as a **portfolio-ready, reproducible research prototype** w
 deterministic safety gates and transparent negative evidence. It must not be described as a
 production-ready accounting system or as having 97.5% real-world accuracy.
 
-## Next authorized work
+## Release boundary
 
-Open a separate post-RC investigation for why three correctly recalled structured energy
-records were not admitted. Do not alter rc.2, its answers, or its evidence. Any future release
-candidate requires a reviewed fix, a new version, and a new independently frozen holdout.
-
+Merge only after remote `test` and `container` checks pass at the final branch SHA. Publish
+the wheel, source distribution, manifest, raw rc.6 result hash, and container digest. Do not
+publish licensed factor data, customer evidence, or claim production readiness.
