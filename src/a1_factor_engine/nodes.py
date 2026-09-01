@@ -1414,7 +1414,7 @@ class TopKNode(Node[GraphState]):
         admission_rejected = bool(state.qualifications) and not any(
             item.eligible for item in state.qualifications
         )
-        if admission_rejected and not reason_codes:
+        if admission_rejected and not reason_codes and not state.request_gaps:
             reason_codes = (*reason_codes, "ADMISSION_REJECTED")
         conflicting_external_id = any(
             "conflicting_duplicate_source_id" in item.reasons

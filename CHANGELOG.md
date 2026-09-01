@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0-rc.5 - 2026-09-02
+
+- Preserve RC4 as NO-GO after 36/48 complete frozen case contracts passed.
+- Keep reviewed aliases and applicability alternatives in `reference_review_required` rather
+  than silently promoting them to primary recommendations.
+- Suppress the misleading `ADMISSION_REJECTED` reason when a request gap already produces
+  `MORE_INPUT_NEEDED`; genuine hard-rejected records retain the governance reason.
+- Require a wholly new RC5 sealed dataset and first run.
+
 ## 0.14.0-rc.4 - 2026-09-02
 
 - Fail the sealed release gate unless every frozen case satisfies its full HTTP/status/reason/

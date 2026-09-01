@@ -119,6 +119,7 @@ async def test_operational_factor_without_request_subject_returns_more_input() -
     ))
 
     assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.reason_codes == ()
     assert result.trace.explain()["required_choice"] == {
         "field": "subject_type",
         "options": ("energy",),
@@ -137,6 +138,7 @@ async def test_lifecycle_energy_factor_without_request_subject_returns_more_inpu
     ))
 
     assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.reason_codes == ()
     assert result.trace.explain()["required_choice"]["field"] == "subject_type"
 
 
