@@ -1,0 +1,25 @@
+# Architecture
+
+CarbonFactorResolver (CFR) is a structured factor-resolution component. It accepts JSON
+requests, retrieves records from local catalogues and structured external adapters, applies
+deterministic qualification gates, ranks only eligible candidates, and returns an explained
+recommendation, `MORE_INPUT`, or a safe refusal.
+
+```mermaid
+flowchart LR
+  U[Document Intelligence / carbon-report] -->|structured ResolutionRequest| C[CFR]
+  C --> E[entity and intent resolution]
+  E --> R[local + structured-source retrieval]
+  R --> G[unit / boundary / subject / evidence gates]
+  G --> K[rank + explain]
+  K --> H[human review and immutable lock]
+  H -->|reviewed / locked factor| D[carbon-report calculation and reporting]
+```
+
+CFR does not parse files, extract activity data, calculate a complete product footprint,
+generate reports, or auto-approve formal factors. The production source lane is
+“Structured Factor Source Fetch + Record Validation/Normalization”. The developer-only
+offline acceptance harness is outside the runtime and API.
+
+Detailed design: [docs/CFR_ARCHITECTURE.md](docs/CFR_ARCHITECTURE.md).
+

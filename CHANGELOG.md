@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.14.0-rc.1 - 2026-09-02
+
+- Merged the Portfolio Challenge and Unit System work onto a clean `main` baseline.
+- Fixed all three strict fault-injection findings: catalogue transport failures now fail
+  closed without HTTP 500, and health/request/benchmark failures no longer reflect internal
+  exception text.
+- Made rejection terminal for a candidate within the same immutable resolution run.
+- Preserved FactorBench V1 and introduced FactorBench V2 with a versioned `wrong-unit-53`
+  adjudication; historical scores remain unchanged.
+- Renamed the 28-case unit evaluation to **Frozen Unit Regression Set** and retained both
+  the independent first-run 24/28 result and the post-fix 28/28 regression result.
+- Added canonical architecture, evaluation, limitation, data-license, security and
+  contribution documents plus public package/container safety gates.
+- Hardened Docker context and source-distribution exclusions against local reports,
+  credentials, databases, documents and customer material.
+
+This release candidate is a portfolio-ready reproducible research prototype. It is not a
+production carbon-accounting system and includes no licensed factor database.
+
 ## 0.13.1 - 2026-09-01
 
 - Clarified the production boundary: CFR accepts structured factor requests and records; document parsing, OCR, activity-data extraction, full footprint calculation, report generation, and automatic catalogue approval remain outside the product runtime.

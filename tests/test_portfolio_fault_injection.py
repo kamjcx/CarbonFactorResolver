@@ -215,10 +215,6 @@ async def test_local_catalog_faults_are_explicit_at_repository_boundary(name, ex
         await repository.search(intent)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="known portfolio validation finding: local catalogue transport failures return API 500",
-)
 @pytest.mark.parametrize("name", ["timeout", "connection_failure"])
 def test_api_contains_local_catalog_transport_failures_without_5xx_or_disclosure(name):
     from fastapi.testclient import TestClient
@@ -227,18 +223,32 @@ def test_api_contains_local_catalog_transport_failures_without_5xx_or_disclosure
 
     app = create_app(engine=A1FactorResolutionEngine(local_retrieval=local_fault(name)))
     with TestClient(app, raise_server_exceptions=False) as client:
+        request_id = f"portfolio-local-{name}"
         response = client.post(
             "/api/v1/resolve",
             json={
-                "request_id": f"portfolio-local-{name}",
+                "request_id": request_id,
                 "material_name": "primary aluminium",
                 "quantity": 1,
             },
         )
+        trace_response = client.get(f"/api/v1/traces/{request_id}")
 
-    assert response.status_code < 500
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == ResolutionStatus.SUPPLIER_DATA_REQUIRED.value
+    assert not payload["candidates"]
+    assert not payload["reviewable_candidates"]
     assert INJECTED_SECRET not in response.text
     assert "Traceback" not in response.text
+
+    assert trace_response.status_code == 200
+    trace_payload = trace_response.json()
+    failure = next(
+        entry for entry in trace_payload["entries"] if entry["stage"] == "local_retrieval"
+    )
+    assert failure["details"]["reason_code"] in {"TimeoutError", "ConnectionError"}
+    assert INJECTED_SECRET not in json.dumps(trace_payload)
 
 
 @pytest.mark.parametrize("name", ["malformed_payload", "sha_mismatch"])
@@ -263,10 +273,6 @@ def test_api_contains_local_catalog_data_faults_without_5xx_or_disclosure(name):
     assert "Traceback" not in response.text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="known portfolio validation finding: connector health exposes exception messages",
-)
 def test_connector_health_redacts_exception_secrets_and_stack_details():
     from fastapi.testclient import TestClient
 
@@ -287,3 +293,45 @@ def test_connector_health_redacts_exception_secrets_and_stack_details():
     assert "postgres://" not in response.text
     assert "internal.py" not in response.text
     assert "Traceback" not in response.text
+    assert response.json()["connectors"]["catalog"]["reason_code"] == "HEALTH_PROBE_FAILED"
+
+
+def test_non_mapping_connector_health_failure_is_sanitized_and_degraded():
+    from fastapi.testclient import TestClient
+
+    from a1_factor_engine.api import create_app
+
+    def unhealthy_catalog():
+        raise RuntimeError(f"token={INJECTED_SECRET} internal.py:42")
+
+    with TestClient(
+        create_app(connector_health=unhealthy_catalog),
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.get("/api/v1/connectors/health")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "unhealthy",
+        "error": "health probe failed",
+        "reason_code": "HEALTH_PROBE_FAILED",
+    }
+    assert INJECTED_SECRET not in response.text
+
+
+def test_resolve_validation_error_does_not_reflect_internal_exception_text():
+    from fastapi.testclient import TestClient
+
+    from a1_factor_engine.api import create_app
+
+    class InvalidResolver:
+        async def resolve(self, _payload):
+            raise ValueError(f"token={INJECTED_SECRET} internal.py:42")
+
+    with TestClient(create_app(engine=InvalidResolver())) as client:
+        response = client.post("/api/v1/resolve", json={"material_name": "steel"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["reason_code"] == "INVALID_RESOLUTION_REQUEST"
+    assert INJECTED_SECRET not in response.text
+    assert "internal.py" not in response.text

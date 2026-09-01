@@ -11,7 +11,7 @@ from tools.unit_holdout import (
 )
 
 
-def test_holdout_inputs_are_frozen_and_cover_required_risks() -> None:
+def test_frozen_unit_regression_inputs_are_frozen_and_cover_required_risks() -> None:
     assert verify_frozen_inputs() == FROZEN_LF_SHA256
     cases = load_cases()
     catalog = load_catalog()
@@ -32,7 +32,7 @@ def test_holdout_inputs_are_frozen_and_cover_required_risks() -> None:
 
 
 @pytest.mark.asyncio
-async def test_frozen_holdout_matches_all_predeclared_answers() -> None:
+async def test_frozen_unit_regression_matches_all_predeclared_answers() -> None:
     payload = await run_holdout()
     assert payload["metrics"]["case_count"] >= 20
     assert payload["metrics"]["failed_count"] == 0, [

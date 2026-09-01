@@ -1,0 +1,7 @@
+prune tests
+prune outputs
+prune docs
+exclude task_plan.md
+exclude findings.md
+exclude progress.md
+global-exclude .env .env.* *.db *.sqlite* *.duckdb *.pem *.key *.p12 *.pfx

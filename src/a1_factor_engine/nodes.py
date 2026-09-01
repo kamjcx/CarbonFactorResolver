@@ -711,7 +711,20 @@ class LocalRetrievalNode(Node[GraphState]):
             return state
         if state.normalized.retrieval_intent is None:
             raise ValueError("normalized activity lacks RetrievalIntent")
-        result = await self.repository.search(state.normalized.retrieval_intent)
+        try:
+            result = await self.repository.search(state.normalized.retrieval_intent)
+        except OSError as exc:
+            # Catalogue transport failures are evidence about availability, not
+            # permission to invent or admit a factor.  Keep the failure visible
+            # through a stable reason code without reflecting exception text,
+            # then let the existing graph reach its normal fail-closed result.
+            state.local_records = ()
+            state.event(Stage.LOCAL_RETRIEVAL, "local factor source unavailable", {
+                "reason_code": type(exc).__name__,
+                "repository_type": type(self.repository).__name__,
+                "record_count": 0,
+            })
+            return state
         state.local_records = result.records
         state.link_attempts.extend(result.attempts)
         state.trace.set_database_anchor(result.database_anchor)

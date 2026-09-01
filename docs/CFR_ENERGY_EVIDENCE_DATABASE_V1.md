@@ -174,7 +174,7 @@ This supports comparison when either the formal factor catalogue or energy datab
 
 - dataset version: `t-chnrisc-0008-2025+enterprise-energy-89/v4`;
 - schema version: `5`;
-- local path: `D:\carbon-data\energy_parameters.db`;
+- deployment path: `<private-data-root>/energy_parameters.db`;
 - database SHA-256: `0d47d6eac30e6de3ef110638506ae370aa68d87c57811b1f35a9060cef1d005a`;
 - records: 309 quotas, 31 conversions, 14 modifier rules, 273 enterprise profiles and 63 process-emission observations;
 - runtime-eligible enterprise records: 193.

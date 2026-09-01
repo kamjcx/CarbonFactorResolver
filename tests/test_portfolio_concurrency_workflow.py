@@ -343,5 +343,8 @@ async def test_human_rejection_prevents_locking_and_remains_traceable() -> None:
     assert event.message == "candidate rejected"
     assert event.details["note"] == "evidence not accepted"
 
-    # Deliberately do not assert approve-after-reject behavior here. Re-approval
-    # is a separately reported frozen-runtime defect, not a benchmark contract.
+    with pytest.raises(ValueError, match="rejected candidate cannot be approved"):
+        await engine.approve(result.request_id, candidate.candidate_id, "second-reviewer")
+
+    preserved = await engine.store.get_approval(result.request_id, candidate.candidate_id)
+    assert preserved == rejection

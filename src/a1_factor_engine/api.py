@@ -11,6 +11,11 @@ from uuid import uuid4
 from .engine import A1FactorResolutionEngine
 from .serialization import serialize_benchmark, serialize_recommendation, serialize_trace, to_jsonable
 
+INVALID_RESOLUTION_REQUEST = "INVALID_RESOLUTION_REQUEST"
+HEALTH_PROBE_FAILED = "HEALTH_PROBE_FAILED"
+BENCHMARK_RUN_FAILED = "BENCHMARK_RUN_FAILED"
+BENCHMARK_COMPARISON_FAILED = "BENCHMARK_COMPARISON_FAILED"
+
 
 async def _maybe_await(value: Any) -> Any:
     return await value if inspect.isawaitable(value) else value
@@ -42,24 +47,30 @@ def _run_id(value: Any) -> str | None:
 
 
 async def _connector_payload(provider: Any) -> dict[str, Any]:
+    async def safe_probe(connector: Any) -> Any:
+        try:
+            probe = getattr(connector, "health", connector)
+            value = probe() if callable(probe) else probe
+            return to_jsonable(await _maybe_await(value))
+        except Exception:  # A public health response must never reflect exception text.
+            return {
+                "status": "unhealthy",
+                "error": "health probe failed",
+                "reason_code": HEALTH_PROBE_FAILED,
+            }
+
     if provider is None:
         return {"status": "not_configured", "connectors": {}}
     if isinstance(provider, Mapping):
         results: dict[str, Any] = {}
         for name, connector in provider.items():
-            try:
-                probe = getattr(connector, "health", connector)
-                value = probe() if callable(probe) else probe
-                results[str(name)] = to_jsonable(await _maybe_await(value))
-            except Exception as exc:  # Health must report failures without taking down the endpoint.
-                results[str(name)] = {"status": "unhealthy", "error": str(exc)}
+            results[str(name)] = await safe_probe(connector)
         healthy = all(
             not isinstance(item, Mapping) or item.get("status") not in {"unhealthy", "error"}
             for item in results.values()
         )
         return {"status": "ok" if healthy else "degraded", "connectors": results}
-    probe = getattr(provider, "health", provider)
-    payload = to_jsonable(await _maybe_await(probe()))
+    payload = await safe_probe(provider)
     return payload if isinstance(payload, dict) else {"status": "ok", "connectors": payload}
 
 
@@ -125,12 +136,29 @@ def create_app(
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.post("/api/v1/resolve")
+    @app.post(
+        "/api/v1/resolve",
+        responses={
+            400: {
+                "description": "Invalid structured resolution request",
+                "content": {"application/json": {"example": {"detail": {
+                    "reason_code": INVALID_RESOLUTION_REQUEST,
+                    "message": "resolution request is invalid",
+                }}}},
+            },
+        },
+    )
     async def resolve(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
         try:
             result = await resolver.resolve(payload)
         except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "reason_code": INVALID_RESOLUTION_REQUEST,
+                    "message": "resolution request is invalid",
+                },
+            ) from exc
         return serialize_recommendation(result)
 
     @app.get("/api/v1/resolutions/{request_id}")
@@ -191,7 +219,13 @@ def create_app(
         try:
             result = await _run_benchmark(benchmark_runner, str(resolved_dataset))
         except (OSError, TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "reason_code": BENCHMARK_RUN_FAILED,
+                    "message": "benchmark run could not be completed",
+                },
+            ) from exc
         run_id = _run_id(result) or str(uuid4())
         benchmark_runs[run_id] = result
         response = serialize_benchmark(result)
@@ -234,7 +268,13 @@ def create_app(
         try:
             result = await _maybe_await(compare(base, candidate))
         except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "reason_code": BENCHMARK_COMPARISON_FAILED,
+                    "message": "benchmark runs could not be compared",
+                },
+            ) from exc
         return serialize_benchmark(result)
 
     @app.get("/api/v1/connectors/health")
@@ -251,4 +291,10 @@ def create_app(
     return app
 
 
-__all__ = ["create_app"]
+__all__ = [
+    "BENCHMARK_COMPARISON_FAILED",
+    "BENCHMARK_RUN_FAILED",
+    "HEALTH_PROBE_FAILED",
+    "INVALID_RESOLUTION_REQUEST",
+    "create_app",
+]
