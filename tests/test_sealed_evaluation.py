@@ -52,6 +52,39 @@ def test_catalog_loader_rejects_invalid_database_anchor_before_runtime(tmp_path:
         load_catalog(path)
 
 
+def test_case_loader_rejects_non_object_and_non_string_lists(tmp_path: Path) -> None:
+    path = tmp_path / "cases.jsonl"
+    path.write_text("[]\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be an object"):
+        load_cases(path)
+    invalid = _case("invalid-list", acceptable_source_ids=[42])
+    _write_jsonl(path, [invalid])
+    with pytest.raises(ValueError, match="must be strings"):
+        load_cases(path)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    (
+        ({"database": {"sha256": "a" * 64}}, "object with records"),
+        ({"records": []}, "database metadata"),
+        ({"database": {"sha256": "a" * 64}, "records": [{"record_id": ""}]},
+         "non-empty and unique"),
+        ({"database": {"sha256": "a" * 64}, "records": [
+            {"record_id": "same"}, {"record_id": "same"},
+        ]}, "non-empty and unique"),
+    ),
+)
+def test_catalog_loader_rejects_invalid_shape_and_ids(
+    tmp_path: Path, payload: dict, message: str
+) -> None:
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_catalog(path)
+
+
 def test_metric_denominators_empty_populations_and_unknown_safety_dimension() -> None:
     answerable = {
         "answerable": True,
