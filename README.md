@@ -21,6 +21,10 @@ curl -X POST http://127.0.0.1:8000/api/v1/resolve \
 The public repository uses only small project-authored synthetic fixtures. It does not ship
 ecoinvent, customer records, or any commercial factor database.
 
+**Release status:** `v0.14.0-rc.2` is a NO-GO for final release because its independently
+frozen sealed run achieved 83.33% Answerable Top-1 against a 90% gate. All safety, abstention,
+recall, replay and HTTP-500 gates passed. See [Release Readiness](docs/RELEASE_READINESS_V0.14.md).
+
 ## Product Scope
 
 ### In Scope
