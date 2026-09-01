@@ -17,7 +17,7 @@ carbon-accounting use or formal factor admission.
 | Three strict xfail adjudications | FIXED; 0 strict xfail |
 | Public HTTP 500 / exception disclosure | PASS |
 | Rejected-candidate approval monotonicity | PASS |
-| Core tests | 309 passed |
+| Core tests | 315 passed |
 | Core branch coverage | 87.05% |
 | Evaluator critical-path branch coverage | 84.10% |
 | Offline true-data harness | 13 passed; 43.24% branch coverage (separate metric) |
