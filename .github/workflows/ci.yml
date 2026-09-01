@@ -40,6 +40,17 @@ jobs:
         run: uv run --extra test mypy src tools/true_data_acceptance.py
       - name: Run FactorBench
         run: uv run --extra test cfr benchmark run data/benchmarks/factorbench_v1.jsonl > factorbench-run.json
+      - name: Run Portfolio Challenge
+        run: >-
+          uv run --extra test --extra api python tools/portfolio_validation.py
+          --output outputs/portfolio_validation
+      - name: Upload Portfolio Challenge evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-validation-${{ github.sha }}
+          path: outputs/portfolio_validation/
+          if-no-files-found: error
       - name: Build package
         run: uv build
 
