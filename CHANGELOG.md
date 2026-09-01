@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0-rc.6 - 2026-09-02
+
+- Preserve RC5 as NO-GO after a malformed 62-character sealed database anchor caused all
+  requests to fail closed before retrieval.
+- Validate sealed catalogue database anchors as exactly 64 lowercase hexadecimal characters
+  during pre-runtime loading.
+- Require a wholly new RC6 sealed dataset and first run.
+
 ## 0.14.0-rc.5 - 2026-09-02
 
 - Preserve RC4 as NO-GO after 36/48 complete frozen case contracts passed.

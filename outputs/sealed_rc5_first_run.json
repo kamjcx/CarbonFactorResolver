@@ -1,0 +1,1772 @@
+{
+  "schema_version": "cfr-sealed-evaluation/v2",
+  "created_at": "2026-09-01T17:51:55.190345+00:00",
+  "git_sha": "1cd70614475aab2224c0c361c06ea7065031dfde",
+  "cases_sha256": "e0a079d33e6e4792573e1eec8d6e38d11d6f74f5af8a9240908237531c5ead6b",
+  "catalog_sha256": "cdd4452f5b6b9449d8d0cc0451dd1bb97ca2d3b71fc3dc155d54ded1f0a53036",
+  "metrics": {
+    "case_count": 48,
+    "answerable_case_count": 26,
+    "abstention_case_count": 22,
+    "passed_count": 0,
+    "case_contract_pass_rate": 0.0,
+    "answerable_top_1": 0.0,
+    "retrieval_recall_before_gate": 0.0,
+    "abstention_correctness": 1.0,
+    "boundary_violation_count": 0,
+    "subject_violation_count": 0,
+    "unit_dimension_violation_count": 0,
+    "forbidden_candidate_escape_count": 0,
+    "deterministic_replay": 1.0,
+    "unhandled_http_500_count": 0
+  },
+  "release_gate": {
+    "passed": false,
+    "checks": {
+      "case_contract": false,
+      "answerable_top_1": false,
+      "retrieval_recall_before_gate": false,
+      "abstention_correctness": true,
+      "boundary_violation": true,
+      "subject_violation": true,
+      "unit_dimension_violation": true,
+      "forbidden_candidate_escape": true,
+      "deterministic_replay": true,
+      "unhandled_http_500": true
+    }
+  },
+  "results": [
+    {
+      "case_id": "R5-TIER-001",
+      "category": "multilingual_exact",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-AURORAPOND-DIATOMITE"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-002",
+      "category": "multilingual_reviewed_alias",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-AURORAPOND-DIATOMITE"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-003",
+      "category": "multilingual_exact",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-MAPLEQUAY-NICKEL"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-004",
+      "category": "multilingual_reviewed_alias",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-MAPLEQUAY-NICKEL"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-005",
+      "category": "multilingual_exact",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-THISTLEFORD-CORK"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-006",
+      "category": "multilingual_reviewed_alias",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-THISTLEFORD-CORK"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-007",
+      "category": "multilingual_exact",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-GLACIERMEAD-CERAMIC"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-008",
+      "category": "multilingual_reviewed_alias",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-GLACIERMEAD-CERAMIC"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-009",
+      "category": "multilingual_exact",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-COPPERLEAF-FLAX"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-010",
+      "category": "multilingual_reviewed_alias",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-COPPERLEAF-FLAX"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-011",
+      "category": "multilingual_exact",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-NIGHTJAR-SANDSTONE"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-TIER-012",
+      "category": "multilingual_reviewed_alias",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-NIGHTJAR-SANDSTONE"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-013",
+      "category": "energy_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-OPALWIND-HEAT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-014",
+      "category": "energy_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-OPALWIND-HEAT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-015",
+      "category": "energy_reviewed_alias_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-OPALWIND-HEAT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-016",
+      "category": "combustion_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-EMBERLAKE-FUEL"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-017",
+      "category": "combustion_reviewed_alias_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-EMBERLAKE-FUEL"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-018",
+      "category": "transport_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-LARKSPUR-FREIGHT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-019",
+      "category": "transport_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-LARKSPUR-FREIGHT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-OPER-020",
+      "category": "transport_reviewed_alias_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-LARKSPUR-FREIGHT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-APPLY-021",
+      "category": "geography_alias_applicability",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-VELVET-FACADE-VN"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-APPLY-022",
+      "category": "geography_alias_applicability",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-VELVET-FACADE-VN"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-APPLY-023",
+      "category": "year_alias_applicability",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-SPRINGTIDE-BLANKET-CURRENT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-APPLY-024",
+      "category": "year_alias_applicability",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "reference_review_required",
+        "acceptable_source_ids": [
+          "R5-SPRINGTIDE-BLANKET-CURRENT"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-SCALE-025",
+      "category": "mass_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-AURORAPOND-DIATOMITE"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-SCALE-026",
+      "category": "mass_exact_scale",
+      "safety_dimension": "none",
+      "answerable": true,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": false,
+        "retrieval_recall": false,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "recommendation_ready",
+        "acceptable_source_ids": [
+          "R5-MAPLEQUAY-NICKEL"
+        ],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-027",
+      "category": "boundary",
+      "safety_dimension": "boundary",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-PRIMROSE-A3"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-028",
+      "category": "boundary",
+      "safety_dimension": "boundary",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-HARBORGRASS-TOTAL"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-029",
+      "category": "subject",
+      "safety_dimension": "subject",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-FROSTFERN-RAW"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-030",
+      "category": "subject",
+      "safety_dimension": "subject",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-DAWNREEF-FINISHED"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-031",
+      "category": "unit_dimension",
+      "safety_dimension": "unit",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-AURORAPOND-DIATOMITE"
+        ],
+        "reason_codes": [
+          "UNIT_DIMENSION_MISMATCH"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-032",
+      "category": "unit_dimension",
+      "safety_dimension": "unit",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-OPALWIND-HEAT"
+        ],
+        "reason_codes": [
+          "UNIT_DIMENSION_MISMATCH"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-033",
+      "category": "indicator",
+      "safety_dimension": "indicator",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-HONEYSKY-INDICATOR"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-034",
+      "category": "declared_product",
+      "safety_dimension": "declared_product",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-ALMONDRIVER-DECLARED"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-035",
+      "category": "source_quality",
+      "safety_dimension": "source_quality",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-SILVERHEATH-REJECTED"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-036",
+      "category": "admission_eligibility",
+      "safety_dimension": "source_quality",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-CRIMSONBAY-BLOCKED"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-037",
+      "category": "forbidden_candidate_escape",
+      "safety_dimension": "forbidden_candidate_escape",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-WRENFIELD-LIMIT"
+        ],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-GATE-038",
+      "category": "invalid_catalog_unit",
+      "safety_dimension": "unit",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": false,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "unresolved",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [
+          "R5-IRIS-BAD-UNIT"
+        ],
+        "reason_codes": [
+          "CATALOG_FACTOR_UNIT_INVALID"
+        ]
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ASK-039",
+      "category": "missing_subject",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ASK-040",
+      "category": "missing_subject",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ASK-041",
+      "category": "missing_subject",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ASK-042",
+      "category": "missing_subject",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ASK-043",
+      "category": "missing_subject",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "more_input_needed",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ZERO-044",
+      "category": "catalog_absent",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "supplier_data_required",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ZERO-045",
+      "category": "catalog_absent",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "supplier_data_required",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ZERO-046",
+      "category": "catalog_absent",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "supplier_data_required",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ZERO-047",
+      "category": "catalog_absent",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "supplier_data_required",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    },
+    {
+      "case_id": "R5-ZERO-048",
+      "category": "catalog_absent",
+      "safety_dimension": "none",
+      "answerable": false,
+      "passed": false,
+      "checks": {
+        "http_status": false,
+        "terminal_status": false,
+        "reason_codes": true,
+        "top_1": true,
+        "retrieval_recall": true,
+        "abstention": true,
+        "forbidden_escape": true,
+        "deterministic_replay": true,
+        "trace_present": true
+      },
+      "expected": {
+        "http_status": 200,
+        "status": "supplier_data_required",
+        "acceptable_source_ids": [],
+        "forbidden_source_ids": [],
+        "reason_codes": []
+      },
+      "observed": {
+        "http_status": 400,
+        "status": null,
+        "follow_up": null,
+        "reason_codes": [],
+        "source_ids": [],
+        "retrieved_source_ids": []
+      },
+      "trace": null
+    }
+  ]
+}

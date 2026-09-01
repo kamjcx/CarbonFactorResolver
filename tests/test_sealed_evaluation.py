@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.sealed_evaluation import aggregate, load_cases, release_gate, run_sealed
+from tools.sealed_evaluation import aggregate, load_cases, load_catalog, release_gate, run_sealed
 
 
 def _case(case_id: str, **changes):
@@ -39,6 +39,17 @@ def test_loader_rejects_empty_duplicate_and_missing_cases(tmp_path: Path) -> Non
     _write_jsonl(path, [{"case_id": "missing"}])
     with pytest.raises(ValueError, match="lacks"):
         load_cases(path)
+
+
+def test_catalog_loader_rejects_invalid_database_anchor_before_runtime(tmp_path: Path) -> None:
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps({
+        "database": {"name": "invalid", "sha256": "bc" * 31},
+        "records": [],
+    }), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="64 lowercase hex"):
+        load_catalog(path)
 
 
 def test_metric_denominators_empty_populations_and_unknown_safety_dimension() -> None:

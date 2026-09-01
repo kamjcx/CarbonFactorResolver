@@ -64,6 +64,16 @@ def load_catalog(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or not isinstance(payload.get("records"), list):
         raise ValueError("sealed catalogue must be an object with records")
+    database = payload.get("database")
+    if not isinstance(database, dict):
+        raise ValueError("sealed catalogue must include database metadata")
+    database_sha256 = database.get("sha256")
+    if not (
+        isinstance(database_sha256, str)
+        and len(database_sha256) == 64
+        and all(character in "0123456789abcdef" for character in database_sha256)
+    ):
+        raise ValueError("sealed catalogue database SHA-256 must be 64 lowercase hex characters")
     ids = [str(record.get("record_id", "")) for record in payload["records"]]
     if not all(ids) or len(ids) != len(set(ids)):
         raise ValueError("sealed catalogue record_id values must be non-empty and unique")
