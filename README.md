@@ -149,7 +149,7 @@ sealed unit v4 acceptance. See
 - [Data licensing](DATA_LICENSE.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
-- [Release notes](docs/RELEASE_NOTES_V0.14.md)
+- [Release notes](docs/RELEASE_NOTES_V0.14.1.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 
 ## Data and license
