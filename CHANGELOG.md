@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.0 - 2026-09-02
+
+- Promote rc.6 to the stable portfolio release after merge and required remote checks passed.
+- Correct stale public documentation that still described rc.2/rc.3 as the current release
+  blocker; RC3-RC5 remain preserved historical NO-GO evidence and RC6 remains the sealed GO
+  evidence.
+- Change packaging and release documentation only. Runtime resolution, qualification,
+  ranking, public fixtures, frozen answers, and sealed evaluation evidence are unchanged from
+  rc.6.
+- Publish as a portfolio-ready, reproducible research prototype, not a production
+  carbon-accounting system or formal factor catalogue.
+
 ## 0.14.0-rc.6 - 2026-09-02
 
 - Preserve RC5 as NO-GO after a malformed 62-character sealed database anchor caused all

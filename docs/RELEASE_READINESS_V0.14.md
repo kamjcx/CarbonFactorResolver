@@ -2,7 +2,8 @@
 
 ## Decision
 
-`v0.14.0` portfolio release: **GO**, subject to merge and remote CI remaining green
+`v0.14.0` portfolio release: **GO**. The release branch was merged and the required remote
+`test` and `container` checks passed on the final release commit.
 
 RC3–RC5 failures are preserved without rewriting their inputs or results. RC6 used a wholly
 new 48-case public-synthetic set and passed every frozen case contract and aggregate safety
@@ -50,9 +51,11 @@ production-ready accounting system or as having 97.5% real-world accuracy.
 
 ## Release boundary
 
-Merge only after remote `test` and `container` checks pass at the final branch SHA. Publish
-the wheel, source distribution, manifest, raw rc.6 result hash, and container digest. Do not
-publish licensed factor data, customer evidence, or claim production readiness.
+The merge and remote-check conditions are satisfied. The stable release publishes the wheel,
+source distribution, manifest, unchanged rc.6 raw-result hash, and container digest. It does
+not publish licensed factor data or customer evidence and does not claim production readiness.
+No runtime, qualification, ranking, fixture, or sealed-evaluation behavior changed between
+rc.6 and the stable release.
 
 Historical first-run SHA values and their patch-equivalent post-merge/rebase commits are
 recorded in [CFR_RC_REBASE_MAP.md](CFR_RC_REBASE_MAP.md); raw evidence is never rewritten.
