@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.14.2 - 2026-09-03
+
 - Add a developer-only autonomous contract evaluator with 414 deterministic public-synthetic
   cases, an independent Oracle, explicit-denominator metrics, immutable first-run manifests,
   Bad Case attribution and adversarial approval/locking checks.
@@ -14,6 +16,13 @@
   structured source lacks a valid document SHA-256, and serialize terminal approval decisions.
 - Preserve six geography/year raw failures and document them as a versioned benchmark-label
   disagreement with the published `USABLE_WITH_ASSUMPTIONS` contract.
+- Add a 20-record `PUBLIC_SYNTHETIC` bring-your-own-catalog example spanning materials,
+  energy, transport and processes, plus exact, `MORE_INPUT` and safe-refusal demonstrations.
+- Add a BYOC tutorial for file, HTTP and custom repository adapters with explicit schema,
+  fail-closed, licensing and human-approval boundaries.
+- Replace the README hero architecture visual with CFR's internal resolution flow, making
+  recall versus deterministic admission, excluded-candidate Trace, human review and immutable
+  locking visible; no Resolver behavior changes are introduced by the presentation work.
 
 ## 0.14.1 - 2026-09-02
 
