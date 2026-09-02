@@ -89,8 +89,9 @@ async def test_byoc_copyable_examples_match_resolution_contract() -> None:
     payload = await run_cases(("exact", "more-input", "safe-refusal"))
     serialized = json.dumps(payload, ensure_ascii=False)
     assert payload["catalog"] == "data/fixtures/catalog/byoc_public_synthetic_20.json"
+    assert "fixture://byoc-public-synthetic-20" in serialized
     assert "file://" not in serialized
-    assert "d:\\" not in serialized.casefold()
+    assert re.search(r"[a-z]:\\\\", serialized, flags=re.IGNORECASE) is None
     results = payload["results"]
     assert payload["data_classification"] == "PUBLIC_SYNTHETIC"
     assert payload["not_for_carbon_accounting"] is True
