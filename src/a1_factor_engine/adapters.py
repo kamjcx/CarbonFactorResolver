@@ -753,6 +753,7 @@ class InMemoryResolutionStore:
         self.approvals: dict[tuple[str, str], ApprovalRecord] = {}
         self.locked: dict[str, LockedResolution] = {}
         self._run_lock = asyncio.Lock()
+        self._approval_lock = asyncio.Lock()
 
     async def has_resolution_run(self, request_id: str) -> bool:
         return request_id in self.recommendations or request_id in self.traces
@@ -781,9 +782,13 @@ class InMemoryResolutionStore:
         return self.traces.get(request_id)
 
     async def save_approval(self, approval: ApprovalRecord) -> None:
-        if approval.request_id in self.locked:
-            raise ValueError("locked resolution cannot be changed")
-        self.approvals[(approval.request_id, approval.candidate_id)] = approval
+        key = (approval.request_id, approval.candidate_id)
+        async with self._approval_lock:
+            if approval.request_id in self.locked:
+                raise ValueError("locked resolution cannot be changed")
+            if key in self.approvals:
+                raise ValueError("candidate already has a terminal human decision")
+            self.approvals[key] = approval
 
     async def get_approval(self, request_id: str, candidate_id: str) -> ApprovalRecord | None:
         return self.approvals.get((request_id, candidate_id))

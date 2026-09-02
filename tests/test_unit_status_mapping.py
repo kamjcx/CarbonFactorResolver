@@ -97,6 +97,8 @@ def _catalog_record(
         "product_form": "coil",
         "composition": "carbon steel",
         "production_process": "electric arc furnace",
+        "source_document_locator": f"https://example.invalid/unit/{source_id}",
+        "source_document_sha256": "6" * 64,
     }
 
 

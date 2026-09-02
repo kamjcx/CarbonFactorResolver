@@ -9,6 +9,11 @@
   latency percentiles, peak RSS, concurrency 10/25/50, replay, ordering, noise and Top-K checks.
 - Keep Resolver runtime, retrieval, ranking, qualification, formal factors and every existing
   frozen answer unchanged; autonomous failures require separate adjudication.
+- Repair three contract-backed findings without rewriting Autonomous Evaluation V1: require
+  decisive input when multiple process/form/geography/year values remain, fail closed when a
+  structured source lacks a valid document SHA-256, and serialize terminal approval decisions.
+- Preserve six geography/year raw failures and document them as a versioned benchmark-label
+  disagreement with the published `USABLE_WITH_ASSUMPTIONS` contract.
 
 ## 0.14.1 - 2026-09-02
 

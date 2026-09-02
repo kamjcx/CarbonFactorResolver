@@ -69,3 +69,10 @@ The accompanying 10k/50k synthetic performance run passed replay/order/noise inv
 Its 50k index build was 117.67 seconds, warm Resolver P50/P95/P99 was 1.321/1.409/1.435 seconds,
 peak RSS was 205.5 MB, and one-process throughput was about 0.75 requests/second at concurrency
 10/25/50. These results expose scale cost; they are not a production SLA.
+
+The post-first-run repair cycle is a regression, not a new independent evaluation. It fixes
+decisive-attribute `MORE_INPUT`, structured-source document-hash admission, and concurrent
+terminal-decision races without changing the V1 generator or frozen first-run evidence. Six
+geography/year cases remain raw failures because their frozen labels conflict with CFR's
+published `USABLE_WITH_ASSUMPTIONS` contract. The versioned rationale and exact case IDs are in
+[the V1 adjudication](docs/CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION.md).

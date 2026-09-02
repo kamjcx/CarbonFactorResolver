@@ -19,8 +19,4 @@ async def test_state_machine_attack_harness_covers_required_transitions() -> Non
         "CONCURRENT_DUPLICATE_APPROVAL_LOCK",
     }
     assert all("passed" in item and "observed" in item for item in results)
-    assert all(
-        item["passed"]
-        for item in results
-        if item["attack_id"] != "CONCURRENT_DUPLICATE_APPROVAL_LOCK"
-    )
+    assert all(item["passed"] for item in results)
