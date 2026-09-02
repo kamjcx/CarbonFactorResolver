@@ -33,6 +33,8 @@ from .units import (
     plan_factor_conversion,
 )
 
+SOURCE_DOCUMENT_HASH_REQUIRED = "SOURCE_DOCUMENT_HASH_REQUIRED"
+
 
 def text(value: str | None) -> str:
     return normalize_text(value).value
@@ -247,6 +249,12 @@ def qualify_record(
     else:
         subject_dim = _dimension(QualificationStatus.PASS)
 
+    structured_catalog_record = "catalog_locator" in source.metadata
+    document_hash = source.source_document_sha256 or ""
+    document_hash_valid = bool(
+        len(document_hash) == 64
+        and all(character in "0123456789abcdef" for character in document_hash)
+    )
     if not source.admission_eligible or source.source_quality_status == SourceQualityStatus.REJECTED:
         quality_dim = _dimension(
             QualificationStatus.MISMATCH,
@@ -254,6 +262,11 @@ def qualify_record(
         )
     elif source.source_quality_status == SourceQualityStatus.NEEDS_REVIEW:
         quality_dim = _dimension(QualificationStatus.UNKNOWN, "source quality requires human review")
+    elif structured_catalog_record and not document_hash_valid:
+        quality_dim = _dimension(
+            QualificationStatus.UNKNOWN,
+            SOURCE_DOCUMENT_HASH_REQUIRED,
+        )
     else:
         quality_dim = _dimension(QualificationStatus.PASS)
 

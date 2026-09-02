@@ -1,0 +1,23 @@
+{
+  "adjudication": "docs/CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION.md",
+  "artifacts": [
+    {
+      "path": "result.json",
+      "sha256": "cc26dcf1063e959fb25320e130b31a96152987adccdce881bd0cc2f5003348e4",
+      "size": 1239900
+    },
+    {
+      "path": "REPORT.md",
+      "sha256": "2070db1090b45d83addcd243f3e6760f3fe7ec7ef5d82bea4c9c29cdb6229081",
+      "size": 2007
+    }
+  ],
+  "contains_licensed_or_customer_data": false,
+  "created_at": "2026-09-02T15:16:29.6819020Z",
+  "data_classification": "PUBLIC_SYNTHETIC",
+  "evaluation_schema": "cfr-autonomous-evaluation-run/v1",
+  "frozen_contract_sha256": "3ef66c0684c562a42a460697e1631131d6e45a0106ea88eaebba397c6249103a",
+  "git_commit": "07883423a5874b63dd2dff8ecf9d34cf8dde8260",
+  "run_kind": "POST_FIX_REGRESSION_NOT_INDEPENDENT",
+  "schema_version": "cfr-autonomous-evaluation-regression-manifest/v1"
+}

@@ -44,3 +44,30 @@ async def test_run_case_uses_real_engine_and_deterministic_replay() -> None:
     assert row["observation"]["trace_complete"] is True
     assert replay_equal is True
 
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "AUTO-MISSING-SPINEL",
+        "AUTO-MISSING-GRID",
+        "AUTO-MISSING-BAUXITE",
+        "AUTO-MISSING-GRAPHITE",
+    ],
+)
+async def test_missing_decisive_attributes_return_more_input(case_id: str) -> None:
+    case = next(item for item in generate_bundle().cases if item.case_id == case_id)
+    row, _ = await _run_case(case)
+    assert row["observation"]["status"] == "more_input_needed"
+    assert not row["observation"]["primary_ids"]
+    assert row["observation"]["reviewable_ids"]
+
+
+@pytest.mark.asyncio
+async def test_missing_document_hash_cannot_become_primary() -> None:
+    case = next(item for item in generate_bundle().cases if item.case_id == "AUTO-01-PROV-HASH")
+    row, _ = await _run_case(case)
+    assert not row["observation"]["primary_ids"]
+    assert not row["observation"]["reviewable_ids"]
+    assert "SOURCE_DOCUMENT_HASH_REQUIRED" in row["observation"]["reason_codes"]
+

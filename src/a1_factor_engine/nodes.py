@@ -71,6 +71,7 @@ from .process_adjustment import resolve_process_variant
 from .qualification import (
     EXPLICIT_NON_MATERIAL_SUBJECTS,
     OPERATIONAL_FACTOR_SUBJECTS,
+    SOURCE_DOCUMENT_HASH_REQUIRED,
     qualify_record,
 )
 from .qualification import (
@@ -1415,6 +1416,12 @@ class TopKNode(Node[GraphState]):
             if reason in stable_unit_codes
         )
         reason_codes = tuple(code for code in stable_unit_codes if code in observed_unit_codes)
+        source_document_hash_required = any(
+            SOURCE_DOCUMENT_HASH_REQUIRED in item.source_quality.reasons
+            for item in state.qualifications
+        )
+        if source_document_hash_required:
+            reason_codes = (*reason_codes, SOURCE_DOCUMENT_HASH_REQUIRED)
         admission_rejected = bool(state.qualifications) and not any(
             item.eligible for item in state.qualifications
         )
@@ -1438,6 +1445,54 @@ class TopKNode(Node[GraphState]):
             if not candidate_hard_rejection_reasons(candidate)
             and candidate.result_tier == ResultTier.REFERENCE_ONLY
         )
+        candidate_ambiguity_fields: list[str] = []
+        if state.normalized is not None and not state.request_gaps:
+            ambiguity_by_id = {
+                candidate.candidate_id: candidate
+                for candidate in (*eligible, *reviewable)
+            }
+            ambiguity_pool = tuple(ambiguity_by_id.values())
+            decisive_fields = (
+                ("production_process", state.normalized.production_process),
+                ("product_form", state.normalized.product_form),
+                ("geography", state.normalized.geography),
+                ("year", state.normalized.year),
+            )
+            for field_name, requested_value in decisive_fields:
+                observed_values = {
+                    getattr(candidate.source, field_name)
+                    for candidate in ambiguity_pool
+                    if getattr(candidate.source, field_name) not in (None, "")
+                }
+                if requested_value in (None, "") and len(observed_values) > 1:
+                    candidate_ambiguity_fields.append(field_name)
+            if candidate_ambiguity_fields:
+                state.required_fields = tuple(dict.fromkeys((
+                    *state.required_fields,
+                    *candidate_ambiguity_fields,
+                )))
+                reason_by_field = {
+                    "production_process": "PROCESS_REQUIRED",
+                    "product_form": "PRODUCT_FORM_REQUIRED",
+                    "geography": "GEOGRAPHY_REQUIRED",
+                    "year": "YEAR_REQUIRED",
+                }
+                reason_codes = tuple(dict.fromkeys((
+                    *reason_codes,
+                    *(reason_by_field[field] for field in candidate_ambiguity_fields),
+                )))
+                reviewable = tuple(
+                    replace(
+                        candidate,
+                        result_tier=ResultTier.REFERENCE_ONLY,
+                        limitations=tuple(dict.fromkeys((
+                            *candidate.limitations,
+                            "candidate requires a decisive request attribute before selection",
+                        ))),
+                    )
+                    for candidate in ambiguity_pool
+                )
+                eligible = ()
         if state.request_gaps:
             # Discovery candidates remain in Trace, but incomplete request
             # identity can never silently become a selectable recommendation.
@@ -1483,6 +1538,15 @@ class TopKNode(Node[GraphState]):
         has_user_selectable_output = bool(eligible or reviewable)
         unresolved_gaps = diagnostic_gaps if not has_user_selectable_output else ()
         question_items: list[str] = []
+        ambiguity_questions = {
+            "production_process": "请确认目标生产工艺或路线。",
+            "product_form": "请确认目标产品形态或规格。",
+            "geography": "请确认目标适用地域。",
+            "year": "请确认目标适用年份。",
+        }
+        question_items.extend(
+            ambiguity_questions[field] for field in candidate_ambiguity_fields
+        )
         if any(gap.gap_type == GapType.PROCESS_VARIANT for gap in unresolved_gaps):
             question_items.extend((
                 "请补充目标工艺路线的综合能耗及能源分配。",
@@ -1572,6 +1636,8 @@ class TopKNode(Node[GraphState]):
                 message=(
                     "required input specification is missing; choose a material subtype before selecting a factor"
                     if state.request_gaps
+                    else "multiple qualified records require a decisive request attribute before selection"
+                    if candidate_ambiguity_fields
                     else "mathematically required reference-flow evidence is missing"
                     if state.required_fields and not state.request_gaps
                     else (

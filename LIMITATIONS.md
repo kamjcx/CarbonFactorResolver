@@ -22,6 +22,9 @@ carbon footprint.
   establish general accuracy on enterprise language or licensed catalogs.
 - The 10k/50k benchmark is a synthetic exact-match/robustness workload. Python event-loop
   concurrency is not equivalent to multi-process production capacity, and no SLA is claimed.
+- Geography and year differences are not universal hard exclusions. They may remain selectable
+  only with disclosed applicability limitations and an explicit human assumption decision;
+  deployments that require exact regional or temporal identity must apply a stricter policy.
 
 Roadmap items such as broader ontologies, document intelligence, report generation, complex UI,
 and automatic formal-catalogue workflows are deliberately outside this release.

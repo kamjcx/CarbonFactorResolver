@@ -107,6 +107,7 @@ from .models import (
     TransformationStep,
 )
 from .process_adjustment import stoichiometric_carbon_emission_kgco2e_per_kg
+from .qualification import SOURCE_DOCUMENT_HASH_REQUIRED
 from .units import (
     CATALOG_FACTOR_UNIT_INVALID,
     UNIT_CONVERSION_EVIDENCE_REQUIRED,
@@ -238,6 +239,7 @@ __all__ = [
     "CATALOG_FACTOR_UNIT_INVALID",
     "UNIT_DIMENSION_MISMATCH",
     "UNIT_CONVERSION_EVIDENCE_REQUIRED",
+    "SOURCE_DOCUMENT_HASH_REQUIRED",
     "parse_activity_unit",
     "parse_factor_unit",
     "parse_catalog_factor_unit",

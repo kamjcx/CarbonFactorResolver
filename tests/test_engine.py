@@ -267,6 +267,8 @@ async def test_catalog_quality_fields_are_fail_closed_when_missing_or_invalid() 
             "indicator": "GWP-total", "declared_product": "steel coil",
             "boundary": "cradle-to-gate", "boundary_modules": ["A1", "A2", "A3"],
             "production_process": "electric arc furnace",
+            "source_document_locator": "https://example.invalid/formal/steel",
+            "source_document_sha256": "1" * 64,
         }
         if quality is not None:
             item["source_quality_status"] = quality
@@ -1140,6 +1142,8 @@ async def test_http_catalog_adapter_anchors_formal_database_response():
             "product_form": "coil",
             "composition": "carbon steel",
             "production_process": "electric arc furnace",
+            "source_document_locator": "https://example.invalid/formal/steel-coil",
+            "source_document_sha256": "5" * 64,
         }],
     }
     adapter = HttpCatalogFactorRepository(
@@ -2900,6 +2904,8 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
             "standard": "GB/T XXXX-202X 征求意见稿",
             "scope": "raw_material",
             "production_process": "sintered",
+            "source_document_locator": "https://example.invalid/refractory/sintered-spinel",
+            "source_document_sha256": "2" * 64,
         }],
     }
     result = await A1FactorResolutionEngine(
@@ -3037,6 +3043,8 @@ async def test_malformed_source_priority_isolated_to_record_warning(invalid_rank
         "production_process": "electric arc furnace",
         "geography": "CN",
         "year": 2024,
+        "source_document_locator": "https://example.invalid/priority/steel",
+        "source_document_sha256": "3" * 64,
     }
     payload = {
         "catalog_version": "dirty-priority-v1",
@@ -3093,6 +3101,8 @@ async def test_explicit_dataset_approval_anchor_can_lift_draft_tier_cap():
             "primary_label": "产品碳足迹因子",
             "standard": "GB/T XXXX-202X 征求意见稿",
             "production_process": "sintered",
+            "source_document_locator": "https://example.invalid/approved/sintered-spinel",
+            "source_document_sha256": "4" * 64,
         }],
     }
     approved_policy = CatalogDatasetPolicy(
