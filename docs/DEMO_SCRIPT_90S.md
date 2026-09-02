@@ -33,5 +33,5 @@ RC6 passed its new 48-case sealed first run at 48/48 with zero boundary, subject
 forbidden-candidate or HTTP-500 failures. The project demonstrates retrieval engineering,
 deterministic safety and honest release gates—not a production carbon-accounting claim."
 
-Redacted trace payloads: [demo_traces.json](../evidence/releases/v0.14.0-rc.6/demo_traces.json).
+Sealed-run evidence: [RC6 first-run record](../evidence/releases/v0.14.0-rc.6/SEALED_FIRST_RUN.md).
 
