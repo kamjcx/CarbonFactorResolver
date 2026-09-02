@@ -83,6 +83,26 @@ and decision reasons rather than presenting an unexplained search result.
 
 See the [90-second demo script](docs/DEMO_SCRIPT_90S.md) for a concise interview walkthrough.
 
+## Autonomous contract evaluation
+
+The developer-only evaluator generates 414 non-duplicate public-synthetic cases from an
+independent, versioned Oracle. It exercises exact boundary and subject matrices, unit
+dimensions, evidence degradation, source priority, ambiguity, high-risk neighbouring
+entities, deterministic replay, catalog perturbation, and approval/lock attacks against the
+real Resolver. A separate scale harness measures 10k/50k synthetic catalogs at concurrency
+10/25/50. Neither harness changes or approves a factor, and neither contains licensed or
+customer data.
+
+```bash
+python -m tools.autonomous_evaluation --output outputs/autonomous-evaluation.json
+python -m tools.autonomous_evaluation.performance --sizes 10000,50000 --concurrency 10,25,50
+```
+
+Generated expectations come from explicit contracts rather than from Resolver output. First
+runs, failures, Bad Case attribution and artifact hashes are retained; a failed gate is a
+diagnostic result, not tuned away. See the
+[autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md).
+
 ## Architecture and product boundary
 
 ```text
@@ -125,6 +145,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
 | Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
+| Autonomous Evaluation V1 | 414 generated contracts + workflow attacks + 10k/50k scale | systematic contract exploration; results do not replace sealed or real-world validation |
 
 RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` adds the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent

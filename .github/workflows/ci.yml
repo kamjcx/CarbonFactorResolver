@@ -66,6 +66,22 @@ jobs:
         run: >-
           uv run --extra test --extra api python tools/portfolio_validation.py
           --output outputs/portfolio_validation
+      - name: Run autonomous public-synthetic evaluation
+        run: >-
+          uv run --extra test --extra api python -m tools.autonomous_evaluation
+          --output outputs/autonomous_evaluation/ci-run.json
+      - name: Run autonomous scale smoke
+        run: >-
+          uv run --extra test python -m tools.autonomous_evaluation.performance
+          --sizes 1000 --concurrency 10,25,50 --warm-queries 3
+          --output outputs/autonomous_evaluation/performance-smoke.json
+      - name: Upload autonomous evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-evaluation-${{ github.sha }}
+          path: outputs/autonomous_evaluation/
+          if-no-files-found: error
       - name: Upload Portfolio Challenge evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,252 @@
+{
+  "schema_version": "cfr-public-synthetic-performance/1.0",
+  "benchmark_kind": "developer-only public-synthetic performance and robustness",
+  "production_performance_claim": false,
+  "licensed_or_customer_data_included": false,
+  "configuration": {
+    "sizes": [
+      10000,
+      50000
+    ],
+    "concurrency_levels": [
+      10,
+      25,
+      50
+    ],
+    "warm_queries": 7,
+    "seed": 20260902,
+    "execution_model": "asyncio workload over shared prebuilt semantic index"
+  },
+  "total_wall_ms": 526384.2048,
+  "results": [
+    {
+      "catalog": {
+        "record_count": 10000,
+        "sha256": "acb344b7b66bfb9c53174506b9498b142378263b4e855465f3ba36515ecc56f2",
+        "data_class": "PUBLIC_SYNTHETIC",
+        "licensed_data_included": false,
+        "generator_version": "public-synthetic-catalog/1.0",
+        "generator_contract_sha256": "7615d821143dd58f1cda61fb59bd5f7acaf4ca2ba996ab8279951020cd570fef"
+      },
+      "timings": {
+        "catalog_generation_ms": 140.162,
+        "semantic_index_build_ms": 21321.5881,
+        "cold_resolver_ms": 284.7528,
+        "cold_start_total_ms": 21746.5029,
+        "repository_query": {
+          "samples": 7,
+          "min_ms": 252.9716,
+          "p50_ms": 286.9414,
+          "p95_ms": 337.76799,
+          "p99_ms": 338.712318,
+          "max_ms": 338.9484
+        },
+        "warm_resolver": {
+          "samples": 7,
+          "min_ms": 253.2474,
+          "p50_ms": 263.6236,
+          "p95_ms": 292.06868,
+          "p99_ms": 296.686136,
+          "max_ms": 297.8405
+        }
+      },
+      "concurrency": {
+        "10": {
+          "requests": 10,
+          "wall_ms": 2690.8591,
+          "throughput_requests_per_second": 3.716285,
+          "latency": {
+            "samples": 10,
+            "min_ms": 253.7179,
+            "p50_ms": 262.5681,
+            "p95_ms": 296.19416,
+            "p99_ms": 303.365072,
+            "max_ms": 305.1578
+          },
+          "top_k_stable": true
+        },
+        "25": {
+          "requests": 25,
+          "wall_ms": 6631.4747,
+          "throughput_requests_per_second": 3.769901,
+          "latency": {
+            "samples": 25,
+            "min_ms": 253.4957,
+            "p50_ms": 262.8207,
+            "p95_ms": 282.2189,
+            "p99_ms": 288.45236,
+            "max_ms": 289.9742
+          },
+          "top_k_stable": true
+        },
+        "50": {
+          "requests": 50,
+          "wall_ms": 13429.5129,
+          "throughput_requests_per_second": 3.723143,
+          "latency": {
+            "samples": 50,
+            "min_ms": 252.6589,
+            "p50_ms": 260.34905,
+            "p95_ms": 311.290115,
+            "p99_ms": 314.073156,
+            "max_ms": 314.9089
+          },
+          "top_k_stable": true
+        }
+      },
+      "robustness": {
+        "target_source_id": "public-synthetic-00000000",
+        "cold_top_k": [
+          "public-synthetic-00000000"
+        ],
+        "deterministic_replay": {
+          "passed": true,
+          "repetitions": 14,
+          "signature_sha256": "af914b38997c9522c449e546a66d8180ac8f30340006028077a3b7c3a173284b"
+        },
+        "catalog_order_perturbation": {
+          "passed": true,
+          "catalog_sha_stable": true,
+          "baseline_top_k": [
+            "public-synthetic-00000000"
+          ],
+          "perturbed_top_k": [
+            "public-synthetic-00000000"
+          ]
+        },
+        "noise_expansion_top_k": {
+          "passed": true,
+          "baseline_record_count": 5000,
+          "expanded_record_count": 10000,
+          "baseline_top_k": [
+            "public-synthetic-00000000"
+          ],
+          "expanded_top_k": [
+            "public-synthetic-00000000"
+          ]
+        }
+      },
+      "peak_rss_bytes": 72069120
+    },
+    {
+      "catalog": {
+        "record_count": 50000,
+        "sha256": "e7860ced7f68b796e621c2572303e38b4b60a9dc376a312c39029d18c75a6340",
+        "data_class": "PUBLIC_SYNTHETIC",
+        "licensed_data_included": false,
+        "generator_version": "public-synthetic-catalog/1.0",
+        "generator_contract_sha256": "7615d821143dd58f1cda61fb59bd5f7acaf4ca2ba996ab8279951020cd570fef"
+      },
+      "timings": {
+        "catalog_generation_ms": 750.1635,
+        "semantic_index_build_ms": 117669.0982,
+        "cold_resolver_ms": 1247.2137,
+        "cold_start_total_ms": 119666.4754,
+        "repository_query": {
+          "samples": 7,
+          "min_ms": 1233.9523,
+          "p50_ms": 1331.6014,
+          "p95_ms": 1395.85898,
+          "p99_ms": 1401.746756,
+          "max_ms": 1403.2187
+        },
+        "warm_resolver": {
+          "samples": 7,
+          "min_ms": 1247.5772,
+          "p50_ms": 1321.3985,
+          "p95_ms": 1408.64488,
+          "p99_ms": 1435.363456,
+          "max_ms": 1442.0431
+        }
+      },
+      "concurrency": {
+        "10": {
+          "requests": 10,
+          "wall_ms": 13355.1867,
+          "throughput_requests_per_second": 0.748773,
+          "latency": {
+            "samples": 10,
+            "min_ms": 1244.4724,
+            "p50_ms": 1324.568,
+            "p95_ms": 1462.74074,
+            "p99_ms": 1530.319508,
+            "max_ms": 1547.2142
+          },
+          "top_k_stable": true
+        },
+        "25": {
+          "requests": 25,
+          "wall_ms": 33348.4883,
+          "throughput_requests_per_second": 0.749659,
+          "latency": {
+            "samples": 25,
+            "min_ms": 1245.3898,
+            "p50_ms": 1322.4075,
+            "p95_ms": 1422.93232,
+            "p99_ms": 1519.913804,
+            "max_ms": 1550.0051
+          },
+          "top_k_stable": true
+        },
+        "50": {
+          "requests": 50,
+          "wall_ms": 66842.5258,
+          "throughput_requests_per_second": 0.748027,
+          "latency": {
+            "samples": 50,
+            "min_ms": 1266.692,
+            "p50_ms": 1337.75905,
+            "p95_ms": 1402.22937,
+            "p99_ms": 1449.411026,
+            "max_ms": 1487.8038
+          },
+          "top_k_stable": true
+        }
+      },
+      "robustness": {
+        "target_source_id": "public-synthetic-00000000",
+        "cold_top_k": [
+          "public-synthetic-00000000"
+        ],
+        "deterministic_replay": {
+          "passed": true,
+          "repetitions": 14,
+          "signature_sha256": "af914b38997c9522c449e546a66d8180ac8f30340006028077a3b7c3a173284b"
+        },
+        "catalog_order_perturbation": {
+          "passed": true,
+          "catalog_sha_stable": true,
+          "baseline_top_k": [
+            "public-synthetic-00000000"
+          ],
+          "perturbed_top_k": [
+            "public-synthetic-00000000"
+          ]
+        },
+        "noise_expansion_top_k": {
+          "passed": true,
+          "baseline_record_count": 25000,
+          "expanded_record_count": 50000,
+          "baseline_top_k": [
+            "public-synthetic-00000000"
+          ],
+          "expanded_top_k": [
+            "public-synthetic-00000000"
+          ]
+        }
+      },
+      "peak_rss_bytes": 205516800
+    }
+  ],
+  "hard_gates": {
+    "deterministic_replay_100_percent": true,
+    "catalog_order_invariant": true,
+    "noise_expansion_top_k_stable": true
+  },
+  "passed": true,
+  "caveats": [
+    "Synthetic exact-match workload; results are not a production SLA.",
+    "Peak RSS is process-lifetime high-water mark, not per-scale incremental allocation.",
+    "CPU-bound semantic queries may serialize within one Python event loop."
+  ]
+}

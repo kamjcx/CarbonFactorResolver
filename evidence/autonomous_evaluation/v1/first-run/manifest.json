@@ -1,0 +1,30 @@
+{
+  "artifacts": [
+    {
+      "path": "first_run.json",
+      "sha256": "5a2a61d6d595c856e17f77d94f0b488ae357ace90c0736419929855722811927",
+      "size": 1286295
+    },
+    {
+      "path": "bad_cases.json",
+      "sha256": "f4853e12350c13dc6a689a8c4710db4bea0ef58e832256a24df6d768d95c77ad",
+      "size": 222164
+    },
+    {
+      "path": "REPORT.md",
+      "sha256": "d757dea40f3b40a59da37dae16f62a9f6f52dfb897419307a61a4ccd72d2cd03",
+      "size": 1734
+    },
+    {
+      "path": "generated_contract.json",
+      "sha256": "8bd479342b52af6fd5b5eab1bd746f9d87308e52411e43da4a6610b9d2bdd1c7",
+      "size": 727338
+    }
+  ],
+  "contract_sha256": "3ef66c0684c562a42a460697e1631131d6e45a0106ea88eaebba397c6249103a",
+  "created_at": "2026-09-02T14:25:37.911874+00:00",
+  "evaluation_schema": "cfr-autonomous-evaluation-run/v1",
+  "git_commit": "fe4eee7101f4f53b463e65ba3edfd8e9f4641367",
+  "git_dirty": true,
+  "schema_version": "cfr-autonomous-evaluation-manifest/v1"
+}

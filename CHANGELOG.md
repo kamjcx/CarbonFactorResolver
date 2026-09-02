@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a developer-only autonomous contract evaluator with 414 deterministic public-synthetic
+  cases, an independent Oracle, explicit-denominator metrics, immutable first-run manifests,
+  Bad Case attribution and adversarial approval/locking checks.
+- Add deterministic 10k/50k synthetic performance and robustness benchmarks with cold/warm
+  latency percentiles, peak RSS, concurrency 10/25/50, replay, ordering, noise and Top-K checks.
+- Keep Resolver runtime, retrieval, ranking, qualification, formal factors and every existing
+  frozen answer unchanged; autonomous failures require separate adjudication.
+
 ## 0.14.1 - 2026-09-02
 
 - Preserve sealed unit v2's 31/32 first run, repair conditioned-volume evidence direction,

@@ -17,6 +17,11 @@ carbon footprint.
   and evidence validation; the public demo defaults to deterministic snapshots.
 - The offline DOCX/PDF acceptance harness is developer QA tooling, not a runtime capability.
 - Performance numbers apply only to the stated test environment and fixture set.
+- Autonomous Evaluation V1 is project-authored and contract-generated. Its breadth improves
+  systematic regression discovery, but it is not independent expert labelling and does not
+  establish general accuracy on enterprise language or licensed catalogs.
+- The 10k/50k benchmark is a synthetic exact-match/robustness workload. Python event-loop
+  concurrency is not equivalent to multi-process production capacity, and no SLA is claimed.
 
 Roadmap items such as broader ontologies, document intelligence, report generation, complex UI,
 and automatic formal-catalogue workflows are deliberately outside this release.
