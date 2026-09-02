@@ -11,7 +11,7 @@
   <rect width="1440" height="800" fill="#f3f1e9"/>
   <text x="48" y="52" fill="#0b695f" font-size="8" font-weight="600" font-family="'Geist Mono', monospace" letter-spacing="2">CFR INTERNAL DECISION FLOW</text>
   <text x="48" y="96" fill="#132826" font-size="32" font-weight="400" font-family="'Instrument Serif', serif">Recall finds possibilities. Qualification decides what may proceed.</text>
-  <text x="48" y="128" fill="#657471" font-size="16" font-family="'Geist', sans-serif">Structured input → explainable recommendation, precise question, or safe refusal. No generated factor values.</text>
+  <text x="48" y="128" fill="#596865" font-size="16" font-family="'Geist', sans-serif">Structured input → explainable recommendation, precise question, or safe refusal. No generated factor values.</text>
 
   <!-- Connectors are drawn before nodes. -->
   <line x1="240" y1="308" x2="280" y2="308" stroke="#657471" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -27,76 +27,76 @@
   <rect x="1108" y="260" width="32" height="16" rx="2" fill="#f3f1e9"/>
   <text x="1124" y="272" fill="#0b695f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">PASS</text>
   <rect x="844" y="424" width="80" height="16" rx="2" fill="#f3f1e9"/>
-  <text x="884" y="436" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">MISSING FIELD</text>
+  <text x="884" y="436" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">MISSING FIELD</text>
   <rect x="1060" y="440" width="80" height="16" rx="2" fill="#f3f1e9"/>
   <text x="1100" y="452" fill="#b23b31" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">HARD CONFLICT</text>
 
   <rect x="48" y="216" width="192" height="184" rx="8" fill="#fffef9" stroke="#657471"/>
   <rect x="60" y="228" width="48" height="16" rx="2" fill="#f3f1e9" stroke="#657471" stroke-width="0.8"/>
-  <text x="84" y="240" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">INPUT</text>
+  <text x="84" y="240" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">INPUT</text>
   <text x="64" y="272" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">ResolutionRequest</text>
-  <text x="64" y="300" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">material / activity</text>
-  <text x="64" y="324" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">unit · boundary · subject</text>
-  <text x="64" y="348" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">geography · year</text>
-  <text x="64" y="372" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">process · product form</text>
+  <text x="64" y="300" fill="#596865" font-size="12" font-family="'Geist Mono', monospace">material / activity</text>
+  <text x="64" y="324" fill="#596865" font-size="12" font-family="'Geist Mono', monospace">unit · boundary · subject</text>
+  <text x="64" y="348" fill="#596865" font-size="12" font-family="'Geist Mono', monospace">geography · year</text>
+  <text x="64" y="372" fill="#596865" font-size="12" font-family="'Geist Mono', monospace">process · product form</text>
 
   <rect x="280" y="260" width="160" height="96" rx="8" fill="#fffef9" stroke="#132826"/>
   <text x="360" y="296" fill="#132826" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Validate + normalize</text>
-  <text x="360" y="324" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">schema · units · fingerprints</text>
+  <text x="360" y="324" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">schema · units · fingerprints</text>
 
   <rect x="480" y="260" width="160" height="96" rx="8" fill="#fffef9" stroke="#132826"/>
   <text x="560" y="296" fill="#132826" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Entity + modifiers</text>
-  <text x="560" y="324" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">identity · route · form</text>
+  <text x="560" y="324" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">identity · route · form</text>
 
   <rect x="680" y="244" width="160" height="128" rx="8" fill="#fffef9" stroke="#132826"/>
   <rect x="692" y="256" width="48" height="16" rx="2" fill="#f3f1e9" stroke="#657471" stroke-width="0.8"/>
-  <text x="716" y="268" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">RECALL</text>
+  <text x="716" y="268" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">RECALL</text>
   <text x="760" y="300" fill="#132826" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Hybrid retrieval</text>
-  <text x="760" y="328" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">local + structured external</text>
-  <text x="760" y="348" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">plausible records, not approval</text>
+  <text x="760" y="328" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">local + structured external</text>
+  <text x="760" y="348" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">plausible records, not approval</text>
 
   <rect x="880" y="220" width="224" height="176" rx="8" fill="#f9e7de" stroke="#ed713a" stroke-width="1.6"/>
   <rect x="892" y="232" width="72" height="16" rx="2" fill="#fffef9" stroke="#ed713a" stroke-width="0.8"/>
-  <text x="928" y="244" fill="#ed713a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">ADMISSION</text>
+  <text x="928" y="244" fill="#8f3f25" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="1">ADMISSION</text>
   <text x="992" y="276" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Deterministic gates</text>
-  <text x="992" y="304" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">unit · boundary · subject</text>
-  <text x="992" y="324" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">process/form · geo/year</text>
-  <text x="992" y="344" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">provenance · document hash</text>
+  <text x="992" y="304" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">unit · boundary · subject</text>
+  <text x="992" y="324" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">process/form · geo/year</text>
+  <text x="992" y="344" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">provenance · document hash</text>
   <line x1="904" y1="360" x2="1080" y2="360" stroke="#d8d6ca"/>
   <text x="992" y="380" fill="#b23b31" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">EXCLUDED → reason code + Trace</text>
 
   <rect x="1144" y="220" width="208" height="156" rx="8" fill="#edf4ef" stroke="#0b695f"/>
   <text x="1248" y="264" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Rank + explain</text>
-  <text x="1248" y="296" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">eligible Top-K only</text>
-  <text x="1248" y="320" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">evidence · limitations · Trace</text>
+  <text x="1248" y="296" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">eligible Top-K only</text>
+  <text x="1248" y="320" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">evidence · limitations · Trace</text>
   <text x="1248" y="348" fill="#0b695f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">RECOMMENDATION_READY</text>
 
   <rect x="728" y="496" width="208" height="112" rx="24" fill="#fffef9" stroke="#657471"/>
   <text x="832" y="536" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ask one precise question</text>
-  <text x="832" y="568" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">MORE_INPUT_NEEDED</text>
-  <text x="832" y="588" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">alternatives stay REFERENCE_ONLY</text>
+  <text x="832" y="568" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">MORE_INPUT_NEEDED</text>
+  <text x="832" y="588" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">alternatives stay REFERENCE_ONLY</text>
 
   <rect x="952" y="496" width="192" height="112" rx="24" fill="#fffef9" stroke="#b23b31"/>
   <text x="1048" y="536" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Safe refusal</text>
   <text x="1048" y="568" fill="#b23b31" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">UNRESOLVED / DATA REQUIRED</text>
-  <text x="1048" y="588" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">never invent a numeric factor</text>
+  <text x="1048" y="588" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">never invent a numeric factor</text>
 
   <rect x="1144" y="496" width="208" height="112" rx="8" fill="#edf4ef" stroke="#0b695f"/>
   <text x="1248" y="532" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Human review</text>
-  <text x="1248" y="560" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">optional reasoned override</text>
+  <text x="1248" y="560" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">optional reasoned override</text>
   <text x="1248" y="584" fill="#0b695f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">IMMUTABLE LOCKED FACTOR</text>
 
-  <text x="880" y="188" fill="#ed713a" font-size="16" font-family="'Instrument Serif', serif" font-style="italic">Recall is broad; admission is deliberately narrow.</text>
+  <text x="880" y="188" fill="#8f3f25" font-size="16" font-family="'Instrument Serif', serif" font-style="italic">Recall is broad; admission is deliberately narrow.</text>
 
   <line x1="48" y1="672" x2="1392" y2="672" stroke="#d8d6ca" stroke-width="0.8"/>
-  <text x="48" y="696" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="2">LEGEND</text>
+  <text x="48" y="696" fill="#596865" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="2">LEGEND</text>
   <rect x="144" y="684" width="20" height="20" rx="4" fill="#fffef9" stroke="#132826"/>
-  <text x="176" y="700" fill="#657471" font-size="12" font-family="'Geist', sans-serif">processing stage</text>
+  <text x="176" y="700" fill="#596865" font-size="12" font-family="'Geist', sans-serif">processing stage</text>
   <rect x="344" y="684" width="20" height="20" rx="4" fill="#f9e7de" stroke="#ed713a"/>
-  <text x="376" y="700" fill="#657471" font-size="12" font-family="'Geist', sans-serif">qualification boundary</text>
+  <text x="376" y="700" fill="#596865" font-size="12" font-family="'Geist', sans-serif">qualification boundary</text>
   <rect x="584" y="684" width="20" height="20" rx="4" fill="#edf4ef" stroke="#0b695f"/>
-  <text x="616" y="700" fill="#657471" font-size="12" font-family="'Geist', sans-serif">eligible / governed state</text>
+  <text x="616" y="700" fill="#596865" font-size="12" font-family="'Geist', sans-serif">eligible / governed state</text>
   <line x1="864" y1="696" x2="904" y2="696" stroke="#b23b31" stroke-width="1.2" marker-end="url(#arrow-danger)"/>
-  <text x="920" y="700" fill="#657471" font-size="12" font-family="'Geist', sans-serif">fail-closed branch</text>
-  <text x="48" y="752" fill="#657471" font-size="8" font-family="'Geist Mono', monospace">PUBLIC PORTFOLIO DIAGRAM · STRUCTURED INPUT ONLY · NO DOCUMENT PARSING · NO AUTOMATIC APPROVAL</text>
+  <text x="920" y="700" fill="#596865" font-size="12" font-family="'Geist', sans-serif">fail-closed branch</text>
+  <text x="48" y="752" fill="#596865" font-size="8" font-family="'Geist Mono', monospace">PUBLIC PORTFOLIO DIAGRAM · STRUCTURED INPUT ONLY · NO DOCUMENT PARSING · NO AUTOMATIC APPROVAL</text>
 </svg>

@@ -102,7 +102,7 @@ For a service that already exposes the same JSON envelope, use its URL directly:
 repository = HttpCatalogFactorRepository(
     endpoint="https://catalog.example/api/v1/factors",
     timeout_seconds=10,
-    expected_database_sha256="<pinned snapshot SHA-256>",
+    expected_sha256="<pinned snapshot SHA-256>",
 )
 engine = A1FactorResolutionEngine(local_retrieval=repository)
 ```
