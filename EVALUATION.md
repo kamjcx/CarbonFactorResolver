@@ -41,3 +41,20 @@ in the RC manifest and sealed-evaluation report. Latency is descriptive for the 
 environment, not a service-level guarantee.
 
 Detailed methodology: [docs/CFR_EVALUATION_METHODOLOGY.md](docs/CFR_EVALUATION_METHODOLOGY.md).
+
+## Autonomous Evaluation V1
+
+The autonomous suite is a developer-only public-synthetic diagnostic. An independent Oracle
+derives outcomes from reviewed boundary, subject, unit, provenance and workflow contracts;
+it does not call Resolver qualification or ranking code to create its answers. The fixed seed
+produces 414 unique cases and supports immutable first-run JSON/Markdown, Bad Case categories,
+SHA-256 manifests, 100% replay checks, and API safety probes.
+
+Scale evidence is reported separately for deterministic 10k and 50k synthetic catalogs,
+including build/cold/warm P50/P95/P99, peak process RSS, concurrency 10/25/50, throughput,
+catalog-order invariance, noise expansion and Top-K stability. These measurements describe
+the recorded environment and are not a service-level objective.
+
+The suite is deliberately more adversarial than the frozen release benchmarks. A NO-GO
+result identifies a contract or implementation issue for separate adjudication; generated
+answers and first-run failures are not rewritten to improve scores.
