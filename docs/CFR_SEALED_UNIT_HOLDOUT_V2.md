@@ -1,6 +1,6 @@
 # CFR Sealed Unit Holdout v2
 
-Status: **FROZEN BEFORE FIRST RESOLVER RUN**
+Status: **FROZEN REGRESSION EVIDENCE — NOT AN INDEPENDENT HOLDOUT**
 
 This is a post-fix, unit-only acceptance set authored after the v0.14.0 runtime was frozen.
 It did not participate in development of the unit parser, conversion rules, qualification
@@ -19,11 +19,20 @@ energy scales, Unicode cubic units, conditioned-volume evidence in both directio
 cross-dimension refusal, request syntax failure, catalogue-unit failure, a usable
 alternative and genuine supplier-data absence.
 
-The first run must preserve full Trace, raw and normalized request fingerprints, and a
-stable decision fingerprint for every case. A failing first run remains failure evidence;
-it must never be repaired by changing an expected answer. If runtime code is changed in
-response to a failure, this dataset becomes a regression set and a new sealed set is
-required before any independent-holdout claim.
+The first run preserves full Trace, raw and normalized request fingerprints, and a stable
+decision fingerprint for every case. Its SHA-256 is
+`767438d7fbcfc9f7d84153c0af2e12c29ec92ab38cc39785a9bc5e310ac522e0`.
+
+That run passed 31/32. `SUH2-VOLUME-07` exposed an incorrect normalization attempt: an
+`Nm3` request carrying directional `m3 -> Nm3` evidence was pre-converted in the inverse
+direction and misreported as `UNIT_SYNTAX_UNSUPPORTED`. Expected answers were not changed.
+Runtime normalization was repaired to preserve the stated conditioned-volume reference
+state, and the conditioned-volume gate was extended to scaled ambient-volume units.
+The unchanged set then passed 32/32.
+
+Because runtime code changed in response to its first-run failure, v2 is now a regression
+set. It is not used as the post-fix independent-holdout claim; a wholly new v3 dataset is
+frozen after the repair.
 
 Run locally with:
 

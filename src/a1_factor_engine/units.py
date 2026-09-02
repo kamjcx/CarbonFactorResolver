@@ -270,7 +270,11 @@ def parse_catalog_factor_unit(value: str) -> ParsedFactorUnit:
 
 
 def _is_conditioned_volume_pair(source: ActivityUnitSpec, target: ActivityUnitSpec) -> bool:
-    return {source.canonical_unit, target.canonical_unit} == {"m3", "Nm3"}
+    return (
+        source.dimension == ActivityDimension.VOLUME
+        and target.dimension == ActivityDimension.VOLUME
+        and source.requires_external_evidence != target.requires_external_evidence
+    )
 
 
 def _matching_evidence(
