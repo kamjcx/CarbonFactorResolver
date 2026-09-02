@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Reframe the README as a recruiter-friendly portfolio entry with a concise problem statement,
+  five-minute synthetic-data quickstart, three demo decisions, honest evaluation summary, and
+  direct links to detailed engineering documentation.
+- Add a branded decision-architecture visual and two screenshots captured from the running
+  synthetic CFR Dashboard.
+- Update the Dashboard eyebrow from the obsolete A1-only label to the full factor-evidence
+  scope; no API, retrieval, qualification, approval, fixture, or factor behavior changes.
+- Add Python 3.12 and 3.13 compatibility jobs after the complete 315-test suite passed under
+  both interpreters; Python 3.11 remains the authoritative branch-coverage job.
+
 ## 0.14.0 - 2026-09-02
 
 - Promote rc.6 to the stable portfolio release after merge and required remote checks passed.

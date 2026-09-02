@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CarbonFactorResolver decision path</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; background: #f3f1e9; }
+    body { display: grid; min-height: 100vh; place-items: center; }
+    svg { display: block; width: min(100%, 1280px); height: auto; }
+  </style>
+</head>
+<body>
+<svg viewBox="0 0 1280 720" role="img" aria-labelledby="cfr-architecture-title cfr-architecture-desc">
+  <title id="cfr-architecture-title">CarbonFactorResolver decision path</title>
+  <desc id="cfr-architecture-desc">Structured factor requests pass through entity resolution, source retrieval, deterministic qualification, ranked outcomes, human review, and immutable locking while document uploads stop outside the runtime boundary.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#657471"/>
+    </marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#ed713a"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f3f1e9"/>
+  <text x="64" y="68" fill="#0b695f" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" letter-spacing="2">DECISION ARCHITECTURE</text>
+  <text x="64" y="112" fill="#132826" font-size="28" font-weight="600" font-family="'Geist', sans-serif">From structured request to reviewed, locked factor</text>
+  <text x="64" y="144" fill="#657471" font-size="16" font-family="'Geist', sans-serif">Numbers originate in traceable source records. Deterministic gates decide what may proceed.</text>
+
+  <rect x="48" y="188" width="224" height="348" rx="8" fill="#fffef9" stroke="#d8d6ca"/>
+  <rect x="288" y="188" width="704" height="348" rx="8" fill="#fffef9" stroke="#0b695f" stroke-dasharray="4 4"/>
+  <rect x="1008" y="188" width="224" height="348" rx="8" fill="#fffef9" stroke="#d8d6ca"/>
+  <rect x="64" y="196" width="88" height="20" rx="2" fill="#fffef9"/>
+  <text x="68" y="212" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="1">UPSTREAM</text>
+  <rect x="304" y="196" width="112" height="20" rx="2" fill="#fffef9"/>
+  <text x="308" y="212" fill="#0b695f" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="1">CFR RUNTIME</text>
+  <rect x="1024" y="196" width="120" height="20" rx="2" fill="#fffef9"/>
+  <text x="1028" y="212" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="1">GOVERNANCE</text>
+
+  <line x1="232" y1="340" x2="332" y2="340" stroke="#657471" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="492" y1="340" x2="532" y2="340" stroke="#657471" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="692" y1="340" x2="732" y2="340" stroke="#ed713a" stroke-width="2" marker-end="url(#arrow-accent)"/>
+  <line x1="892" y1="340" x2="1036" y2="340" stroke="#657471" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1120" y1="396" x2="1120" y2="440" stroke="#657471" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M 812,396 V 460 Q 812,468 804,468 H 648" fill="none" stroke="#657471" stroke-width="1" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+
+  <rect x="76" y="284" width="156" height="112" rx="8" fill="#f3f1e9" stroke="#657471"/>
+  <text x="154" y="328" text-anchor="middle" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">ResolutionRequest</text>
+  <text x="154" y="356" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">structured JSON</text>
+
+  <rect x="332" y="284" width="160" height="112" rx="8" fill="#fffef9" stroke="#132826"/>
+  <text x="412" y="328" text-anchor="middle" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Entity + intent</text>
+  <text x="412" y="356" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">identity proof</text>
+
+  <rect x="532" y="284" width="160" height="112" rx="8" fill="#fffef9" stroke="#132826"/>
+  <text x="612" y="324" text-anchor="middle" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Source retrieval</text>
+  <text x="612" y="352" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">local + structured</text>
+  <text x="612" y="372" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">external records</text>
+
+  <rect x="732" y="272" width="160" height="124" rx="8" fill="#f9e7de" stroke="#ed713a" stroke-width="2"/>
+  <text x="812" y="316" text-anchor="middle" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Qualification</text>
+  <text x="812" y="344" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">unit · boundary</text>
+  <text x="812" y="364" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">subject · evidence</text>
+
+  <rect x="648" y="440" width="164" height="56" rx="8" fill="#edf4ef" stroke="#0b695f"/>
+  <text x="730" y="464" text-anchor="middle" fill="#132826" font-size="12" font-weight="600" font-family="'Geist', sans-serif">Trace + exclusions</text>
+  <text x="730" y="484" text-anchor="middle" fill="#657471" font-size="8" font-family="'Geist Mono', monospace">auditable decision record</text>
+
+  <rect x="1036" y="284" width="168" height="112" rx="8" fill="#fffef9" stroke="#132826"/>
+  <text x="1120" y="324" text-anchor="middle" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Ranked outcome</text>
+  <text x="1120" y="352" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">candidate · MORE_INPUT</text>
+  <text x="1120" y="372" text-anchor="middle" fill="#657471" font-size="12" font-family="'Geist Mono', monospace">or safe refusal</text>
+
+  <rect x="1036" y="440" width="168" height="64" rx="8" fill="#edf4ef" stroke="#0b695f"/>
+  <text x="1120" y="468" text-anchor="middle" fill="#132826" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Human review</text>
+  <text x="1120" y="488" text-anchor="middle" fill="#657471" font-size="8" font-family="'Geist Mono', monospace">immutable lock</text>
+
+  <path d="M 64,464 H 124" fill="none" stroke="#b23b31" stroke-width="2" stroke-dasharray="5 4"/>
+  <line x1="124" y1="452" x2="124" y2="476" stroke="#b23b31" stroke-width="3"/>
+  <text x="64" y="436" fill="#b23b31" font-size="12" font-weight="600" font-family="'Geist', sans-serif">PDF · DOCX · OCR</text>
+  <text x="64" y="504" fill="#657471" font-size="12" font-family="'Geist', sans-serif">handled upstream, never by CFR API</text>
+
+  <line x1="64" y1="604" x2="1216" y2="604" stroke="#d8d6ca"/>
+  <text x="64" y="636" fill="#657471" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="1">LEGEND</text>
+  <rect x="168" y="624" width="20" height="20" rx="4" fill="#f9e7de" stroke="#ed713a"/>
+  <text x="200" y="640" fill="#657471" font-size="12" font-family="'Geist', sans-serif">deterministic safety gate</text>
+  <rect x="424" y="624" width="20" height="20" rx="4" fill="#edf4ef" stroke="#0b695f"/>
+  <text x="456" y="640" fill="#657471" font-size="12" font-family="'Geist', sans-serif">auditable governance state</text>
+  <line x1="720" y1="636" x2="764" y2="636" stroke="#b23b31" stroke-width="2" stroke-dasharray="5 4"/>
+  <line x1="764" y1="624" x2="764" y2="648" stroke="#b23b31" stroke-width="3"/>
+  <text x="780" y="640" fill="#657471" font-size="12" font-family="'Geist', sans-serif">out-of-scope ingress stops at boundary</text>
+</svg>
+</body>
+</html>
