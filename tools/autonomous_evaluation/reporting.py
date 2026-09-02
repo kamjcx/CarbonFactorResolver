@@ -135,6 +135,10 @@ def write_first_run(
     output_dir = output_dir.resolve()
     if output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"first-run output is immutable and already exists: {output_dir}")
+    # Capture repository state before creating the evidence directory. Otherwise
+    # the first generated artifact makes a clean run appear dirty by definition.
+    pre_run_commit = _git(root, "rev-parse", "HEAD")
+    pre_run_dirty = bool(_git(root, "status", "--porcelain"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     failures = bad_cases(payload.get("results", ()))
@@ -157,8 +161,9 @@ def write_first_run(
     manifest = {
         "schema_version": "cfr-autonomous-evaluation-manifest/v1",
         "created_at": datetime.now(UTC).isoformat(),
-        "git_commit": _git(root, "rev-parse", "HEAD"),
-        "git_dirty": bool(_git(root, "status", "--porcelain")),
+        "git_commit": pre_run_commit,
+        "git_dirty": pre_run_dirty,
+        "git_state_captured_before_output": True,
         "evaluation_schema": complete.get("schema_version"),
         "contract_sha256": sha256_value(generated_contract) if generated_contract is not None else None,
         "artifacts": [

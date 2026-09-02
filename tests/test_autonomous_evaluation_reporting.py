@@ -124,6 +124,7 @@ def test_first_run_manifest_is_verifiable_and_refuses_overwrite(tmp_path) -> Non
         generated_contract={"schema_version": "contract/v1", "cases": []},
     )
     assert manifest["schema_version"] == "cfr-autonomous-evaluation-manifest/v1"
+    assert manifest["git_state_captured_before_output"] is True
     assert verify_manifest(output) == ()
     assert json.loads((output / "first_run.json").read_text())["schema_version"]
     with pytest.raises(FileExistsError, match="immutable"):

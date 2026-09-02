@@ -58,3 +58,14 @@ the recorded environment and are not a service-level objective.
 The suite is deliberately more adversarial than the frozen release benchmarks. A NO-GO
 result identifies a contract or implementation issue for separate adjudication; generated
 answers and first-run failures are not rewritten to improve scores.
+
+The V1 first run at commit `fe4eee7` is preserved as NO-GO: 314/418 complete rows passed,
+Direct Top-1 was 93.05%, Recall@5 99.23%, abstention 90%, MORE_INPUT recall 20%, evidence
+metadata presence 93.27%, and deterministic replay 100%. Boundary, subject, unit and HTTP-500
+counts were zero, while six geography/year forbidden candidates escaped and one of eight
+workflow attacks failed. See the [raw summary](evidence/autonomous_evaluation/v1/SUMMARY.md).
+
+The accompanying 10k/50k synthetic performance run passed replay/order/noise invariants.
+Its 50k index build was 117.67 seconds, warm Resolver P50/P95/P99 was 1.321/1.409/1.435 seconds,
+peak RSS was 205.5 MB, and one-process throughput was about 0.75 requests/second at concurrency
+10/25/50. These results expose scale cost; they are not a production SLA.

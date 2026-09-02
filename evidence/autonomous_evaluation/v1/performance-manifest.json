@@ -1,0 +1,18 @@
+{
+  "schema_version": "cfr-autonomous-performance-manifest/v1",
+  "evaluator_commit": "fe4eee7101f4f53b463e65ba3edfd8e9f4641367",
+  "data_classification": "PUBLIC_SYNTHETIC",
+  "contains_licensed_or_customer_data": false,
+  "artifact": {
+    "path": "performance.json",
+    "sha256": "457e769ed163aff3f5834b5294c51c0527e833832bcd1a767e39a24ee332c779",
+    "size": 7738
+  },
+  "configuration": {
+    "sizes": [10000, 50000],
+    "concurrency": [10, 25, 50],
+    "warm_queries": 7,
+    "seed": 20260902
+  },
+  "passed": true
+}
