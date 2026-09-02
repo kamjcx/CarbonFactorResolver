@@ -1,0 +1,2 @@
+# Immutable evaluator evidence is hashed as raw bytes. Do not rewrite line endings.
+evidence/autonomous_evaluation/v1/post-fix-regression/* -text
