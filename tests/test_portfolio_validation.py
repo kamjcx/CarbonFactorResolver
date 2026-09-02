@@ -79,10 +79,10 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
         "CFR-PV-001", "CFR-PV-002", "CFR-PV-003"
     }
     assert all(finding["status"] == "OPEN" for finding in result["known_findings"])
-    assert full["wrong_candidate_rate"] == 6 / 45
+    assert full["wrong_candidate_rate"] == 6 / 46
     assert full["wrong_candidate_count"] == 6
-    assert full["returned_candidate_count"] == 45
-    assert full["top_1_correct_count"] == 39
+    assert full["returned_candidate_count"] == 46
+    assert full["top_1_correct_count"] == 40
     assert full["boundary_violation_rate"] == 0
     assert full["subject_violation_rate"] == 0
     assert lexical["recall_at_5"] >= full["recall_at_5"]
@@ -121,7 +121,11 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
         for case_id, source_id in unit_expected.items()
     )
     assert by_case["FIN-05"]["observed_status"] == "more_input_needed"
-    assert by_case["FIN-05"]["observed_ids"] == []
+    assert by_case["FIN-05"]["observed_ids"] == ["pc:steel-fiber-product"]
+    top_k = by_case["FIN-05"]["trace"]["entries"][-1]["details"]
+    assert top_k["selected_candidate_ids"] == []
+    assert top_k["reviewable_candidate_ids"] == ["local:pc:steel-fiber-product"]
+    assert top_k["required_fields"] == ["steel_fiber_type"]
 
 
 def test_error_is_not_counted_as_abstention() -> None:

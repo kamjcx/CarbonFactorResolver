@@ -119,16 +119,18 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 
 | Evidence set | Result | What it proves |
 |---|---:|---|
-| Core package | 315 passed, 87.05% branch coverage | implementation regression gate |
+| Core package | 324 passed, 87.06% branch coverage | implementation regression gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
-| Closed Portfolio Benchmark | 39/40 answerable Top-1; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
+| Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
+| Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
 
-RC3-RC5 remain preserved NO-GO evidence. The stable `v0.14.0` release is runtime-equivalent
-to RC6 and changed packaging/public documentation only. See
-[Evaluation](EVALUATION.md), [Release Readiness](docs/RELEASE_READINESS_V0.14.md), and the
-[v0.14.0 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.0).
+RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` adds the
+conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent
+sealed unit v4 acceptance. See
+[Evaluation](EVALUATION.md), [Release Readiness](docs/RELEASE_READINESS_V0.14.1.md), and the
+[v0.14.1 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.1).
 
 ## Design guarantees
 

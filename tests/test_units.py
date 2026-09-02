@@ -138,6 +138,15 @@ def test_factor_conditioned_volume_conversion_uses_inverse_evidence_direction():
     assert plan.multiplier == Decimal("1.25")
 
 
+def test_conditioned_volume_gate_also_covers_scaled_ambient_volume_units():
+    activity = plan_activity_conversion("L", "Nm3")
+    factor = plan_factor_conversion("kgCO2e/L", "kgCO2e/Nm3")
+    assert activity.evidence_required is True
+    assert activity.reason_code == UNIT_CONVERSION_EVIDENCE_REQUIRED
+    assert factor.evidence_required is True
+    assert factor.reason_code == UNIT_CONVERSION_EVIDENCE_REQUIRED
+
+
 def test_cross_dimension_plan_and_conversion_are_structured():
     plan = plan_activity_conversion("kg", "kWh")
     assert plan.reason_code == UNIT_DIMENSION_MISMATCH

@@ -11,13 +11,20 @@ fixtures and contracts; they are not a claim of accuracy across all real-world f
 - **FactorBench V3** distinguishes true zero-recall from records recalled and then rejected
   for indicator, declared-product, or boundary incompatibility. V1/V2 remain immutable.
 - **Portfolio Challenge V1** is a closed regression/safety diagnostic, not an unseen-query
-  benchmark. Its recorded result is 39/40 answerable Top-1 with zero boundary and subject
-  escapes.
+  benchmark. It returns 39 direct recommendations plus FIN-05 as `MORE_INPUT_NEEDED` with
+  the correct source retained as `REFERENCE_ONLY`; boundary and subject escapes remain zero.
 - **Frozen Unit Regression Set** contains 28 cases. Its independent first run was 24/28;
   runtime code was then repaired and the regression rerun was 28/28. It is not described as
   an independent holdout after that repair.
 - **Sealed Portfolio Holdout** is created only after the RC code, configuration and public
   fixtures are frozen. Its first-run artifacts remain immutable.
+- **Sealed Unit Holdout v2** first ran 31/32 and exposed the conditioned-volume evidence-
+  direction defect. Its unchanged post-fix rerun is 32/32, so v2 is a regression set.
+- **Sealed Unit Holdout v3** first ran 23/24 because one frozen expected answer had the wrong
+  numerator/denominator scaling. The answer and NO-GO evidence remain unchanged.
+- **Sealed Unit Holdout v4** is the post-fix independent unit-only set. Its first run passed
+  21/21 with 100% status, recommendation, reason, refusal, evidence, value and emissions
+  checks. No runtime or answer changed after its freeze.
 
 The rc.1 and rc.2 outcomes remain immutable historical evidence. RC3 exposed a release-gate
 defect, RC4 proved the corrected gate fails closed, and RC5 exposed a missing catalogue-anchor

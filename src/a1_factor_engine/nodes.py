@@ -522,7 +522,11 @@ class NormalizeNode(Node[GraphState]):
                 ActivityDimension.COUNT: "item",
             }
             quantity_base_unit = base_units[activity_unit.dimension]
-            if activity_unit.canonical_unit == "Nm3" and state.request.unit_conversion_evidence is None:
+            if activity_unit.canonical_unit == "Nm3":
+                # Keep a conditioned-volume request in its stated reference state.
+                # The same directional evidence may be needed later to convert a
+                # source factor into Nm3; pre-normalizing the quantity to m3 would
+                # incorrectly demand the inverse evidence direction.
                 quantity_base_unit = "Nm3"
                 quantity_base = state.request.quantity
             else:
@@ -1437,8 +1441,9 @@ class TopKNode(Node[GraphState]):
         if state.request_gaps:
             # Discovery candidates remain in Trace, but incomplete request
             # identity can never silently become a selectable recommendation.
+            # Otherwise-qualified REFERENCE_ONLY candidates remain visible for
+            # explicit review and cannot use the standard approval mode.
             eligible = ()
-            reviewable = ()
         if state.unit_reason_codes:
             eligible = ()
             reviewable = ()

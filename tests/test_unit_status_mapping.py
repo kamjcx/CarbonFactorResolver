@@ -263,6 +263,37 @@ async def test_m3_to_nm3_with_versioned_controlled_evidence_can_recommend() -> N
 
 
 @pytest.mark.asyncio
+async def test_nm3_request_uses_forward_source_factor_evidence_without_inverse_preconversion() -> None:
+    evidence = UnitConversionEvidence(
+        evidence_id="ambient-to-normal-volume-2026",
+        version="2026.1",
+        source_canonical_unit="m3",
+        target_canonical_unit="Nm3",
+        multiplier=Decimal("1.04"),
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository(
+            [_record("ambient-volume-factor", factor_unit="kgCO2e/m3", factor_value=2.08)]
+        )
+    ).resolve(
+        _request(
+            quantity=10,
+            quantity_unit="Nm3",
+            target_factor_unit="kgCO2e/Nm3",
+            unit_conversion_evidence=evidence,
+        )
+    )
+
+    assert result.status == ResolutionStatus.RECOMMENDATION_READY
+    assert _reason_codes(result) == ()
+    assert result.candidates[0].factor_unit == "kgCO2e/Nm3"
+    assert result.candidates[0].factor_value == pytest.approx(2.0)
+    assert result.candidates[0].total_emissions_kgco2e == pytest.approx(20.0)
+    steps = result.trace.explain()["transformation_steps"]
+    assert any(evidence.evidence_id in step["parameter_ids"] for step in steps)
+
+
+@pytest.mark.asyncio
 async def test_true_zero_hit_remains_supplier_data_required() -> None:
     result = await A1FactorResolutionEngine(local_retrieval=InMemoryFactorRepository([])).resolve(_request())
 

@@ -28,10 +28,11 @@ aluminium but does not choose primary versus secondary production. It returns
 
 ## 82–90s — Honest evaluation
 
-"The closed Portfolio Benchmark is 39/40. RC3 through RC5 remain preserved failure evidence;
-RC6 passed its new 48-case sealed first run at 48/48 with zero boundary, subject, unit,
-forbidden-candidate or HTTP-500 failures. The project demonstrates retrieval engineering,
-deterministic safety and honest release gates—not a production carbon-accounting claim."
+"The closed Portfolio Benchmark produces 39 direct recommendations and one safe MORE_INPUT
+with the correct source retained as REFERENCE_ONLY. RC6 passed 48/48, and the independent
+post-fix unit holdout passed 21/21 on its first run. Historical failed runs remain preserved.
+The project demonstrates retrieval engineering, deterministic safety and honest release
+gates—not a production carbon-accounting claim."
 
 Sealed-run evidence: [RC6 first-run record](../evidence/releases/v0.14.0-rc.6/SEALED_FIRST_RUN.md).
 
