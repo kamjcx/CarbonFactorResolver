@@ -24,3 +24,9 @@ an unevidenced `L -> Nm3` path that must return `MORE_INPUT`, and an evidenced
 The committed inputs and answers must not change after the first run. If the first run
 fails, that result remains evidence and v3 ceases to qualify as an independent holdout
 after any runtime repair.
+
+Run from the repository root with:
+
+```powershell
+python -m tools.sealed_unit_holdout_v3 --output outputs/sealed_unit_holdout_v3/first_run.json
+```
