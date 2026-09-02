@@ -29,10 +29,12 @@ or a mass factor for an energy activity. CFR separates recall from admission:
 4. rank only qualified candidates and explain every inclusion and exclusion;
 5. require a human decision before an immutable factor is locked.
 
-![CarbonFactorResolver structured decision architecture](docs/assets/cfr-resolution-architecture.png)
+![CarbonFactorResolver internal decision flow from structured request through retrieval, deterministic gates, human review, and immutable lock](docs/assets/cfr-resolution-architecture.png)
 
-The editable diagram source is
-[docs/assets/cfr-resolution-architecture.html](docs/assets/cfr-resolution-architecture.html).
+The diagram makes the critical separation explicit: retrieval may be broad, but only
+deterministically qualified candidates reach ranking and review. Exclusions remain visible
+with reason codes in Trace. Editable sources: [HTML](docs/assets/cfr-resolution-architecture.html)
+and [SVG](docs/assets/cfr-resolution-architecture.svg).
 
 ## Five-minute quickstart
 
@@ -68,6 +70,12 @@ cfr benchmark run data/benchmarks/factorbench_v3.jsonl
 cfr serve --host 127.0.0.1 --port 8000
 ```
 
+To connect your own licensed or internal structured catalogue, follow the
+[Bring Your Own Catalog tutorial](docs/BRING_YOUR_OWN_CATALOG.md). It includes a 20-record
+project-authored `PUBLIC_SYNTHETIC` fixture and three copyable exact-match,
+`MORE_INPUT_NEEDED`, and safe-refusal queries. Imported records remain candidates until a
+human reviews and locks a factor; the tutorial does not authorize accounting use.
+
 ## Three demo decisions
 
 | Request | Expected behavior | Safety property |
@@ -85,8 +93,9 @@ See the [90-second demo script](docs/DEMO_SCRIPT_90S.md) for a concise interview
 
 ## Autonomous contract evaluation
 
-The developer-only evaluator generates 414 non-duplicate public-synthetic cases from an
-independent, versioned Oracle. It exercises exact boundary and subject matrices, unit
+The developer-only evaluator generates 414 non-duplicate public-synthetic resolution cases
+from an independent, versioned Oracle, plus four API fault cases (418 total results). It
+exercises exact boundary and subject matrices, unit
 dimensions, evidence degradation, source priority, ambiguity, high-risk neighbouring
 entities, deterministic replay, catalog perturbation, and approval/lock attacks against the
 real Resolver. A separate scale harness measures 10k/50k synthetic catalogs at concurrency
@@ -139,19 +148,21 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 
 | Evidence set | Result | What it proves |
 |---|---:|---|
-| Core package | 324 passed, 87.06% branch coverage | implementation regression gate |
+| v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
+| v0.14.2 core package | 360 passed, 87.15% branch coverage | current implementation regression gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
 | Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
-| Autonomous Evaluation V1 | 414 generated contracts + workflow attacks + 10k/50k scale | systematic contract exploration; results do not replace sealed or real-world validation |
+| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases + workflow attacks + 10k/50k scale | systematic contract exploration; six frozen geography/year label disagreements remain visible and adjudicated |
 
-RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` adds the
+RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent
-sealed unit v4 acceptance. See
-[Evaluation](EVALUATION.md), [Release Readiness](docs/RELEASE_READINESS_V0.14.1.md), and the
-[v0.14.1 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.1).
+sealed unit v4 acceptance. `v0.14.2` contains the subsequently merged contract-backed runtime
+repairs, public BYOC example, and release presentation evidence. See [Evaluation](EVALUATION.md),
+[v0.14.2 Release Readiness](docs/RELEASE_READINESS_V0.14.2.md), and the
+[v0.14.2 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.2).
 
 ## Design guarantees
 
@@ -170,7 +181,8 @@ sealed unit v4 acceptance. See
 - [Data licensing](DATA_LICENSE.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
-- [Release notes](docs/RELEASE_NOTES_V0.14.1.md)
+- [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
+- [Release notes](docs/RELEASE_NOTES_V0.14.2.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 
 ## Data and license

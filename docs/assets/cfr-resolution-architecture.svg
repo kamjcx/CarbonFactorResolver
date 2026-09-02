@@ -1,26 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CarbonFactorResolver internal decision flow</title>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; background: #f3f1e9; }
-    body { display: grid; min-height: 100vh; place-items: center; overflow-x: auto; }
-    svg { display: block; width: min(100%, 1440px); height: auto; }
-    @media (max-width: 720px) {
-      body { min-height: auto; place-items: start; }
-      svg { width: 960px; max-width: none; }
-    }
-  </style>
-</head>
-<body>
 <svg viewBox="0 0 1440 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cfr-internal-flow-title cfr-internal-flow-desc">
   <title id="cfr-internal-flow-title">CarbonFactorResolver internal decision flow</title>
   <desc id="cfr-internal-flow-desc">A structured request is validated, resolved and retrieved before deterministic admission gates separate eligible candidates from missing-input and safe-refusal outcomes, with excluded candidates explained in Trace and reviewed factors locked immutably.</desc>
-  <defs>
+  <defs><style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
     <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#657471"/></marker>
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ed713a"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0b695f"/></marker>
@@ -119,5 +100,3 @@
   <text x="920" y="700" fill="#657471" font-size="12" font-family="'Geist', sans-serif">fail-closed branch</text>
   <text x="48" y="752" fill="#657471" font-size="8" font-family="'Geist Mono', monospace">PUBLIC PORTFOLIO DIAGRAM · STRUCTURED INPUT ONLY · NO DOCUMENT PARSING · NO AUTOMATIC APPROVAL</text>
 </svg>
-</body>
-</html>
