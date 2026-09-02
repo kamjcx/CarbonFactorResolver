@@ -21,9 +21,10 @@ curl -X POST http://127.0.0.1:8000/api/v1/resolve \
 The public repository uses only small project-authored synthetic fixtures. It does not ship
 ecoinvent, customer records, or any commercial factor database.
 
-**Release status:** rc.2 remains an immutable NO-GO (83.33% Answerable Top-1). The separately
-scoped rc.3 repair is awaiting a wholly new sealed first run and remote CI; it is not yet a
-final release. See [Release Readiness](docs/RELEASE_READINESS_V0.14.md).
+**Release status:** v0.14.0 is the stable portfolio release. RC3-RC5 remain immutable
+historical NO-GO evidence; RC6 passed its wholly new 48-case sealed first run and all release
+gates. The stable release changes packaging and public documentation only and is runtime-equivalent
+to RC6. See [Release Readiness](docs/RELEASE_READINESS_V0.14.md).
 
 ## Product Scope
 
@@ -69,7 +70,7 @@ not a claim of production readiness or universal real-world accuracy.
 
 ## End-to-end demo
 
-Version 0.14.0-rc.6 adds exact lifecycle-stage, subject, source-quality and unit qualification,
+Version 0.14.0 includes exact lifecycle-stage, subject, source-quality and unit qualification,
 release hardening, versioned evaluation adjudication and reproducible portfolio evidence. The
 default demo uses only clearly labelled public-synthetic fixtures; it never auto-approves a factor.
 
@@ -83,7 +84,8 @@ cfr serve --host 127.0.0.1 --port 8000
 
 Open `http://127.0.0.1:8000` for Query, Benchmark, and Compare views. Start with
 [Architecture](ARCHITECTURE.md), [Evaluation](EVALUATION.md), [Limitations](LIMITATIONS.md),
-[Data License](DATA_LICENSE.md), and [Security](SECURITY.md).
+[Data License](DATA_LICENSE.md), [Security](SECURITY.md), and the
+[v0.14 release notes](docs/RELEASE_NOTES_V0.14.md).
 
 ## Portfolio validation challenge
 
