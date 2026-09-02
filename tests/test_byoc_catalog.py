@@ -87,6 +87,10 @@ async def test_byoc_schema_loads_all_records_through_real_catalog_adapter() -> N
 @pytest.mark.asyncio
 async def test_byoc_copyable_examples_match_resolution_contract() -> None:
     payload = await run_cases(("exact", "more-input", "safe-refusal"))
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert payload["catalog"] == "data/fixtures/catalog/byoc_public_synthetic_20.json"
+    assert "file://" not in serialized
+    assert "d:\\" not in serialized.casefold()
     results = payload["results"]
     assert payload["data_classification"] == "PUBLIC_SYNTHETIC"
     assert payload["not_for_carbon_accounting"] is True

@@ -85,14 +85,15 @@ from a1_factor_engine.engine import A1FactorResolutionEngine
 path = Path("data/fixtures/catalog/byoc_public_synthetic_20.json")
 payload = json.loads(path.read_text(encoding="utf-8"))
 repository = HttpCatalogFactorRepository(
-    endpoint=path.resolve().as_uri(),
+    endpoint="file-snapshot://authorized-catalog",
     fetch_json=lambda _endpoint: payload,
 )
 engine = A1FactorResolutionEngine(local_retrieval=repository)
 ```
 
 The injected callback is suitable for deterministic file snapshots and tests. It should return
-the complete JSON envelope, not an individual record.
+the complete JSON envelope, not an individual record. Use a stable, non-sensitive endpoint
+label: it is retained in Trace, so do not put usernames or absolute local paths in it.
 
 ## HTTP adapter
 

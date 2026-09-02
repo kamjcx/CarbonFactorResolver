@@ -61,7 +61,7 @@ def load_catalog(path: Path = DEFAULT_CATALOG) -> dict[str, Any]:
 def build_engine(path: Path = DEFAULT_CATALOG) -> A1FactorResolutionEngine:
     payload = load_catalog(path)
     repository = HttpCatalogFactorRepository(
-        endpoint=path.resolve().as_uri(),
+        endpoint="fixture://byoc-public-synthetic-20",
         fetch_json=lambda _endpoint: payload,
     )
     return A1FactorResolutionEngine(local_retrieval=repository)
@@ -81,7 +81,11 @@ async def run_cases(
         for name in names
     }
     return {
-        "catalog": str(catalog_path),
+        "catalog": (
+            catalog_path.resolve().relative_to(ROOT).as_posix()
+            if catalog_path.resolve().is_relative_to(ROOT)
+            else catalog_path.name
+        ),
         "data_classification": "PUBLIC_SYNTHETIC",
         "not_for_carbon_accounting": True,
         "results": results,
