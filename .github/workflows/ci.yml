@@ -58,10 +58,6 @@ jobs:
         run: >-
           uv run --extra test python tools/sealed_unit_holdout_v2.py
           --output outputs/sealed_unit_holdout_v2/result.json
-      - name: Run Sealed Unit Holdout v3
-        run: >-
-          uv run --extra test python -m tools.sealed_unit_holdout_v3
-          --output outputs/sealed_unit_holdout_v3/result.json
       - name: Run Sealed Unit Holdout v4
         run: >-
           uv run --extra test python -m tools.sealed_unit_holdout_v4

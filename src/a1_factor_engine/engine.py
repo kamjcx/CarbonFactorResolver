@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Mapping, Sequence
 
 from .adapters import (
@@ -341,13 +341,7 @@ class A1ResolutionGraph:
             # generic aluminium must still show available route variants while
             # the terminal decision remains MORE_INPUT_NEEDED.
             await self._discover_external(state)
-        if state.request_gaps and state.resolution_candidates:
-            # A broad family request cannot silently choose a subtype record;
-            # retain its raw/qualification evidence and ask the smallest
-            # identity question first.
-            state.resolution_candidates = ()
-            state.local_candidates = ()
-        if state.request_gaps and not state.resolution_candidates:
+        if state.request_gaps:
             state.required_fields = tuple(gap.field for gap in state.request_gaps)
             state.event(
                 Stage.LOCAL_EVALUATE,
@@ -410,6 +404,21 @@ class A1ResolutionGraph:
                 state.resolution_candidates = local_resolved
                 state.local_candidates = local_candidates
         await self.re_evaluate.run(state)
+        if state.request_gaps and state.resolution_candidates:
+            # Re-evaluation computes the ordinary tier. Only after that step do
+            # we cap otherwise-qualified records at REFERENCE_ONLY, so a broad
+            # family request can expose evidence without selecting a subtype.
+            state.resolution_candidates = tuple(
+                replace(
+                    candidate,
+                    result_tier=ResultTier.REFERENCE_ONLY,
+                    limitations=tuple(dict.fromkeys((
+                        *candidate.limitations,
+                        "request identity is incomplete; subtype evidence is required before selection",
+                    ))),
+                )
+                for candidate in state.resolution_candidates
+            )
         if Router.after_proxy(state) == Stage.CANDIDATE_POOL:
             await self.pool.run(state)
         await self.rank.run(state)

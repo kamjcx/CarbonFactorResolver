@@ -37,12 +37,17 @@ def test_sealed_unit_holdout_v3_is_frozen_and_covers_post_fix_unit_risks() -> No
 
 
 @pytest.mark.asyncio
-async def test_sealed_unit_holdout_v3_matches_every_frozen_answer() -> None:
+async def test_sealed_unit_holdout_v3_preserves_the_frozen_adjudication_failure() -> None:
     payload = await run_holdout()
-    assert payload["metrics"]["failed_count"] == 0, [
+    failures = [
         row for row in payload["results"] if not row["passed"]
     ]
-    assert payload["metrics"]["case_pass_rate"] == 1.0
-    assert all(value == 1.0 for value in payload["metrics"]["check_accuracy"].values())
+    assert payload["metrics"]["failed_count"] == 1
+    assert payload["metrics"]["passed_count"] == 23
+    assert [row["case_id"] for row in failures] == ["SUH3-MASS-03"]
+    assert failures[0]["checks"]["recommendation"] is True
+    assert failures[0]["checks"]["status"] is True
+    assert failures[0]["checks"]["factor_value"] is False
+    assert failures[0]["checks"]["total_emissions"] is False
     fingerprints = [row["decision_fingerprint"] for row in payload["results"]]
     assert len(fingerprints) == len(set(fingerprints))

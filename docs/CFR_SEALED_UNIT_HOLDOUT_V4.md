@@ -1,6 +1,6 @@
 # CFR Sealed Unit Holdout v4
 
-Status: **FROZEN BEFORE FIRST RESOLVER RUN**
+Status: **INDEPENDENT FIRST RUN PASS**
 
 This is the final post-fix unit-only acceptance set. It was authored after the v2 runtime
 repair and after the v3 expected-answer adjudication. It contains 21 new cases and 13 new
@@ -19,6 +19,11 @@ catalogue records with and without a usable alternative; and genuine supplier-da
 Inputs and answers are immutable after the commit that freezes these hashes. The first
 Resolver run retains full Trace and raw, normalized and decision fingerprints. Any failure
 remains evidence and cannot be repaired by changing a benchmark answer.
+
+The first Resolver run passed **21/21**, with 100% status, recommendation, reason-code,
+refusal, evidence-gate, factor-unit, factor-value and total-emissions checks. No runtime or
+expected-answer change was made after freeze. The full first-run artifact SHA-256 is
+`0fbad5055769e8f40a55ba2d857537abe57ea5449e12707c970c3c04e0a4bfb5`.
 
 Run from the repository root with:
 

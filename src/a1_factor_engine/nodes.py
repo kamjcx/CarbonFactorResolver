@@ -1441,8 +1441,9 @@ class TopKNode(Node[GraphState]):
         if state.request_gaps:
             # Discovery candidates remain in Trace, but incomplete request
             # identity can never silently become a selectable recommendation.
+            # Otherwise-qualified REFERENCE_ONLY candidates remain visible for
+            # explicit review and cannot use the standard approval mode.
             eligible = ()
-            reviewable = ()
         if state.unit_reason_codes:
             eligible = ()
             reviewable = ()

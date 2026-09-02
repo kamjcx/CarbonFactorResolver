@@ -2,9 +2,10 @@
 
 ## Status
 
-FIN-05 remains unchanged pending a human benchmark adjudication. This document is a
-read-only evidence assessment; it neither changes the frozen Portfolio Challenge answer
-nor authorizes a production semantic-policy change.
+**CLOSED — Option 3 adopted.** The frozen Portfolio Challenge answer remains unchanged.
+The Resolver returns `MORE_INPUT_NEEDED`, preserves `pc:steel-fiber-product` as a
+`REFERENCE_ONLY` candidate, and requires `steel_fiber_type` before ordinary selection.
+This benchmark adjudication does not approve the synthetic record for production use.
 
 ## Current evidence
 
@@ -20,9 +21,9 @@ qualification. It is admitted as a direct candidate with no hard exclusion.
 
 Independently, request normalization classifies steel fibre as a broad product family.
 It records unresolved subtype, steel grade/family, surface coating, and application,
-then requires a `steel_fiber_type` choice before an EPD is selected. Consequently the
-trace funnel is 42 raw records, 4 retrieval hits, 1 qualified record, 0 candidate-pool
-records, and 0 returned records; the status is `more_input_needed`.
+then requires a `steel_fiber_type` choice before an EPD is selected. The qualified record
+is therefore visible only in `reviewable_candidates`; `candidates` remains empty and the
+terminal status is `more_input_needed`.
 
 The evidence therefore exposes a semantic-policy conflict rather than a unit defect:
 the catalogue alias and direct qualification say the source is admissible, while the
@@ -49,12 +50,12 @@ with current request-gap policy.
 Risk: changing the answer without proving the benchmark's original intent would hide a
 possible product-identity or generic-factor-policy defect.
 
-### Option 3 — Preserve both sides pending evidence (recommended)
+### Option 3 — Preserve both sides pending evidence (adopted)
 
-Keep the frozen benchmark label and current production behavior unchanged. Record
-FIN-05 as an open adjudication, exclude it from the unit-fix success claim, and resolve
-it only after the evidence and approvals below are complete. This preserves the
-immutable benchmark and avoids weakening a safety gate merely to improve recall.
+Keep the frozen benchmark label unchanged and preserve the qualified source as
+`REFERENCE_ONLY`. The request remains `MORE_INPUT_NEEDED`; the reference cannot use
+standard approval or locking. This preserves the immutable benchmark and avoids weakening
+a safety gate merely to improve recall.
 
 ## Evidence required for a final decision
 
@@ -73,6 +74,7 @@ immutable benchmark and avoids weakening a safety gate merely to improve recall.
   governance sign-off on the production policy. If production behavior or a public
   contract changes, technical-owner approval is also required.
 
-Until those items exist in canonical, reviewable sources, the available evidence is
-insufficient to choose Option 1 or Option 2. Option 3 is therefore the recommended
-interim disposition, with the FIN-05 label left unchanged.
+Until those items exist in canonical, reviewable sources, the available evidence remains
+insufficient for direct recommendation. Option 3 is the final safe benchmark disposition.
+Future source-scope evidence may create a new versioned adjudication, but must not rewrite
+this frozen answer or its recorded history.

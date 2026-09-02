@@ -2168,6 +2168,41 @@ async def test_t01_broad_steel_fiber_returns_more_input_with_provisional_options
 
 
 @pytest.mark.asyncio
+async def test_broad_steel_fiber_keeps_qualified_record_reference_only() -> None:
+    source = replace(
+        record(
+            "generic-steel-fiber-product",
+            "steel fiber",
+            2.16,
+            product_form="fiber",
+            factor_kind=FactorKind.EPD_INDICATOR,
+            indicator="GWP-total",
+            declared_product="steel fiber",
+        ),
+        subject_type=FactorSubjectType.FINISHED_PRODUCT,
+    )
+    result = await A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([source])
+    ).resolve(
+        ResolutionRequest(
+            material_name="steel fiber",
+            quantity=1,
+            product_form="fiber",
+            subject_type=FactorSubjectType.FINISHED_PRODUCT,
+            boundary="cradle-to-gate",
+        )
+    )
+
+    assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.candidates == ()
+    assert [item.source.source_id for item in result.reviewable_candidates] == [
+        "generic-steel-fiber-product"
+    ]
+    assert result.reviewable_candidates[0].result_tier == ResultTier.REFERENCE_ONLY
+    assert result.trace.explain()["required_choice"]["field"] == "steel_fiber_type"
+
+
+@pytest.mark.asyncio
 async def test_t01_chinese_steel_fiber_identity_is_not_unknown():
     result = await A1FactorResolutionEngine().resolve(
         ResolutionRequest(material_name="钢纤维", quantity=1, product_form="纤维")

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.14.1 - 2026-09-02
+
+- Preserve sealed unit v2's 31/32 first run, repair conditioned-volume evidence direction,
+  and retain its unchanged 32/32 post-fix regression result.
+- Preserve sealed unit v3's 23/24 NO-GO caused by an erroneous frozen expected value without
+  relabelling the answer.
+- Pass the wholly new sealed unit v4 first run at 21/21 with all reported checks at 100%.
+- Treat any ambient-volume/conditioned-volume crossing, including `L`/`Nm3`, as requiring
+  directional versioned evidence.
+- Close FIN-05 as `MORE_INPUT_NEEDED` with its otherwise-qualified source retained only as
+  `REFERENCE_ONLY`; standard selection and locking remain prohibited.
+- Keep deployment-side structured electricity records blocked until their complete formal
+  source and approval evidence is available.
+
 - Reframe the README as a recruiter-friendly portfolio entry with a concise problem statement,
   five-minute synthetic-data quickstart, three demo decisions, honest evaluation summary, and
   direct links to detailed engineering documentation.
@@ -9,7 +23,7 @@
   synthetic CFR Dashboard.
 - Update the Dashboard eyebrow from the obsolete A1-only label to the full factor-evidence
   scope; no API, retrieval, qualification, approval, fixture, or factor behavior changes.
-- Add Python 3.12 and 3.13 compatibility jobs after the complete 315-test suite passed under
+- Add Python 3.12 and 3.13 compatibility jobs after the complete 324-test suite passed under
   both interpreters; Python 3.11 remains the authoritative branch-coverage job.
 
 ## 0.14.0 - 2026-09-02
