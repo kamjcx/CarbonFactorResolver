@@ -20,6 +20,8 @@
   energy, transport and processes, plus exact, `MORE_INPUT` and safe-refusal demonstrations.
 - Add a BYOC tutorial for file, HTTP and custom repository adapters with explicit schema,
   fail-closed, licensing and human-approval boundaries.
+- Redact local filesystem identity from BYOC demo output and Trace by using a stable synthetic
+  locator and repository-relative display path.
 - Replace the README hero architecture visual with CFR's internal resolution flow, making
   recall versus deterministic admission, excluded-candidate Trace, human review and immutable
   locking visible; no Resolver behavior changes are introduced by the presentation work.
