@@ -31,6 +31,7 @@ from .models import (
     CandidateOrigin,
     GapType,
     LockedResolution,
+    LockedResolutionEvidenceSnapshot,
     QualificationDiagnostic,
     Recommendation,
     RequestGap,
@@ -469,8 +470,11 @@ class A1FactorResolutionEngine:
             raise ValueError(f"duplicate request_id: {request.request_id}")
         state = await self.graph.run(request)
         assert state.recommendation is not None
-        await self.store.save_resolution_run(state.recommendation, state.trace)
-        return state.recommendation
+        recommendation = self._bind_recommendation(state.recommendation, state.trace)
+        await self.store.save_resolution_run(recommendation, state.trace)
+        stored = await self.store.get_recommendation(recommendation.request_id)
+        assert stored is not None
+        return stored
 
     async def resolve_debug(
         self, request: ResolutionRequest | Mapping[str, object]
@@ -485,8 +489,13 @@ class A1FactorResolutionEngine:
             graph = replace(self.graph, deployment_policy=DeploymentPolicy(request.min_score))
             state = await graph.run(request)
             assert state.recommendation is not None
-            await self.store.save_resolution_run(state.recommendation, state.trace)
-            return state.recommendation
+            recommendation = self._bind_recommendation(
+                state.recommendation, state.trace, policy=graph.deployment_policy
+            )
+            await self.store.save_resolution_run(recommendation, state.trace)
+            stored = await self.store.get_recommendation(recommendation.request_id)
+            assert stored is not None
+            return stored
         return await self.resolve(request)
 
     async def state(self, request_id: str) -> Recommendation | None:
@@ -552,11 +561,24 @@ class A1FactorResolutionEngine:
         existing_approval = await self.store.get_approval(request_id, candidate_id)
         if existing_approval is not None and existing_approval.status == ApprovalStatus.REJECTED:
             raise ValueError("rejected candidate cannot be approved in the same resolution run")
-        approval = ApprovalRecord(request_id, candidate_id, reviewer, ApprovalStatus.APPROVED, note, mode=mode)
-        await self.store.save_approval(approval)
-        await self._append_trace(request_id, "human_approval", "candidate approved", {
+        trace = await self.store.get_trace(request_id)
+        if trace is None:
+            raise KeyError(f"trace not found: {request_id}")
+        expected_trace_revision = trace.revision
+        updated_trace = trace.clone()
+        updated_trace.append("human_approval", "candidate approved", {
             "candidate_id": candidate_id, "reviewer": reviewer, "note": note, "approval_mode": mode.value,
         })
+        approval = self._bound_approval(
+            recommendation, candidate, updated_trace, reviewer, ApprovalStatus.APPROVED,
+            note=note, mode=mode,
+        )
+        await self.store.save_approval(
+            approval,
+            updated_trace,
+            expected_recommendation_sha256=recommendation.content_sha256,
+            expected_trace_revision=expected_trace_revision,
+        )
         return approval
 
     async def reject(self, request_id: str, candidate_id: str, reviewer: str, note: str = "") -> ApprovalRecord:
@@ -571,11 +593,24 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
-        approval = ApprovalRecord(request_id, candidate_id, reviewer, ApprovalStatus.REJECTED, note)
-        await self.store.save_approval(approval)
-        await self._append_trace(request_id, "human_approval", "candidate rejected", {
+        trace = await self.store.get_trace(request_id)
+        if trace is None:
+            raise KeyError(f"trace not found: {request_id}")
+        expected_trace_revision = trace.revision
+        updated_trace = trace.clone()
+        updated_trace.append("human_approval", "candidate rejected", {
             "candidate_id": candidate_id, "reviewer": reviewer, "note": note,
         })
+        approval = self._bound_approval(
+            recommendation, candidate, updated_trace, reviewer, ApprovalStatus.REJECTED,
+            note=note,
+        )
+        await self.store.save_approval(
+            approval,
+            updated_trace,
+            expected_recommendation_sha256=recommendation.content_sha256,
+            expected_trace_revision=expected_trace_revision,
+        )
         return approval
 
     async def lock(self, request_id: str, candidate_id: str, reviewer: str) -> LockedResolution:
@@ -598,6 +633,9 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        trace = await self.store.get_trace(request_id)
+        if trace is None:
+            raise KeyError(f"trace not found: {request_id}")
         incomplete = tuple(
             item for item in candidate.limitations
             if item.startswith("formal_admission_incomplete:")
@@ -625,17 +663,33 @@ class A1FactorResolutionEngine:
                 raise ValueError(
                     "candidate total emissions are inconsistent with factor value and resolved quantity"
                 )
-        locked = LockedResolution(
-            request_id=request_id,
-            candidate=candidate,
-            reviewer=reviewer,
-            approval=ApprovalRecord(
-                request_id, candidate_id, approval.reviewer, ApprovalStatus.LOCKED, approval.note, approval.created_at,
-                approval.mode,
-            ),
+        if not approval.is_integrity_bound:
+            raise ValueError("legacy approval without integrity digests cannot be locked")
+        expected_bindings = (
+            candidate.content_sha256,
+            recommendation.content_sha256,
+            recommendation.revision,
+            recommendation.database_anchor_sha256,
+            recommendation.registry_anchor_sha256,
+            recommendation.policy_anchor_sha256,
+            trace.revision,
+            trace.chain_sha256,
         )
-        await self.store.save_locked(locked)
-        await self._append_trace(request_id, "lock", "approved factor result locked", {
+        observed_bindings = (
+            approval.candidate_content_sha256,
+            approval.recommendation_content_sha256,
+            approval.recommendation_revision,
+            approval.database_anchor_sha256,
+            approval.registry_anchor_sha256,
+            approval.policy_anchor_sha256,
+            approval.trace_revision,
+            approval.trace_chain_sha256,
+        )
+        if observed_bindings != expected_bindings:
+            raise ValueError("approval binding no longer matches candidate, recommendation, anchors or trace")
+        expected_trace_revision = trace.revision
+        updated_trace = trace.clone()
+        updated_trace.append("lock", "approved factor result locked", {
             "candidate_id": candidate_id,
             "reviewer": reviewer,
             "locked_result_is_immutable": True,
@@ -646,6 +700,28 @@ class A1FactorResolutionEngine:
             "override_reason": approval.note if approval.mode == ApprovalMode.REFERENCE_OVERRIDE else None,
             "unresolved_warnings": candidate.warnings,
         })
+        snapshot = LockedResolutionEvidenceSnapshot.from_trace(
+            updated_trace,
+            registry_anchor_sha256=recommendation.registry_anchor_sha256 or "",
+            policy_anchor_sha256=recommendation.policy_anchor_sha256 or "",
+        )
+        locked_approval = replace(approval, status=ApprovalStatus.LOCKED)
+        locked = LockedResolution(
+            request_id=request_id,
+            candidate=candidate,
+            reviewer=reviewer,
+            approval=locked_approval,
+            evidence_snapshot=snapshot,
+            candidate_content_sha256=candidate.content_sha256,
+            recommendation_content_sha256=recommendation.content_sha256,
+            approval_content_sha256=approval.content_sha256,
+        )
+        await self.store.save_locked(
+            locked,
+            updated_trace,
+            expected_recommendation_sha256=recommendation.content_sha256,
+            expected_trace_revision=expected_trace_revision,
+        )
         return locked
 
     async def locked(self, request_id: str) -> LockedResolution | None:
@@ -707,8 +783,62 @@ class A1FactorResolutionEngine:
         trace = await self.store.get_trace(request_id)
         if trace is None:
             raise KeyError(f"trace not found: {request_id}")
-        trace.append(stage, message, details)
-        await self.store.save_trace(trace)
+        updated = trace.clone()
+        updated.append(stage, message, details)
+        await self.store.save_trace(updated)
+
+    def _bind_recommendation(
+        self,
+        recommendation: Recommendation,
+        trace: ResolutionTrace,
+        *,
+        policy: DeploymentPolicy | None = None,
+    ) -> Recommendation:
+        database_anchor_sha256 = (
+            trace.database_anchor.anchor_sha256 if trace.database_anchor else None
+        )
+        return replace(
+            recommendation,
+            trace=trace,
+            database_anchor_sha256=database_anchor_sha256,
+            registry_anchor_sha256=self.graph.material_registry.sha256,
+            policy_anchor_sha256=(policy or self.graph.deployment_policy).anchor_sha256,
+        )
+
+    @staticmethod
+    def _bound_approval(
+        recommendation: Recommendation,
+        candidate: Candidate,
+        trace: ResolutionTrace,
+        reviewer: str,
+        status: ApprovalStatus,
+        *,
+        note: str = "",
+        mode: ApprovalMode = ApprovalMode.STANDARD,
+    ) -> ApprovalRecord:
+        if not all((
+            recommendation.database_anchor_sha256,
+            recommendation.registry_anchor_sha256,
+            recommendation.policy_anchor_sha256,
+        )):
+            raise ValueError("recommendation is missing integrity anchors")
+        return ApprovalRecord(
+            request_id=recommendation.request_id,
+            candidate_id=candidate.candidate_id,
+            reviewer=reviewer,
+            status=status,
+            note=note,
+            mode=mode,
+            candidate_content_sha256=candidate.content_sha256,
+            recommendation_content_sha256=recommendation.content_sha256,
+            recommendation_revision=recommendation.revision,
+            database_anchor_sha256=recommendation.database_anchor_sha256,
+            registry_anchor_sha256=recommendation.registry_anchor_sha256,
+            policy_anchor_sha256=recommendation.policy_anchor_sha256,
+            trace_revision=trace.revision,
+            trace_chain_sha256=trace.chain_sha256,
+            reviewer_identity=reviewer,
+        )
 
     @staticmethod
     def _trace_ids(

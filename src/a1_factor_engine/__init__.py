@@ -20,6 +20,7 @@ from .energy_database import (
     interpret_process_emission_observation,
 )
 from .engine import A1FactorResolutionEngine
+from .integrity import CatalogIntegrityError, PersistenceIntegrityError
 from .material_registry import (
     DEFAULT_MATERIAL_REGISTRY,
     FormRule,
@@ -37,6 +38,7 @@ from .models import (
     AccountingQuantificationStatus,
     AccountingRole,
     ApprovalMode,
+    ApprovalRecord,
     ApprovalStatus,
     Candidate,
     CandidateAdmission,
@@ -60,6 +62,7 @@ from .models import (
     LinkOutcome,
     LinkStrategy,
     LockedResolution,
+    LockedResolutionEvidenceSnapshot,
     MaterialCategory,
     MaterialClass,
     MaterialIdentity,
@@ -155,6 +158,7 @@ __all__ = [
     "stoichiometric_carbon_emission_kgco2e_per_kg",
     "ApprovalStatus",
     "ApprovalMode",
+    "ApprovalRecord",
     "Candidate",
     "CandidateAdmission",
     "CandidateOrigin",
@@ -173,6 +177,9 @@ __all__ = [
     "IdentityProofType",
     "IdentityResolution",
     "LockedResolution",
+    "LockedResolutionEvidenceSnapshot",
+    "CatalogIntegrityError",
+    "PersistenceIntegrityError",
     "LinkAttempt",
     "LinkOutcome",
     "LinkStrategy",

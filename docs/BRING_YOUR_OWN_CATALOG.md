@@ -17,7 +17,12 @@ accounting**.
   "catalog_version": "your-catalog/v1",
   "database": {
     "name": "authorized-factor-source",
-    "sha256": "<64 lowercase hexadecimal characters>"
+    "sha256": "<optional source-artifact SHA-256>"
+  },
+  "manifest": {
+    "schema_version": "cfr.catalog/v2",
+    "catalog_content_sha256": "<canonical record-content SHA-256>",
+    "publisher_id": "your-stable-publisher-id"
   },
   "records": [
     {
@@ -46,7 +51,11 @@ accounting**.
 Every selectable structured record needs a stable identity, numeric value and unit, subject,
 exact boundary, declared product, quality/admission state, evidence locator, and evidence hash.
 Geography, year, product form, process and composition should be supplied whenever they affect
-applicability. Keep the database hash tied to the exact source snapshot used by the adapter.
+applicability. Generate `manifest.catalog_content_sha256` with
+`a1_factor_engine.integrity.catalog_content_sha256(records)`. CFR recomputes it and rejects a
+mismatch. `database.sha256` identifies the optional source artifact and is not a substitute for
+the canonical record-content digest. An unsigned `publisher_id` is retained as a claim, not
+treated as verified identity.
 
 ## Run the included example
 
@@ -112,6 +121,10 @@ Production deployments should provide authentication, TLS, retry/rate-limit poli
 data access and audit storage outside CFR. A custom repository adapter may implement
 `FactorRepositoryPort` when the source cannot provide this envelope; it must still return
 provenance-complete `SourceRecord` objects.
+
+Dataset policies that inherit evidence, source priority or formal approval must also bind the
+exact `catalog_content_sha256`; matching a source name or standard alone is not sufficient. See
+[`CFR_CATALOG_LOCK_INTEGRITY_V3.md`](CFR_CATALOG_LOCK_INTEGRITY_V3.md).
 
 ## Custom repository adapter
 

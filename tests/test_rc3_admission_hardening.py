@@ -20,6 +20,7 @@ from a1_factor_engine.adapters import (
     HttpCatalogFactorRepository,
     InMemoryFactorRepository,
 )
+from a1_factor_engine.integrity import catalog_content_sha256
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import DatabaseVersionAnchor
 from a1_factor_engine.semantic_index import SemanticFactorIndex
@@ -342,6 +343,7 @@ async def test_http_catalog_cache_rebuilds_when_decision_policy_changes() -> Non
         record_categories=("energy_factor",),
         geography="CN",
         year=2024,
+        catalog_content_sha256=catalog_content_sha256(payload["records"]),
     )
     repository = HttpCatalogFactorRepository(
         fetch_json=lambda _url: payload,

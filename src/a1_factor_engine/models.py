@@ -17,6 +17,14 @@ from types import MappingProxyType
 from typing import Any, Mapping, Optional
 from uuid import uuid4
 
+from .integrity import (
+    DECISION_SCHEMA_VERSION,
+    LOCK_SCHEMA_VERSION,
+    TRACE_SCHEMA_VERSION,
+    PersistenceIntegrityError,
+    canonical_json_bytes,
+    stable_sha256,
+)
 from .units import UnitConversionEvidence
 
 
@@ -1006,6 +1014,10 @@ class DatabaseVersionAnchor:
     database_sha256: Optional[str]
     locator: str
     observed_at: datetime = field(default_factory=_now)
+    schema_version: str = "legacy-catalog/v1"
+    publisher_id: str = "unverified-legacy"
+    publisher_identity_verified: bool = False
+    catalog_content_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if not self.catalog_name.strip() or not self.catalog_version.strip() or not self.locator.strip():
@@ -1015,18 +1027,45 @@ class DatabaseVersionAnchor:
             if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
                 raise ValueError("database_sha256 must be a lowercase SHA-256 or None")
             object.__setattr__(self, "database_sha256", digest)
+        if self.catalog_content_sha256 is not None:
+            digest = self.catalog_content_sha256.strip().lower()
+            if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+                raise ValueError("catalog_content_sha256 must be a lowercase SHA-256 or None")
+            object.__setattr__(self, "catalog_content_sha256", digest)
 
     @property
     def identity(self) -> str:
         return self.database_sha256 or f"{self.catalog_name}:{self.catalog_version}"
+
+    @property
+    def content_sha256(self) -> str | None:
+        return self.catalog_content_sha256 or self.database_sha256
+
+    @property
+    def anchor_sha256(self) -> str:
+        return stable_sha256({
+            "catalog_name": self.catalog_name,
+            "catalog_version": self.catalog_version,
+            "database_artifact_sha256": self.database_sha256,
+            "catalog_content_sha256": self.content_sha256,
+            "locator": self.locator,
+            "schema_version": self.schema_version,
+            "publisher_id": self.publisher_id,
+            "publisher_identity_verified": self.publisher_identity_verified,
+        })
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "catalog_name": self.catalog_name,
             "catalog_version": self.catalog_version,
             "database_sha256": self.database_sha256,
+            "catalog_content_sha256": self.content_sha256,
             "locator": self.locator,
             "observed_at": self.observed_at.isoformat(),
+            "schema_version": self.schema_version,
+            "publisher_id": self.publisher_id,
+            "publisher_identity_verified": self.publisher_identity_verified,
+            "anchor_sha256": self.anchor_sha256,
         }
 
 
@@ -1152,11 +1191,25 @@ class TraceEntry:
     message: str
     details: Mapping[str, Any] = field(default_factory=dict)
     at: datetime = field(default_factory=_now)
+    previous_hash: str = ""
+    entry_hash: str = ""
 
     def __post_init__(self) -> None:
         if self.revision < 1:
             raise ValueError("trace entry revision must be positive")
         object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
+        expected = stable_sha256({
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "revision": self.revision,
+            "stage": self.stage,
+            "message": self.message,
+            "details": dict(self.details),
+            "at": self.at,
+            "previous_hash": self.previous_hash,
+        })
+        if self.entry_hash and self.entry_hash != expected:
+            raise PersistenceIntegrityError("trace entry hash does not match its content")
+        object.__setattr__(self, "entry_hash", expected)
 
 
 @dataclass(slots=True)
@@ -1174,12 +1227,66 @@ class ResolutionTrace:
 
     def append(self, stage: str, message: str, details: Mapping[str, Any] | None = None) -> TraceEntry:
         self.revision += 1
-        entry = TraceEntry(self.revision, stage, message, details or {})
+        previous_hash = self.entries[-1].entry_hash if self.entries else ""
+        entry = TraceEntry(
+            self.revision, stage, message, details or {}, previous_hash=previous_hash
+        )
         self.entries.append(entry)
         return entry
 
+    def verify_hash_chain(self) -> None:
+        previous_hash = ""
+        if self.revision != len(self.entries):
+            raise PersistenceIntegrityError("trace revision does not match entry count")
+        for expected_revision, entry in enumerate(self.entries, start=1):
+            if entry.revision != expected_revision or entry.previous_hash != previous_hash:
+                raise PersistenceIntegrityError("trace hash chain order is invalid")
+            expected_hash = stable_sha256({
+                "schema_version": TRACE_SCHEMA_VERSION,
+                "revision": entry.revision,
+                "stage": entry.stage,
+                "message": entry.message,
+                "details": dict(entry.details),
+                "at": entry.at,
+                "previous_hash": entry.previous_hash,
+            })
+            if entry.entry_hash != expected_hash:
+                raise PersistenceIntegrityError("trace hash chain content is invalid")
+            previous_hash = entry.entry_hash
+
+    @property
+    def chain_sha256(self) -> str:
+        self.verify_hash_chain()
+        return stable_sha256({
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "trace_id": self.trace_id,
+            "request_id": self.request_id,
+            "request_fingerprint": self.request_fingerprint,
+            "raw_request_fingerprint": self.raw_request_fingerprint,
+            "normalized_business_fingerprint": self.normalized_business_fingerprint,
+            "database_anchor_sha256": (
+                self.database_anchor.anchor_sha256 if self.database_anchor else None
+            ),
+            "revision": self.revision,
+            "entry_hashes": tuple(entry.entry_hash for entry in self.entries),
+        })
+
     def set_database_anchor(self, anchor: DatabaseVersionAnchor) -> None:
         self.database_anchor = anchor
+
+    def clone(self) -> "ResolutionTrace":
+        """Copy the live trace so a store can commit an append atomically."""
+
+        return ResolutionTrace(
+            trace_id=self.trace_id,
+            request_id=self.request_id,
+            request_fingerprint=self.request_fingerprint,
+            raw_request_fingerprint=self.raw_request_fingerprint,
+            normalized_business_fingerprint=self.normalized_business_fingerprint,
+            database_anchor=self.database_anchor,
+            revision=self.revision,
+            entries=list(self.entries),
+        )
 
     def latest(self, stage: str) -> Optional[TraceEntry]:
         return next((entry for entry in reversed(self.entries) if entry.stage == stage), None)
@@ -1267,10 +1374,72 @@ class ResolutionTrace:
                     "message": entry.message,
                     "details": dict(entry.details),
                     "at": entry.at.isoformat(),
+                    "previous_hash": entry.previous_hash,
+                    "entry_hash": entry.entry_hash,
                 }
                 for entry in self.entries
             ),
+            "chain_sha256": self.chain_sha256,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class LockedResolutionEvidenceSnapshot:
+    """Byte-stable trace evidence frozen independently from the live trace."""
+
+    trace_id: str
+    request_id: str
+    trace_revision: int
+    trace_chain_sha256: str
+    database_anchor_sha256: str
+    registry_anchor_sha256: str
+    policy_anchor_sha256: str
+    canonical_bytes: bytes
+    snapshot_sha256: str
+    schema_version: str = TRACE_SCHEMA_VERSION
+
+    @classmethod
+    def from_trace(
+        cls,
+        trace: "ResolutionTrace",
+        *,
+        registry_anchor_sha256: str,
+        policy_anchor_sha256: str,
+    ) -> "LockedResolutionEvidenceSnapshot":
+        trace.verify_hash_chain()
+        if trace.database_anchor is None:
+            raise PersistenceIntegrityError("trace has no catalog anchor")
+        payload = {
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "trace_id": trace.trace_id,
+            "request_id": trace.request_id,
+            "trace_revision": trace.revision,
+            "trace_chain_sha256": trace.chain_sha256,
+            "database_anchor_sha256": trace.database_anchor.anchor_sha256,
+            "registry_anchor_sha256": registry_anchor_sha256,
+            "policy_anchor_sha256": policy_anchor_sha256,
+            "entries": tuple({
+                "revision": entry.revision,
+                "stage": entry.stage,
+                "message": entry.message,
+                "details": dict(entry.details),
+                "at": entry.at,
+                "previous_hash": entry.previous_hash,
+                "entry_hash": entry.entry_hash,
+            } for entry in trace.entries),
+        }
+        frozen = canonical_json_bytes(payload)
+        return cls(
+            trace_id=trace.trace_id,
+            request_id=trace.request_id,
+            trace_revision=trace.revision,
+            trace_chain_sha256=trace.chain_sha256,
+            database_anchor_sha256=trace.database_anchor.anchor_sha256,
+            registry_anchor_sha256=registry_anchor_sha256,
+            policy_anchor_sha256=policy_anchor_sha256,
+            canonical_bytes=frozen,
+            snapshot_sha256=hashlib.sha256(frozen).hexdigest(),
+        )
 
 
 def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
@@ -1463,6 +1632,42 @@ class SourceRecord:
             row=self.row,
         )
 
+    @property
+    def content_sha256(self) -> str:
+        """Stable digest of every field that can affect a factor decision."""
+
+        return stable_sha256({
+            "schema_version": DECISION_SCHEMA_VERSION,
+            "source_id": self.source_id,
+            "source_type": self.source_type,
+            "provider": self.provider,
+            "locator": self.locator,
+            "material_name": self.material_name,
+            "factor_value": self.factor_value,
+            "factor_unit": self.factor_unit,
+            "geography": self.geography,
+            "year": self.year,
+            "product_form": self.product_form,
+            "composition": self.composition,
+            "production_process": self.production_process,
+            "boundary": self.boundary,
+            "citation": self.citation,
+            "excerpt": self.excerpt,
+            "metadata": dict(self.metadata),
+            "factor_kind": self.factor_kind,
+            "subject_type": self.subject_type,
+            "source_quality_status": self.source_quality_status,
+            "admission_eligible": self.admission_eligible,
+            "indicator": self.indicator,
+            "declared_product": self.declared_product,
+            "boundary_modules": self.boundary_modules,
+            "catalog_locator": self.catalog_locator,
+            "source_document_sha256": self.source_document_sha256,
+            "page": self.page,
+            "table": self.table,
+            "row": self.row,
+        })
+
 
 @dataclass(frozen=True, slots=True)
 class ResolutionRequest:
@@ -1643,6 +1848,52 @@ class Candidate:
             raise ValueError("total emissions must be finite and non-negative")
         object.__setattr__(self, "dimensions", MappingProxyType(dict(self.dimensions)))
 
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": DECISION_SCHEMA_VERSION,
+            "candidate_id": self.candidate_id,
+            "origin": self.origin,
+            "source_content_sha256": self.source.content_sha256,
+            "provenance": {
+                "source_id": self.provenance.source_id,
+                "source_type": self.provenance.source_type,
+                "provider": self.provenance.provider,
+                "locator": self.provenance.locator,
+                "citation": self.provenance.citation,
+                "excerpt": self.provenance.excerpt,
+                "catalog_locator": self.provenance.catalog_locator,
+                "source_document_sha256": self.provenance.source_document_sha256,
+                "page": self.provenance.page,
+                "table": self.provenance.table,
+                "row": self.provenance.row,
+            },
+            "factor_value": self.factor_value,
+            "factor_unit": self.factor_unit,
+            "score": self.score,
+            "reasons": self.reasons,
+            "limitations": self.limitations,
+            "dimensions": dict(self.dimensions),
+            "proxy_material": self.proxy_material,
+            "proxy_class": self.proxy_class,
+            "evidence_coverage": self.evidence_coverage,
+            "evidence_gaps": self.evidence_gaps,
+            "resolution_type": self.resolution_type,
+            "result_tier": self.result_tier,
+            "resolution_strength": self.resolution_strength,
+            "gaps": self.gaps,
+            "transformation_steps": self.transformation_steps,
+            "parameter_evidence_ids": self.parameter_evidence_ids,
+            "base_source_ids": self.base_source_ids,
+            "assumptions": self.assumptions,
+            "warnings": self.warnings,
+            "resolved_activity_value": self.resolved_activity_value,
+            "resolved_activity_unit": self.resolved_activity_unit,
+            "activity_dimension": self.activity_dimension,
+            "resolved_quantity_kg": self.resolved_quantity_kg,
+            "total_emissions_kgco2e": self.total_emissions_kgco2e,
+        })
+
 
 @dataclass(frozen=True, slots=True)
 class DerivedFactorCandidate:
@@ -1698,6 +1949,11 @@ class Recommendation:
     accounting_assignments: tuple[AccountingAssignment, ...] = ()
     reason_codes: tuple[str, ...] = ()
     created_at: datetime = field(default_factory=_now)
+    revision: int = 1
+    database_anchor_sha256: str | None = None
+    registry_anchor_sha256: str | None = None
+    policy_anchor_sha256: str | None = None
+    schema_version: str = DECISION_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -1705,6 +1961,36 @@ class Recommendation:
             "reviewable_candidate_reasons",
             MappingProxyType(dict(self.reviewable_candidate_reasons)),
         )
+        if self.revision < 1:
+            raise ValueError("recommendation revision must be positive")
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "revision": self.revision,
+            "status": self.status,
+            "candidate_digests": tuple(item.content_sha256 for item in self.candidates),
+            "reviewable_candidate_digests": tuple(
+                item.content_sha256 for item in self.reviewable_candidates
+            ),
+            "diagnostic_candidate_digests": tuple(
+                item.content_sha256 for item in self.diagnostic_candidates
+            ),
+            "follow_up": self.follow_up,
+            "message": self.message,
+            "confidence": self.confidence,
+            "resolution_strength": self.resolution_strength,
+            "reviewable_candidate_reasons": dict(self.reviewable_candidate_reasons),
+            "missing_gaps": self.missing_gaps,
+            "questions": self.questions,
+            "accounting_assignments": self.accounting_assignments,
+            "reason_codes": self.reason_codes,
+            "database_anchor_sha256": self.database_anchor_sha256,
+            "registry_anchor_sha256": self.registry_anchor_sha256,
+            "policy_anchor_sha256": self.policy_anchor_sha256,
+        })
 
 
 @dataclass(frozen=True, slots=True)
@@ -1716,6 +2002,16 @@ class ApprovalRecord:
     note: str = ""
     created_at: datetime = field(default_factory=_now)
     mode: ApprovalMode = ApprovalMode.STANDARD
+    candidate_content_sha256: str | None = None
+    recommendation_content_sha256: str | None = None
+    recommendation_revision: int | None = None
+    database_anchor_sha256: str | None = None
+    registry_anchor_sha256: str | None = None
+    policy_anchor_sha256: str | None = None
+    trace_revision: int | None = None
+    trace_chain_sha256: str | None = None
+    reviewer_identity: str | None = None
+    schema_version: str = DECISION_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.request_id.strip() or not self.candidate_id.strip() or not self.reviewer.strip():
@@ -1726,6 +2022,41 @@ class ApprovalRecord:
             except ValueError as exc:
                 raise ValueError("approval mode is not supported") from exc
 
+    @property
+    def is_integrity_bound(self) -> bool:
+        return all((
+            self.candidate_content_sha256,
+            self.recommendation_content_sha256,
+            self.recommendation_revision is not None,
+            self.database_anchor_sha256,
+            self.registry_anchor_sha256,
+            self.policy_anchor_sha256,
+            self.trace_revision is not None,
+            self.trace_chain_sha256,
+            self.reviewer_identity,
+        ))
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "candidate_id": self.candidate_id,
+            "reviewer": self.reviewer,
+            "reviewer_identity": self.reviewer_identity,
+            "status": self.status,
+            "note": self.note,
+            "mode": self.mode,
+            "candidate_content_sha256": self.candidate_content_sha256,
+            "recommendation_content_sha256": self.recommendation_content_sha256,
+            "recommendation_revision": self.recommendation_revision,
+            "database_anchor_sha256": self.database_anchor_sha256,
+            "registry_anchor_sha256": self.registry_anchor_sha256,
+            "policy_anchor_sha256": self.policy_anchor_sha256,
+            "trace_revision": self.trace_revision,
+            "trace_chain_sha256": self.trace_chain_sha256,
+        })
+
 
 @dataclass(frozen=True, slots=True)
 class LockedResolution:
@@ -1734,6 +2065,11 @@ class LockedResolution:
     reviewer: str
     approval: ApprovalRecord
     locked_at: datetime = field(default_factory=_now)
+    evidence_snapshot: LockedResolutionEvidenceSnapshot | None = None
+    candidate_content_sha256: str | None = None
+    recommendation_content_sha256: str | None = None
+    approval_content_sha256: str | None = None
+    schema_version: str = LOCK_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.request_id.strip() or not self.reviewer.strip():
@@ -1744,6 +2080,22 @@ class LockedResolution:
             raise ValueError("lock approval must reference the locked request")
         if self.approval.status != ApprovalStatus.LOCKED:
             raise ValueError("locked resolution requires a locked approval")
+        if self.evidence_snapshot is not None and self.evidence_snapshot.request_id != self.request_id:
+            raise ValueError("locked evidence snapshot belongs to another request")
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "candidate_content_sha256": self.candidate_content_sha256,
+            "recommendation_content_sha256": self.recommendation_content_sha256,
+            "approval_content_sha256": self.approval_content_sha256,
+            "evidence_snapshot_sha256": (
+                self.evidence_snapshot.snapshot_sha256 if self.evidence_snapshot else None
+            ),
+            "reviewer": self.reviewer,
+        })
 
 
 @dataclass(frozen=True, slots=True)

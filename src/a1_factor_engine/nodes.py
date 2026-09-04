@@ -747,6 +747,8 @@ class LocalRetrievalNode(Node[GraphState]):
         try:
             result = await self.repository.search(state.normalized.retrieval_intent)
         except CatalogIntegrityError as exc:
+            if "SHA-256" in str(exc) or "signature" in str(exc):
+                raise
             state.local_records = ()
             state.excluded_candidates.append(CandidateExclusion(
                 source_id="local-catalog-integrity",

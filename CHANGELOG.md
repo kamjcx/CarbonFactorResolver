@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added the frozen `cfr.catalog/v2` canonical content manifest and strict
+  declared-versus-observed record digest validation.
+- Bound dataset policy, source records, candidates, recommendations, approvals,
+  locked results and evidence traces to versioned content digests.
+- Added atomic approval/lock compare-and-set semantics, append-only trace hash
+  chains and immutable locked evidence snapshots.
+- Added fail-closed migration rules for unbound policies and legacy approvals.
+
+## Unreleased
+
 - Harden formal resolution: explicit geography/year conflicts fail closed unless a versioned
   deployment substitution policy authorizes that exact dimension; missing declared product or
   lifecycle boundary is `REFERENCE_ONLY` and cannot be approved or locked.

@@ -1,5 +1,22 @@
 # Architecture
 
+## Content-addressed decision boundary
+
+```text
+canonical Catalog manifest
+        -> SourceRecord digest
+        -> Candidate digest
+        -> Recommendation digest + revision + DB/registry/policy anchors
+        -> human Approval digest + reviewer + trace revision
+        -> compare-and-set Lock
+        -> immutable evidence snapshot
+                  |
+                  +-> later LiveResolutionTrace appends remain separate
+```
+
+The versioned contract and persistence migration rules are defined in
+[`docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md`](docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md).
+
 CarbonFactorResolver (CFR) is a structured factor-resolution component. It accepts JSON
 requests, retrieves records from local catalogues and structured external adapters, applies
 deterministic qualification gates, ranks only eligible candidates, and returns an explained

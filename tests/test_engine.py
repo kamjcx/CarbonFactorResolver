@@ -51,6 +51,7 @@ from a1_factor_engine import (
     stoichiometric_carbon_emission_kgco2e_per_kg,
 )
 from a1_factor_engine.adapters import (
+    REFRACTORY_A1_STANDARD_POLICY,
     HttpCatalogFactorRepository,
     InMemoryFactorRepository,
     InMemoryGradeSeriesRepository,
@@ -58,6 +59,7 @@ from a1_factor_engine.adapters import (
     InMemoryProxyRepository,
     InMemoryReferenceFlowRepository,
 )
+from a1_factor_engine.integrity import catalog_content_sha256
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import NormalizedActivity, resolution_request_fingerprint
 from a1_factor_engine.qualification import qualify_record
@@ -1079,7 +1081,9 @@ async def test_trace_explains_local_hits_proxy_route_exclusions_and_ranking():
 
     assert result.status == ResolutionStatus.PROCESS_MODEL_REQUIRED
     assert trace is result.trace
-    assert trace is not None and trace.database_anchor == anchor
+    assert trace is not None and trace.database_anchor is not None
+    assert trace.database_anchor.identity == anchor.identity
+    assert trace.database_anchor.content_sha256 is not None
     assert trace.latest("local_retrieval").details["records"][0]["source_id"] == "local-conflict"
     assert trace.latest("local_evaluate").details["decision"] == "resolve_local_gaps"
     assert trace.latest("process_variant_resolution").details["modes"][0]["mode"] == "UNADJUSTED_PROCESS_PROXY"
@@ -1107,6 +1111,7 @@ async def test_same_request_comparison_explains_database_update():
     before = await engine.resolve(request())
     repository.records = [record("steel-v2", "steel coil", 0.8)]
     repository.anchor = new_anchor
+    repository.__post_init__()
     after = await engine.resolve(request())
     comparison = await engine.compare_traces(before.request_id, after.request_id)
 
@@ -2914,6 +2919,10 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
         local_retrieval=HttpCatalogFactorRepository(
             expected_sha256=digest,
             fetch_json=lambda _: payload,
+            dataset_policies=(replace(
+                REFRACTORY_A1_STANDARD_POLICY,
+                catalog_content_sha256=catalog_content_sha256(payload["records"]),
+            ),),
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",
@@ -3117,6 +3126,7 @@ async def test_explicit_dataset_approval_anchor_can_lift_draft_tier_cap():
         declared_product_from_name=True,
         evidence_citation="reviewed internal dataset approval record",
         production_approval_id="dataset-approval:refractory-a1/v1",
+        catalog_content_sha256=catalog_content_sha256(payload["records"]),
     )
     result = await A1FactorResolutionEngine(
         local_retrieval=HttpCatalogFactorRepository(

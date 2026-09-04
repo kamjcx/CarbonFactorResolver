@@ -149,7 +149,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | Evidence set | Result | What it proves |
 |---|---:|---|
 | v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
-| v0.14.2 core package | 360 passed, 87.15% branch coverage | current implementation regression gate |
+| PR3 stacked candidate | 411 passed, 86.42% branch coverage | current Catalog-to-lock integrity regression gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
@@ -171,6 +171,8 @@ repairs, public BYOC example, and release presentation evidence. See [Evaluation
 - Exact A1/A2/A3/A1-A3 and factor-subject matrices fail closed.
 - Unsupported or cross-dimension units return stable reason codes.
 - Source locator, content hash, declared product, boundary, and database anchors stay in Trace.
+- Catalog content, candidate, recommendation revision, approval, reviewer and locked evidence are
+  content-addressed; lock uses compare-and-set and freezes a separate evidence snapshot.
 - Rejected candidates cannot later be approved in the same immutable resolution run.
 - `REFERENCE_ONLY` results require an explicit, reasoned human override.
 
@@ -183,6 +185,7 @@ repairs, public BYOC example, and release presentation evidence. See [Evaluation
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
+- [Catalog-to-lock integrity contract](docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md)
 - [Release notes](docs/RELEASE_NOTES_V0.14.2.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 

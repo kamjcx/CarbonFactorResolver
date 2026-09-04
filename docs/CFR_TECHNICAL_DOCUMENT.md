@@ -700,7 +700,7 @@ Trace 能回答：
 
 ### 19.4 当前 Trace 保证边界
 
-Trace 可更新，因此后续写入会改变同一 Trace 的 revision。锁定结果的不可变性由 `LockedResolution` 和 Store 约束保证，而不是依赖 Trace 快照。
+Trace 可更新，因此后续写入会改变 live Trace 的 revision。自完整性合同 V3 起，锁定同时生成独立的 `LockedResolutionEvidenceSnapshot`，冻结锁定时的 Trace revision、hash chain、Catalog/Registry/Policy 锚点和规范化字节；后续 live Trace 追加不会改变锁定快照。
 
 ## 20. 人工审批与锁定
 
@@ -723,7 +723,7 @@ stateDiagram-v2
 
 ### 20.3 lock
 
-锁定前必须存在 `APPROVED` 记录。锁定边界独立重查硬门禁、审批模式和“因子 × 规范化数量 = 总量”一致性，再产生 frozen `LockedResolution` 并写入状态为 `LOCKED` 的 ApprovalRecord。
+锁定前必须存在绑定 candidate、recommendation revision、Catalog/Registry/Policy 锚点、Trace revision/hash chain 与 reviewer identity 的 `APPROVED` 记录。锁定边界独立重查硬门禁、审批模式和“因子 × 规范化数量 = 总量”一致性，再以 compare-and-set 产生 frozen `LockedResolution` 和 `LockedResolutionEvidenceSnapshot`；缺少摘要的旧审批记录不得锁定。
 
 锁定语义：
 
@@ -778,7 +778,7 @@ class GradeSeriesRepositoryPort(Protocol):
 
 ### 21.5 ResolutionStorePort
 
-定义 Recommendation、Trace、Approval 和 LockedResolution 的保存与查询接口。生产实现需要自行提供事务、唯一约束、并发控制和持久化。
+定义 Recommendation、live Trace、Approval、LockedResolution 和锁定证据快照的保存与查询接口。生产实现必须提供事务、唯一约束、revision compare-and-set、append-only hash-chain 校验和持久化；参考 InMemory Store 会模拟同样的并发语义。
 
 ## 22. 当前 Adapters
 
@@ -1195,7 +1195,7 @@ Normalize Text
 
 正式目录不写回仓库。HTTP Adapter 在进程内把目录记录预解析成 Semantic Index；目录 SHA、注册表版本或注册表 SHA 变化时生成新的 index version。Trace 暴露 `material_mention`、`identity_resolution`、`retrieval_intent`、`semantic_index`、`candidate_admissions`、排除原因和最终排名，支持解释同一请求在目录或注册表更新前后的差异。
 
-`0.11.2` 的审核式 `CatalogDatasetPolicy` 只为同时匹配 category、standard 和 primary label 的记录补充来源文件已经明确规定、但目录未逐行重复的字段。当前耐火材料征求意见稿策略依据 5.2、5.3.1 和 7.1 继承 `declared_product=记录名称`、`boundary=cradle-to-gate` 和 `indicator=GWP-total`；年份与地域没有被凭空补齐。草案/征求意见、聚合和待审核来源确定性封顶为 `REFERENCE_ONLY`。只有代码侧受审 Policy 绑定非空 `production_approval_id`，才可解除该上限；应用的 policy、approval、继承字段、Tier 原因和证据章节都进入 SourceRecord metadata 与 Trace。
+`0.11.2` 引入的审核式 `CatalogDatasetPolicy` 只为同时匹配 category、standard 和 primary label 的记录补充来源文件已经明确规定、但目录未逐行重复的字段。完整性合同 V3 进一步要求 Policy 绑定精确 `catalog_content_sha256`；仅靠名称、标准、分类或来源版本不会获得继承字段、正式 approval 或优先级。年份与地域仍不得凭空补齐。草案/征求意见、聚合和待审核来源确定性封顶为 `REFERENCE_ONLY`。只有绑定当前 Catalog 内容摘要且含非空 `production_approval_id` 的受审 Policy 才可解除该上限；应用的 policy、approval、继承字段、Tier 原因和证据章节都进入 SourceRecord metadata 与 Trace。
 
 完整契约、迁移边界和验收案例见 `docs/CFR_SEMANTIC_RESOLUTION_V2_IMPLEMENTATION_ZH.md`。
 
