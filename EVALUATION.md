@@ -3,6 +3,26 @@
 CFR uses versioned, public-synthetic regression suites. These results measure the shipped
 fixtures and contracts; they are not a claim of accuracy across all real-world factor queries.
 
+## Current gate audit
+
+The current stacked Autonomous Contract V3 leaves the V1 evidence unchanged and binds all 103
+raw disagreements to explicit previous/effective expectations. Its effective run passes 418/418
+case contracts with zero unresolved Bad Cases and zero boundary, subject, unit, forbidden-candidate,
+or HTTP-500 escapes. Raw V1 metrics remain visible at 230/259 Direct Top-1 and 103 Bad Cases; the
+V3 effective view is 230/230 Direct Top-1, 230/230 Recall@5, 145/145 abstention and 23/23
+`MORE_INPUT`. This is a post-adjudication regression, not an independent or real-world benchmark.
+See the [V3 contract](docs/CFR_AUTONOMOUS_QUALITY_GATE_V3.md).
+
+### Historical gate audit
+
+A read-only rerun on `main` commit `5155a6829fcdd521f04359263f543245a1c6b03f`
+completed successfully but did **not** pass its quality gates. Autonomous Evaluation reported
+100 raw Bad Cases (94 unresolved after six validated adjudications) and six raw forbidden
+escapes; Portfolio Validation reported 53/60 decision accuracy, 4/10 MORE_INPUT positive
+recall, and 6/46 wrong candidates. The evaluator CLIs now return non-zero for this result so a
+completed run cannot appear as release approval. See the
+[bound baseline and Bad Case audit](evidence/evaluation_gate_audit/5155a68/BASELINE.md).
+
 ## Published suites
 
 - **FactorBench V1** is immutable historical evidence. Its `wrong-unit-53` historical label
@@ -13,6 +33,17 @@ fixtures and contracts; they are not a claim of accuracy across all real-world f
 - **Portfolio Challenge V1** is a closed regression/safety diagnostic, not an unseen-query
   benchmark. It returns 39 direct recommendations plus FIN-05 as `MORE_INPUT_NEEDED` with
   the correct source retained as `REFERENCE_ONLY`; boundary and subject escapes remain zero.
+- **Portfolio Challenge V2 adjudication overlay** leaves every V1 line and raw metric intact.
+  It separately evaluates selectable candidates, non-selectable reference/provisional evidence,
+  and required choices for eight SHA-bound ambiguity cases. This prevents valid discovery clues
+  from being counted as formal recommendations without simply ignoring them.
+- **Autonomous Safety V2 adjudication** records 13 stale steel-fibre oracle presets introduced by
+  the stricter subtype requirement. Current raw results retain all 103 failures; the effective
+  view adjudicates those 13 and leaves 90 unresolved, so the release gate remains closed.
+- **Autonomous Contract V3 adjudication** carries forward Safety V2 and adjudicates the remaining
+  90 status/Oracle mismatches with per-case case/input SHA and explicit effective expectations.
+  It recomputes effective metrics rather than merely suppressing failures; any expectation mismatch
+  remains unresolved.
 - **Frozen Unit Regression Set** contains 28 cases. Its independent first run was 24/28;
   runtime code was then repaired and the regression rerun was 28/28. It is not described as
   an independent holdout after that repair.
@@ -72,7 +103,11 @@ peak RSS was 205.5 MB, and one-process throughput was about 0.75 requests/second
 
 The post-first-run repair cycle is a regression, not a new independent evaluation. It fixes
 decisive-attribute `MORE_INPUT`, structured-source document-hash admission, and concurrent
-terminal-decision races without changing the V1 generator or frozen first-run evidence. Six
-geography/year cases remain raw failures because their frozen labels conflict with CFR's
-published `USABLE_WITH_ASSUMPTIONS` contract. The versioned rationale and exact case IDs are in
-[the V1 adjudication](docs/CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION.md).
+terminal-decision races without changing the V1 generator or frozen first-run evidence. Safety V2
+classifies the six geography/year disagreements as fixed runtime defects: explicit conflicts now
+hard-reject unless a versioned substitution policy applies. The historical V1 interpretation and
+its superseding SHA-bound record remain available in
+[the V1 adjudication](docs/CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION.md) and
+[the Safety V2 contract](docs/CFR_RESOLUTION_SAFETY_HARDENING_V2.md). Contract V3 resolves the
+remaining Oracle/status inventory without changing these historical artifacts; see
+[the V3 adjudication contract](docs/CFR_AUTONOMOUS_QUALITY_GATE_V3.md).

@@ -43,10 +43,10 @@ The following additive rules are also frozen for RC3:
   kinds. They must map from structured catalogues, require their matching explicit subject,
   and may reach the same recommendation tiers as lifecycle factors only after every other
   gate passes.
-- An explicit request geography must never yield a different explicit geography as a primary
-  recommendation. An explicit request year must never yield a source outside a documented
-  three-year applicability window as a primary recommendation. Missing source geography/year
-  remains visible as reviewable uncertainty, not silently exact evidence.
+- Resolution Safety V2 supersedes the former primary-only/three-year rule: an explicit request
+  geography or year conflict is excluded from the candidate pool unless the source carries an
+  ID/version-bound substitution policy for that exact dimension. Missing source geography/year
+  remains visible as uncertainty, not silently exact evidence.
 - Local and external records use the same qualification/admission/observation sinks and
   diagnostics. Conflicting duplicate external `source_id` records fail closed.
 - True zero-recall after a complete request remains `SUPPLIER_DATA_REQUIRED`; recalled but

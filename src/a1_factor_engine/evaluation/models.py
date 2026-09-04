@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 SCHEMA_VERSION = "factorbench/v1"
 
@@ -49,7 +50,7 @@ class FactorBenchCase:
         object.__setattr__(self, "request", MappingProxyType(dict(self.request)))
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "FactorBenchCase":
+    def from_mapping(cls, value: Mapping[str, Any]) -> FactorBenchCase:
         required = {
             "schema_version", "case_id", "tags", "request", "catalog_fixture",
             "expected_identity", "expected_status", "expected_top_ids",

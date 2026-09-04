@@ -8,20 +8,29 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Any
 from uuid import uuid4
 
+from .integrity import (
+    DECISION_SCHEMA_VERSION,
+    LOCK_SCHEMA_VERSION,
+    TRACE_SCHEMA_VERSION,
+    PersistenceIntegrityError,
+    canonical_json_bytes,
+    stable_sha256,
+)
 from .units import UnitConversionEvidence
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class FactorSourceType(str, Enum):
@@ -302,7 +311,7 @@ class RequestGapType(str, Enum):
 
 
 class QualificationStatus(str, Enum):
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 - domain status, not a credential
     MISMATCH = "mismatch"
     UNKNOWN = "unknown"
     NOT_EVALUATED = "not_evaluated"
@@ -368,6 +377,10 @@ class ReferenceFlowRecord:
     mass_per_unit_kg: float
     evidence: ParameterEvidence
     method: str = "mass_per_unit"
+    declared_product: str | None = None
+    product_form: str | None = None
+    specification: str | None = None
+    metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.record_id.strip() or not self.material_name.strip() or not self.reference_unit.strip():
@@ -376,6 +389,7 @@ class ReferenceFlowRecord:
             raise ValueError("mass_per_unit_kg must be finite and positive")
         if abs(self.mass_per_unit_kg - self.evidence.value) > 1e-12:
             raise ValueError("reference-flow mass must equal its parameter evidence value")
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,8 +397,8 @@ class ResolutionGap:
     gap_id: str
     candidate_id: str
     gap_type: GapType
-    target_value: Optional[str]
-    candidate_value: Optional[str]
+    target_value: str | None
+    candidate_value: str | None
     severity: float
     reason: str
     resolvable_by: tuple[RouterType, ...]
@@ -998,9 +1012,13 @@ class DatabaseVersionAnchor:
 
     catalog_name: str
     catalog_version: str
-    database_sha256: Optional[str]
+    database_sha256: str | None
     locator: str
     observed_at: datetime = field(default_factory=_now)
+    schema_version: str = "legacy-catalog/v1"
+    publisher_id: str = "unverified-legacy"
+    publisher_identity_verified: bool = False
+    catalog_content_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if not self.catalog_name.strip() or not self.catalog_version.strip() or not self.locator.strip():
@@ -1010,18 +1028,45 @@ class DatabaseVersionAnchor:
             if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
                 raise ValueError("database_sha256 must be a lowercase SHA-256 or None")
             object.__setattr__(self, "database_sha256", digest)
+        if self.catalog_content_sha256 is not None:
+            digest = self.catalog_content_sha256.strip().lower()
+            if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+                raise ValueError("catalog_content_sha256 must be a lowercase SHA-256 or None")
+            object.__setattr__(self, "catalog_content_sha256", digest)
 
     @property
     def identity(self) -> str:
         return self.database_sha256 or f"{self.catalog_name}:{self.catalog_version}"
+
+    @property
+    def content_sha256(self) -> str | None:
+        return self.catalog_content_sha256 or self.database_sha256
+
+    @property
+    def anchor_sha256(self) -> str:
+        return stable_sha256({
+            "catalog_name": self.catalog_name,
+            "catalog_version": self.catalog_version,
+            "database_artifact_sha256": self.database_sha256,
+            "catalog_content_sha256": self.content_sha256,
+            "locator": self.locator,
+            "schema_version": self.schema_version,
+            "publisher_id": self.publisher_id,
+            "publisher_identity_verified": self.publisher_identity_verified,
+        })
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "catalog_name": self.catalog_name,
             "catalog_version": self.catalog_version,
             "database_sha256": self.database_sha256,
+            "catalog_content_sha256": self.content_sha256,
             "locator": self.locator,
             "observed_at": self.observed_at.isoformat(),
+            "schema_version": self.schema_version,
+            "publisher_id": self.publisher_id,
+            "publisher_identity_verified": self.publisher_identity_verified,
+            "anchor_sha256": self.anchor_sha256,
         }
 
 
@@ -1047,14 +1092,14 @@ class SemanticIndexAnchor:
 class RetrievalResult:
     """Records returned together with the exact catalogue version queried."""
 
-    records: tuple["SourceRecord", ...]
+    records: tuple[SourceRecord, ...]
     database_anchor: DatabaseVersionAnchor
     attempts: tuple[LinkAttempt, ...] = ()
     observations: tuple[RecallObservation, ...] = ()
     semantic_index_anchor: SemanticIndexAnchor | None = None
-    retrieval_diagnostics: tuple["RetrievalDiagnostic", ...] = ()
-    conversion_diagnostics: tuple["RecordConversionDiagnostic", ...] = ()
-    funnel: "PipelineFunnel | None" = None
+    retrieval_diagnostics: tuple[RetrievalDiagnostic, ...] = ()
+    conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = ()
+    funnel: PipelineFunnel | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1137,7 +1182,7 @@ class CandidateExclusion:
     source_id: str
     origin: CandidateOrigin
     reasons: tuple[str, ...]
-    candidate_id: Optional[str] = None
+    candidate_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1147,11 +1192,25 @@ class TraceEntry:
     message: str
     details: Mapping[str, Any] = field(default_factory=dict)
     at: datetime = field(default_factory=_now)
+    previous_hash: str = ""
+    entry_hash: str = ""
 
     def __post_init__(self) -> None:
         if self.revision < 1:
             raise ValueError("trace entry revision must be positive")
         object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
+        expected = stable_sha256({
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "revision": self.revision,
+            "stage": self.stage,
+            "message": self.message,
+            "details": dict(self.details),
+            "at": self.at,
+            "previous_hash": self.previous_hash,
+        })
+        if self.entry_hash and self.entry_hash != expected:
+            raise PersistenceIntegrityError("trace entry hash does not match its content")
+        object.__setattr__(self, "entry_hash", expected)
 
 
 @dataclass(slots=True)
@@ -1163,20 +1222,74 @@ class ResolutionTrace:
     request_fingerprint: str
     raw_request_fingerprint: str | None = None
     normalized_business_fingerprint: str | None = None
-    database_anchor: Optional[DatabaseVersionAnchor] = None
+    database_anchor: DatabaseVersionAnchor | None = None
     revision: int = 0
     entries: list[TraceEntry] = field(default_factory=list)
 
     def append(self, stage: str, message: str, details: Mapping[str, Any] | None = None) -> TraceEntry:
         self.revision += 1
-        entry = TraceEntry(self.revision, stage, message, details or {})
+        previous_hash = self.entries[-1].entry_hash if self.entries else ""
+        entry = TraceEntry(
+            self.revision, stage, message, details or {}, previous_hash=previous_hash
+        )
         self.entries.append(entry)
         return entry
+
+    def verify_hash_chain(self) -> None:
+        previous_hash = ""
+        if self.revision != len(self.entries):
+            raise PersistenceIntegrityError("trace revision does not match entry count")
+        for expected_revision, entry in enumerate(self.entries, start=1):
+            if entry.revision != expected_revision or entry.previous_hash != previous_hash:
+                raise PersistenceIntegrityError("trace hash chain order is invalid")
+            expected_hash = stable_sha256({
+                "schema_version": TRACE_SCHEMA_VERSION,
+                "revision": entry.revision,
+                "stage": entry.stage,
+                "message": entry.message,
+                "details": dict(entry.details),
+                "at": entry.at,
+                "previous_hash": entry.previous_hash,
+            })
+            if entry.entry_hash != expected_hash:
+                raise PersistenceIntegrityError("trace hash chain content is invalid")
+            previous_hash = entry.entry_hash
+
+    @property
+    def chain_sha256(self) -> str:
+        self.verify_hash_chain()
+        return stable_sha256({
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "trace_id": self.trace_id,
+            "request_id": self.request_id,
+            "request_fingerprint": self.request_fingerprint,
+            "raw_request_fingerprint": self.raw_request_fingerprint,
+            "normalized_business_fingerprint": self.normalized_business_fingerprint,
+            "database_anchor_sha256": (
+                self.database_anchor.anchor_sha256 if self.database_anchor else None
+            ),
+            "revision": self.revision,
+            "entry_hashes": tuple(entry.entry_hash for entry in self.entries),
+        })
 
     def set_database_anchor(self, anchor: DatabaseVersionAnchor) -> None:
         self.database_anchor = anchor
 
-    def latest(self, stage: str) -> Optional[TraceEntry]:
+    def clone(self) -> ResolutionTrace:
+        """Copy the live trace so a store can commit an append atomically."""
+
+        return ResolutionTrace(
+            trace_id=self.trace_id,
+            request_id=self.request_id,
+            request_fingerprint=self.request_fingerprint,
+            raw_request_fingerprint=self.raw_request_fingerprint,
+            normalized_business_fingerprint=self.normalized_business_fingerprint,
+            database_anchor=self.database_anchor,
+            revision=self.revision,
+            entries=list(self.entries),
+        )
+
+    def latest(self, stage: str) -> TraceEntry | None:
         return next((entry for entry in reversed(self.entries) if entry.stage == stage), None)
 
     def explain(self) -> dict[str, Any]:
@@ -1262,13 +1375,75 @@ class ResolutionTrace:
                     "message": entry.message,
                     "details": dict(entry.details),
                     "at": entry.at.isoformat(),
+                    "previous_hash": entry.previous_hash,
+                    "entry_hash": entry.entry_hash,
                 }
                 for entry in self.entries
             ),
+            "chain_sha256": self.chain_sha256,
         }
 
 
-def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
+@dataclass(frozen=True, slots=True)
+class LockedResolutionEvidenceSnapshot:
+    """Byte-stable trace evidence frozen independently from the live trace."""
+
+    trace_id: str
+    request_id: str
+    trace_revision: int
+    trace_chain_sha256: str
+    database_anchor_sha256: str
+    registry_anchor_sha256: str
+    policy_anchor_sha256: str
+    canonical_bytes: bytes
+    snapshot_sha256: str
+    schema_version: str = TRACE_SCHEMA_VERSION
+
+    @classmethod
+    def from_trace(
+        cls,
+        trace: ResolutionTrace,
+        *,
+        registry_anchor_sha256: str,
+        policy_anchor_sha256: str,
+    ) -> LockedResolutionEvidenceSnapshot:
+        trace.verify_hash_chain()
+        if trace.database_anchor is None:
+            raise PersistenceIntegrityError("trace has no catalog anchor")
+        payload = {
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "trace_id": trace.trace_id,
+            "request_id": trace.request_id,
+            "trace_revision": trace.revision,
+            "trace_chain_sha256": trace.chain_sha256,
+            "database_anchor_sha256": trace.database_anchor.anchor_sha256,
+            "registry_anchor_sha256": registry_anchor_sha256,
+            "policy_anchor_sha256": policy_anchor_sha256,
+            "entries": tuple({
+                "revision": entry.revision,
+                "stage": entry.stage,
+                "message": entry.message,
+                "details": dict(entry.details),
+                "at": entry.at,
+                "previous_hash": entry.previous_hash,
+                "entry_hash": entry.entry_hash,
+            } for entry in trace.entries),
+        }
+        frozen = canonical_json_bytes(payload)
+        return cls(
+            trace_id=trace.trace_id,
+            request_id=trace.request_id,
+            trace_revision=trace.revision,
+            trace_chain_sha256=trace.chain_sha256,
+            database_anchor_sha256=trace.database_anchor.anchor_sha256,
+            registry_anchor_sha256=registry_anchor_sha256,
+            policy_anchor_sha256=policy_anchor_sha256,
+            canonical_bytes=frozen,
+            snapshot_sha256=hashlib.sha256(frozen).hexdigest(),
+        )
+
+
+def resolution_request_fingerprint(request: ResolutionRequest) -> str:
     """Hash business inputs while deliberately excluding the per-run request ID."""
 
     payload = {
@@ -1294,13 +1469,12 @@ def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
             if request.unit_conversion_evidence else None
         ),
         "top_k": request.top_k,
-        "min_score": request.min_score,
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
+def normalized_business_fingerprint(activity: NormalizedActivity) -> str:
     """Hash normalized business identity, independent of run and display settings."""
 
     def normalized(value: object) -> object:
@@ -1384,12 +1558,12 @@ class SourceRecord:
     material_name: str
     factor_value: float
     factor_unit: str
-    geography: Optional[str] = None
-    year: Optional[int] = None
-    product_form: Optional[str] = None
-    composition: Optional[str] = None
-    production_process: Optional[str] = None
-    boundary: Optional[str] = None
+    geography: str | None = None
+    year: int | None = None
+    product_form: str | None = None
+    composition: str | None = None
+    production_process: str | None = None
+    boundary: str | None = None
     citation: str = ""
     excerpt: str = ""
     retrieved_at: datetime = field(default_factory=_now)
@@ -1459,24 +1633,62 @@ class SourceRecord:
             row=self.row,
         )
 
+    @property
+    def content_sha256(self) -> str:
+        """Stable digest of every field that can affect a factor decision."""
+
+        return stable_sha256({
+            "schema_version": DECISION_SCHEMA_VERSION,
+            "source_id": self.source_id,
+            "source_type": self.source_type,
+            "provider": self.provider,
+            "locator": self.locator,
+            "material_name": self.material_name,
+            "factor_value": self.factor_value,
+            "factor_unit": self.factor_unit,
+            "geography": self.geography,
+            "year": self.year,
+            "product_form": self.product_form,
+            "composition": self.composition,
+            "production_process": self.production_process,
+            "boundary": self.boundary,
+            "citation": self.citation,
+            "excerpt": self.excerpt,
+            "metadata": dict(self.metadata),
+            "factor_kind": self.factor_kind,
+            "subject_type": self.subject_type,
+            "source_quality_status": self.source_quality_status,
+            "admission_eligible": self.admission_eligible,
+            "indicator": self.indicator,
+            "declared_product": self.declared_product,
+            "boundary_modules": self.boundary_modules,
+            "catalog_locator": self.catalog_locator,
+            "source_document_sha256": self.source_document_sha256,
+            "page": self.page,
+            "table": self.table,
+            "row": self.row,
+        })
+
 
 @dataclass(frozen=True, slots=True)
 class ResolutionRequest:
     material_name: str
     quantity: float
     quantity_unit: str = "kg"
-    geography: Optional[str] = None
-    year: Optional[int] = None
-    product_form: Optional[str] = None
-    composition: Optional[str] = None
-    production_process: Optional[str] = None
+    geography: str | None = None
+    year: int | None = None
+    product_form: str | None = None
+    composition: str | None = None
+    production_process: str | None = None
     subject_type: FactorSubjectType = FactorSubjectType.UNKNOWN
     boundary: str = "cradle-to-gate"
-    target_factor_unit: Optional[str] = None
+    target_factor_unit: str | None = None
     unit_conversion_evidence: UnitConversionEvidence | None = None
     top_k: int = 3
     request_id: str = field(default_factory=lambda: str(uuid4()))
-    min_score: float = 0.65
+    # Debug-only compatibility field. Formal resolution ignores request-owned
+    # thresholds and uses the deployment's immutable policy instead.
+    min_score: float | None = None
 
     def __post_init__(self) -> None:
         if not self.material_name.strip():
@@ -1487,7 +1699,7 @@ class ResolutionRequest:
             raise ValueError("year must be a plausible calendar year")
         if not 1 <= self.top_k <= 50:
             raise ValueError("top_k must be between 1 and 50")
-        if not 0 <= self.min_score <= 1:
+        if self.min_score is not None and not 0 <= self.min_score <= 1:
             raise ValueError("min_score must be between 0 and 1")
         if not isinstance(self.subject_type, FactorSubjectType):
             try:
@@ -1496,8 +1708,12 @@ class ResolutionRequest:
                 raise ValueError("subject_type must be a supported FactorSubjectType") from exc
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ResolutionRequest":
+    def from_mapping(
+        cls, value: Mapping[str, Any], *, allow_debug_controls: bool = False
+    ) -> ResolutionRequest:
         payload = dict(value)
+        if "min_score" in payload and not allow_debug_controls:
+            raise ValueError("min_score is a deployment policy and is not accepted by formal requests")
         evidence = payload.get("unit_conversion_evidence")
         if isinstance(evidence, Mapping):
             evidence_payload = dict(evidence)
@@ -1510,9 +1726,9 @@ class ResolutionRequest:
 class MaterialInterpretation:
     canonical_name: str
     aliases: tuple[str, ...] = ()
-    product_form: Optional[str] = None
-    composition: Optional[str] = None
-    production_process: Optional[str] = None
+    product_form: str | None = None
+    composition: str | None = None
+    production_process: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1520,12 +1736,12 @@ class NormalizedActivity:
     request_id: str
     canonical_name: str
     aliases: tuple[str, ...]
-    quantity_kg: Optional[float]
-    geography: Optional[str]
-    year: Optional[int]
-    product_form: Optional[str]
-    composition: Optional[str]
-    production_process: Optional[str]
+    quantity_kg: float | None
+    geography: str | None
+    year: int | None
+    product_form: str | None
+    composition: str | None
+    production_process: str | None
     subject_type: FactorSubjectType
     boundary: str
     target_factor_unit: str
@@ -1543,9 +1759,9 @@ class NormalizedActivity:
     material_mention: MaterialMention | None = None
     identity_resolution: IdentityResolution | None = None
     retrieval_intent: RetrievalIntent | None = None
-    quantity_base: Optional[float] = None
-    quantity_base_unit: Optional[str] = None
-    activity_dimension: Optional[str] = None
+    quantity_base: float | None = None
+    quantity_base_unit: str | None = None
+    activity_dimension: str | None = None
     unit_reason_codes: tuple[str, ...] = ()
     unit_conversion_evidence: UnitConversionEvidence | None = None
     target_factor_unit_derived: bool = False
@@ -1585,8 +1801,8 @@ class Candidate:
     reasons: tuple[str, ...]
     limitations: tuple[str, ...]
     dimensions: Mapping[str, float]
-    proxy_material: Optional[str] = None
-    proxy_class: Optional[str] = None
+    proxy_material: str | None = None
+    proxy_class: str | None = None
     evidence_coverage: float = 0.0
     evidence_gaps: tuple[str, ...] = ()
     resolution_type: ResolutionType = ResolutionType.DIRECT_EXACT
@@ -1598,8 +1814,11 @@ class Candidate:
     base_source_ids: tuple[str, ...] = ()
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
-    resolved_quantity_kg: Optional[float] = None
-    total_emissions_kgco2e: Optional[float] = None
+    resolved_activity_value: float | None = None
+    resolved_activity_unit: str | None = None
+    activity_dimension: str | None = None
+    resolved_quantity_kg: float | None = None
+    total_emissions_kgco2e: float | None = None
 
     def __post_init__(self) -> None:
         if self.provenance.source_id != self.source.source_id:
@@ -1618,11 +1837,63 @@ class Candidate:
             not isfinite(self.resolved_quantity_kg) or self.resolved_quantity_kg <= 0
         ):
             raise ValueError("resolved quantity must be finite and positive")
+        if self.resolved_activity_value is not None and (
+            not isfinite(self.resolved_activity_value) or self.resolved_activity_value <= 0
+        ):
+            raise ValueError("resolved activity value must be finite and positive")
+        if self.resolved_activity_value is not None and not self.resolved_activity_unit:
+            raise ValueError("resolved activity unit is required with a resolved activity value")
         if self.total_emissions_kgco2e is not None and (
             not isfinite(self.total_emissions_kgco2e) or self.total_emissions_kgco2e < 0
         ):
             raise ValueError("total emissions must be finite and non-negative")
         object.__setattr__(self, "dimensions", MappingProxyType(dict(self.dimensions)))
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": DECISION_SCHEMA_VERSION,
+            "candidate_id": self.candidate_id,
+            "origin": self.origin,
+            "source_content_sha256": self.source.content_sha256,
+            "provenance": {
+                "source_id": self.provenance.source_id,
+                "source_type": self.provenance.source_type,
+                "provider": self.provenance.provider,
+                "locator": self.provenance.locator,
+                "citation": self.provenance.citation,
+                "excerpt": self.provenance.excerpt,
+                "catalog_locator": self.provenance.catalog_locator,
+                "source_document_sha256": self.provenance.source_document_sha256,
+                "page": self.provenance.page,
+                "table": self.provenance.table,
+                "row": self.provenance.row,
+            },
+            "factor_value": self.factor_value,
+            "factor_unit": self.factor_unit,
+            "score": self.score,
+            "reasons": self.reasons,
+            "limitations": self.limitations,
+            "dimensions": dict(self.dimensions),
+            "proxy_material": self.proxy_material,
+            "proxy_class": self.proxy_class,
+            "evidence_coverage": self.evidence_coverage,
+            "evidence_gaps": self.evidence_gaps,
+            "resolution_type": self.resolution_type,
+            "result_tier": self.result_tier,
+            "resolution_strength": self.resolution_strength,
+            "gaps": self.gaps,
+            "transformation_steps": self.transformation_steps,
+            "parameter_evidence_ids": self.parameter_evidence_ids,
+            "base_source_ids": self.base_source_ids,
+            "assumptions": self.assumptions,
+            "warnings": self.warnings,
+            "resolved_activity_value": self.resolved_activity_value,
+            "resolved_activity_unit": self.resolved_activity_unit,
+            "activity_dimension": self.activity_dimension,
+            "resolved_quantity_kg": self.resolved_quantity_kg,
+            "total_emissions_kgco2e": self.total_emissions_kgco2e,
+        })
 
 
 @dataclass(frozen=True, slots=True)
@@ -1634,9 +1905,9 @@ class DerivedFactorCandidate:
     transformation_steps: tuple[TransformationStep, ...]
     factor_value: float
     factor_unit: str
-    boundary: Optional[str]
-    geography: Optional[str]
-    year: Optional[int]
+    boundary: str | None
+    geography: str | None
+    year: int | None
     reasons: tuple[str, ...]
     limitations: tuple[str, ...]
     evidence_coverage: float
@@ -1644,8 +1915,11 @@ class DerivedFactorCandidate:
     provenance_lineage: tuple[str, ...]
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
-    resolved_quantity_kg: Optional[float] = None
-    total_emissions_kgco2e: Optional[float] = None
+    resolved_activity_value: float | None = None
+    resolved_activity_unit: str | None = None
+    activity_dimension: str | None = None
+    resolved_quantity_kg: float | None = None
+    total_emissions_kgco2e: float | None = None
 
     def __post_init__(self) -> None:
         if not self.candidate_id.strip() or not self.base_source_ids:
@@ -1661,11 +1935,11 @@ class Recommendation:
     request_id: str
     status: ResolutionStatus
     candidates: tuple[Candidate, ...]
-    follow_up: Optional[FollowUp] = None
+    follow_up: FollowUp | None = None
     message: str = ""
-    trace: Optional[ResolutionTrace] = None
-    confidence: Optional[RecommendationConfidence] = None
-    resolution_strength: Optional[RecommendationConfidence] = None
+    trace: ResolutionTrace | None = None
+    confidence: RecommendationConfidence | None = None
+    resolution_strength: RecommendationConfidence | None = None
     reviewable_candidates: tuple[Candidate, ...] = ()
     reviewable_candidate_reasons: Mapping[str, tuple[str, ...]] = field(
         default_factory=dict
@@ -1676,6 +1950,11 @@ class Recommendation:
     accounting_assignments: tuple[AccountingAssignment, ...] = ()
     reason_codes: tuple[str, ...] = ()
     created_at: datetime = field(default_factory=_now)
+    revision: int = 1
+    database_anchor_sha256: str | None = None
+    registry_anchor_sha256: str | None = None
+    policy_anchor_sha256: str | None = None
+    schema_version: str = DECISION_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -1683,6 +1962,36 @@ class Recommendation:
             "reviewable_candidate_reasons",
             MappingProxyType(dict(self.reviewable_candidate_reasons)),
         )
+        if self.revision < 1:
+            raise ValueError("recommendation revision must be positive")
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "revision": self.revision,
+            "status": self.status,
+            "candidate_digests": tuple(item.content_sha256 for item in self.candidates),
+            "reviewable_candidate_digests": tuple(
+                item.content_sha256 for item in self.reviewable_candidates
+            ),
+            "diagnostic_candidate_digests": tuple(
+                item.content_sha256 for item in self.diagnostic_candidates
+            ),
+            "follow_up": self.follow_up,
+            "message": self.message,
+            "confidence": self.confidence,
+            "resolution_strength": self.resolution_strength,
+            "reviewable_candidate_reasons": dict(self.reviewable_candidate_reasons),
+            "missing_gaps": self.missing_gaps,
+            "questions": self.questions,
+            "accounting_assignments": self.accounting_assignments,
+            "reason_codes": self.reason_codes,
+            "database_anchor_sha256": self.database_anchor_sha256,
+            "registry_anchor_sha256": self.registry_anchor_sha256,
+            "policy_anchor_sha256": self.policy_anchor_sha256,
+        })
 
 
 @dataclass(frozen=True, slots=True)
@@ -1694,6 +2003,16 @@ class ApprovalRecord:
     note: str = ""
     created_at: datetime = field(default_factory=_now)
     mode: ApprovalMode = ApprovalMode.STANDARD
+    candidate_content_sha256: str | None = None
+    recommendation_content_sha256: str | None = None
+    recommendation_revision: int | None = None
+    database_anchor_sha256: str | None = None
+    registry_anchor_sha256: str | None = None
+    policy_anchor_sha256: str | None = None
+    trace_revision: int | None = None
+    trace_chain_sha256: str | None = None
+    reviewer_identity: str | None = None
+    schema_version: str = DECISION_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.request_id.strip() or not self.candidate_id.strip() or not self.reviewer.strip():
@@ -1704,6 +2023,41 @@ class ApprovalRecord:
             except ValueError as exc:
                 raise ValueError("approval mode is not supported") from exc
 
+    @property
+    def is_integrity_bound(self) -> bool:
+        return all((
+            self.candidate_content_sha256,
+            self.recommendation_content_sha256,
+            self.recommendation_revision is not None,
+            self.database_anchor_sha256,
+            self.registry_anchor_sha256,
+            self.policy_anchor_sha256,
+            self.trace_revision is not None,
+            self.trace_chain_sha256,
+            self.reviewer_identity,
+        ))
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "candidate_id": self.candidate_id,
+            "reviewer": self.reviewer,
+            "reviewer_identity": self.reviewer_identity,
+            "status": self.status,
+            "note": self.note,
+            "mode": self.mode,
+            "candidate_content_sha256": self.candidate_content_sha256,
+            "recommendation_content_sha256": self.recommendation_content_sha256,
+            "recommendation_revision": self.recommendation_revision,
+            "database_anchor_sha256": self.database_anchor_sha256,
+            "registry_anchor_sha256": self.registry_anchor_sha256,
+            "policy_anchor_sha256": self.policy_anchor_sha256,
+            "trace_revision": self.trace_revision,
+            "trace_chain_sha256": self.trace_chain_sha256,
+        })
+
 
 @dataclass(frozen=True, slots=True)
 class LockedResolution:
@@ -1712,6 +2066,11 @@ class LockedResolution:
     reviewer: str
     approval: ApprovalRecord
     locked_at: datetime = field(default_factory=_now)
+    evidence_snapshot: LockedResolutionEvidenceSnapshot | None = None
+    candidate_content_sha256: str | None = None
+    recommendation_content_sha256: str | None = None
+    approval_content_sha256: str | None = None
+    schema_version: str = LOCK_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.request_id.strip() or not self.reviewer.strip():
@@ -1722,6 +2081,22 @@ class LockedResolution:
             raise ValueError("lock approval must reference the locked request")
         if self.approval.status != ApprovalStatus.LOCKED:
             raise ValueError("locked resolution requires a locked approval")
+        if self.evidence_snapshot is not None and self.evidence_snapshot.request_id != self.request_id:
+            raise ValueError("locked evidence snapshot belongs to another request")
+
+    @property
+    def content_sha256(self) -> str:
+        return stable_sha256({
+            "schema_version": self.schema_version,
+            "request_id": self.request_id,
+            "candidate_content_sha256": self.candidate_content_sha256,
+            "recommendation_content_sha256": self.recommendation_content_sha256,
+            "approval_content_sha256": self.approval_content_sha256,
+            "evidence_snapshot_sha256": (
+                self.evidence_snapshot.snapshot_sha256 if self.evidence_snapshot else None
+            ),
+            "reviewer": self.reviewer,
+        })
 
 
 @dataclass(frozen=True, slots=True)

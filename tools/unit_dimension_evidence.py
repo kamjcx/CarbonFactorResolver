@@ -10,8 +10,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 SCHEMA_VERSION = "unit-dimension-evidence/v1"
 DECISION_SCHEMA_VERSION = "unit-dimension-decision/v1"

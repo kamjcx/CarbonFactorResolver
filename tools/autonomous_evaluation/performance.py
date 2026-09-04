@@ -16,10 +16,11 @@ import os
 import platform
 import random
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from a1_factor_engine import (
     A1FactorResolutionEngine,
@@ -41,7 +42,7 @@ GENERATOR_CONTRACT_SHA256 = hashlib.sha256(
 ).hexdigest()
 TARGET_NAME = "public synthetic anchor material"
 TARGET_SOURCE_ID = "public-synthetic-00000000"
-FIXED_TIME = datetime(2025, 1, 1, tzinfo=timezone.utc)
+FIXED_TIME = datetime(2025, 1, 1, tzinfo=UTC)
 
 
 def _record(index: int) -> SourceRecord:
@@ -234,8 +235,8 @@ def peak_rss_bytes() -> int | None:
     try:
         import resource
 
-        getrusage = getattr(resource, "getrusage")
-        rusage_self = getattr(resource, "RUSAGE_SELF")
+        getrusage = resource.getrusage
+        rusage_self = resource.RUSAGE_SELF
         value = int(getrusage(rusage_self).ru_maxrss)
         return value if platform.system() == "Darwin" else value * 1024
     except (ImportError, OSError, ValueError):

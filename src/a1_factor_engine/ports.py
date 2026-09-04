@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Protocol, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any, Protocol
 
 from .models import (
     ApprovalRecord,
@@ -97,10 +98,24 @@ class ResolutionStorePort(Protocol):
 
     async def get_trace(self, request_id: str) -> ResolutionTrace | None: ...
 
-    async def save_approval(self, approval: ApprovalRecord) -> None: ...
+    async def save_approval(
+        self,
+        approval: ApprovalRecord,
+        trace: ResolutionTrace,
+        *,
+        expected_recommendation_sha256: str,
+        expected_trace_revision: int,
+    ) -> None: ...
 
     async def get_approval(self, request_id: str, candidate_id: str) -> ApprovalRecord | None: ...
 
-    async def save_locked(self, locked: LockedResolution) -> None: ...
+    async def save_locked(
+        self,
+        locked: LockedResolution,
+        trace: ResolutionTrace,
+        *,
+        expected_recommendation_sha256: str,
+        expected_trace_revision: int,
+    ) -> None: ...
 
     async def get_locked(self, request_id: str) -> LockedResolution | None: ...

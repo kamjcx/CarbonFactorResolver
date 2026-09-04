@@ -4,7 +4,7 @@ from .accounting import (
     resolve_accounting_assignment,
     resolve_process_accounting_assignments,
 )
-from .adapters import REFRACTORY_A1_STANDARD_POLICY, CatalogDatasetPolicy
+from .catalog_policy import CatalogDatasetPolicy, CatalogPolicyBundle
 from .energy_database import (
     CompositeProcessParameterRepository,
     EnergyConversionRecord,
@@ -20,6 +20,7 @@ from .energy_database import (
     interpret_process_emission_observation,
 )
 from .engine import A1FactorResolutionEngine
+from .integrity import CatalogIntegrityError, PersistenceIntegrityError
 from .material_registry import (
     DEFAULT_MATERIAL_REGISTRY,
     FormRule,
@@ -37,6 +38,7 @@ from .models import (
     AccountingQuantificationStatus,
     AccountingRole,
     ApprovalMode,
+    ApprovalRecord,
     ApprovalStatus,
     Candidate,
     CandidateAdmission,
@@ -60,6 +62,7 @@ from .models import (
     LinkOutcome,
     LinkStrategy,
     LockedResolution,
+    LockedResolutionEvidenceSnapshot,
     MaterialCategory,
     MaterialClass,
     MaterialIdentity,
@@ -106,6 +109,7 @@ from .models import (
     SpecificationOperator,
     TransformationStep,
 )
+from .policy import DeploymentPolicy
 from .process_adjustment import stoichiometric_carbon_emission_kgco2e_per_kg
 from .qualification import SOURCE_DOCUMENT_HASH_REQUIRED
 from .units import (
@@ -130,8 +134,9 @@ from .units import (
 
 __all__ = [
     "A1FactorResolutionEngine",
+    "DeploymentPolicy",
     "CatalogDatasetPolicy",
-    "REFRACTORY_A1_STANDARD_POLICY",
+    "CatalogPolicyBundle",
     "CompositeProcessParameterRepository",
     "EnergyConversionRecord",
     "EnergyDatabaseAnchor",
@@ -153,6 +158,7 @@ __all__ = [
     "stoichiometric_carbon_emission_kgco2e_per_kg",
     "ApprovalStatus",
     "ApprovalMode",
+    "ApprovalRecord",
     "Candidate",
     "CandidateAdmission",
     "CandidateOrigin",
@@ -171,6 +177,9 @@ __all__ = [
     "IdentityProofType",
     "IdentityResolution",
     "LockedResolution",
+    "LockedResolutionEvidenceSnapshot",
+    "CatalogIntegrityError",
+    "PersistenceIntegrityError",
     "LinkAttempt",
     "LinkOutcome",
     "LinkStrategy",

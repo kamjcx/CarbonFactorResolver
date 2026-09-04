@@ -1,20 +1,77 @@
-"""Optional FastAPI delivery surface for the factor resolution engine."""
+"""Production-safe and explicitly isolated administration FastAPI surfaces."""
 
 from __future__ import annotations
 
+import asyncio
 import inspect
-import sys
+import json
+import logging
+import os
+import stat
+import tempfile
+from collections import OrderedDict
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 from uuid import uuid4
 
 from .engine import A1FactorResolutionEngine
+from .models import ResolutionRequest, resolution_request_fingerprint
+from .operability import (
+    API_CONTRACT_VERSION,
+    API_VERSION_HEADER,
+    CORRELATION_ID_HEADER,
+    INTERNAL_SERVER_ERROR,
+    REQUEST_VALIDATION_FAILED,
+    RESOURCE_NOT_FOUND,
+    SERVICE_NOT_READY,
+    UNSUPPORTED_MEDIA_TYPE,
+    error_detail,
+)
+from .operability import (
+    request_id as safe_request_id,
+)
 from .serialization import serialize_benchmark, serialize_recommendation, serialize_trace, to_jsonable
 
 INVALID_RESOLUTION_REQUEST = "INVALID_RESOLUTION_REQUEST"
 HEALTH_PROBE_FAILED = "HEALTH_PROBE_FAILED"
 BENCHMARK_RUN_FAILED = "BENCHMARK_RUN_FAILED"
 BENCHMARK_COMPARISON_FAILED = "BENCHMARK_COMPARISON_FAILED"
+ADMIN_AUTHORIZATION_REQUIRED = "ADMIN_AUTHORIZATION_REQUIRED"
+BENCHMARK_DATASET_REJECTED = "BENCHMARK_DATASET_REJECTED"
+RESOLUTION_SCOPE_CONFLICT = "RESOLUTION_SCOPE_CONFLICT"
+RESOLUTION_PAYLOAD_CONFLICT = "RESOLUTION_PAYLOAD_CONFLICT"
+MAX_BENCHMARK_BYTES = 2_000_000
+MAX_BENCHMARK_RUNS = 64
+MAX_BENCHMARK_CACHE_BYTES = 8_000_000
+LOGGER = logging.getLogger("a1_factor_engine.api")
+
+
+def _documented_error(description: str, reason: str, message: str) -> dict[str, Any]:
+    return {
+        "description": description,
+        "content": {"application/json": {"example": {
+            "detail": error_detail(reason, message),
+            "request_id": "018f-example-correlation-id",
+        }}},
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizationContext:
+    """Identity asserted by a deployment gateway or injected authorizer."""
+
+    actor_id: str
+    tenant_id: str
+    project_id: str
+    permissions: tuple[str, ...] = ()
+
+
+AdminAuthorizer = Callable[
+    [Mapping[str, str], str],
+    AuthorizationContext | None | Awaitable[AuthorizationContext | None],
+]
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -22,8 +79,6 @@ async def _maybe_await(value: Any) -> Any:
 
 
 async def _run_benchmark(runner: Any, dataset_path: str) -> Any:
-    """Support an injected runner instance or a ``path -> runner`` factory."""
-
     if inspect.isclass(runner) or (callable(runner) and not callable(getattr(runner, "run", None))):
         return await _maybe_await(runner(dataset_path).run())
     run = getattr(runner, "run", None)
@@ -46,25 +101,19 @@ def _run_id(value: Any) -> str | None:
     return str(candidate) if candidate else None
 
 
-async def _connector_payload(provider: Any) -> dict[str, Any]:
+async def _probe_connectors(provider: Any) -> dict[str, Any]:
     async def safe_probe(connector: Any) -> Any:
         try:
             probe = getattr(connector, "health", connector)
             value = probe() if callable(probe) else probe
             return to_jsonable(await _maybe_await(value))
-        except Exception:  # A public health response must never reflect exception text.
-            return {
-                "status": "unhealthy",
-                "error": "health probe failed",
-                "reason_code": HEALTH_PROBE_FAILED,
-            }
+        except Exception:
+            return {"status": "unhealthy", "reason_code": HEALTH_PROBE_FAILED}
 
     if provider is None:
         return {"status": "not_configured", "connectors": {}}
     if isinstance(provider, Mapping):
-        results: dict[str, Any] = {}
-        for name, connector in provider.items():
-            results[str(name)] = await safe_probe(connector)
+        results = {str(name): await safe_probe(connector) for name, connector in provider.items()}
         healthy = all(
             not isinstance(item, Mapping) or item.get("status") not in {"unhealthy", "error"}
             for item in results.values()
@@ -74,109 +123,487 @@ async def _connector_payload(provider: Any) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"status": "ok", "connectors": payload}
 
 
-def create_app(
+def _public_health(payload: Mapping[str, Any]) -> dict[str, str]:
+    status = str(payload.get("status", "degraded"))
+    return {"status": status if status in {"ok", "degraded", "not_configured"} else "degraded"}
+
+
+def _unconfigured_engine() -> A1FactorResolutionEngine:
+    """Return an empty production engine; demo fixtures require explicit opt-in."""
+
+    return A1FactorResolutionEngine()
+
+
+def _engine_is_configured(engine: Any, *, explicitly_supplied: bool) -> bool:
+    if not explicitly_supplied:
+        return False
+    if not isinstance(engine, A1FactorResolutionEngine):
+        return True
+    from .adapters import NullFactorRepository
+
+    graph = engine.graph
+    return not isinstance(graph.local_retrieval, NullFactorRepository) or bool(graph.external_connectors)
+
+
+def _install_http_contract(app: Any) -> None:
+    from fastapi import Request
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    globals()["Request"] = Request
+
+    def envelope(request: Request, status_code: int, reason: str, message: str) -> JSONResponse:
+        correlation_id = getattr(request.state, "correlation_id", safe_request_id())
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": error_detail(reason, message), "request_id": correlation_id},
+        )
+
+    @app.middleware("http")
+    async def correlation_contract(request: Request, call_next: Callable[..., Any]):
+        supplied = request.headers.get("x-request-id") or request.headers.get(CORRELATION_ID_HEADER)
+        request.state.correlation_id = safe_request_id(supplied)
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+        if (
+            request.method == "POST"
+            and request.url.path in {"/api/v1/resolve", "/api/v1/debug/resolve"}
+            and media_type != "application/json"
+            and not media_type.endswith("+json")
+        ):
+            response = envelope(
+                request, 415, UNSUPPORTED_MEDIA_TYPE, "application/json is required"
+            )
+        else:
+            response = await call_next(request)
+        response.headers[API_VERSION_HEADER] = API_CONTRACT_VERSION
+        response.headers[CORRELATION_ID_HEADER] = request.state.correlation_id
+        LOGGER.info(
+            "http request completed",
+            extra={"correlation_id": request.state.correlation_id, "status_code": response.status_code},
+        )
+        return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, _exc: RequestValidationError):
+        return envelope(request, 422, REQUEST_VALIDATION_FAILED, "request validation failed")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException):
+        if isinstance(exc.detail, Mapping) and exc.detail.get("reason_code"):
+            response = JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": dict(exc.detail), "request_id": request.state.correlation_id},
+            )
+            return response
+        reason = RESOURCE_NOT_FOUND if exc.status_code == 404 else REQUEST_VALIDATION_FAILED
+        message = "resource not found" if exc.status_code == 404 else "request could not be completed"
+        return envelope(request, exc.status_code, reason, message)
+
+    @app.exception_handler(Exception)
+    async def internal_error(request: Request, _exc: Exception):
+        LOGGER.error(
+            "unhandled API failure",
+            extra={"correlation_id": request.state.correlation_id},
+        )
+        return envelope(request, 500, INTERNAL_SERVER_ERROR, "internal server error")
+
+
+async def _readiness(
     *,
-    engine: A1FactorResolutionEngine | None = None,
-    benchmark_runner: Any = None,
-    connector_health: Any = None,
-    benchmark_roots: Sequence[str | Path] | None = None,
-):
-    """Build an application with injected domain services.
-
-    FastAPI is imported lazily so the dependency-free engine remains usable
-    without installing the HTTP extras. Benchmark results live only in this
-    process; persistent benchmark storage belongs to a deployment adapter.
-    """
-
-    try:
-        from fastapi import Body, FastAPI, HTTPException
-        from fastapi.responses import FileResponse
-        from fastapi.staticfiles import StaticFiles
-    except ImportError as exc:  # pragma: no cover - depends on optional install
-        raise RuntimeError("FastAPI delivery requires fastapi and uvicorn") from exc
-
-    if engine is None:
-        from .external_connectors import FixtureExternalConnector, StructuredEPDEvidenceExtractor
-
-        engine = A1FactorResolutionEngine(
-            external_connectors=(FixtureExternalConnector(),),
-            external_extractor=StructuredEPDEvidenceExtractor(),
-        )
-    resolver = engine
-    if connector_health is None:
-        configured_connectors = getattr(getattr(resolver, "graph", None), "external_connectors", ())
-        if configured_connectors:
-            connector_health = {
-                type(connector).__name__: connector for connector in configured_connectors
-            }
-    restrict_default_runner = benchmark_runner is None
-    if benchmark_runner is None:
+    engine_configured: bool,
+    required: Mapping[str, Any],
+    optional: Mapping[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    async def available(probe: Any) -> bool:
         try:
-            from .evaluation import FactorBenchRunner
+            value = probe() if callable(probe) else probe
+            value = await _maybe_await(value)
+            if isinstance(value, Mapping):
+                has_status = "status" in value
+                has_available = "available" in value
+                if not has_status and not has_available:
+                    return False
+                status_ok = (
+                    isinstance(value.get("status"), str)
+                    and value["status"].casefold() in {"ok", "ready", "available"}
+                ) if has_status else True
+                available_ok = value.get("available") is True if has_available else True
+                return status_ok and available_ok
+            return bool(value)
+        except Exception:
+            return False
 
-            benchmark_runner = FactorBenchRunner
-        except ImportError:
-            pass
-    if benchmark_roots is not None:
-        allowed_benchmark_roots = tuple(Path(item).resolve() for item in benchmark_roots)
-    elif restrict_default_runner:
-        allowed_benchmark_roots = (
-            (Path(__file__).resolve().parents[2] / "data" / "benchmarks").resolve(),
-            (Path(sys.prefix) / "share" / "carbon-factor-resolver" / "benchmarks").resolve(),
-        )
-    else:
-        allowed_benchmark_roots = ()
-    benchmark_runs: dict[str, Any] = {}
-    app = FastAPI(title="A1 Factor Resolution", version="1")
-    app.state.engine = resolver
-    app.state.benchmark_runner = benchmark_runner
-    app.state.benchmark_runs = benchmark_runs
+    required_results = {"engine": engine_configured}
+    required_results.update({name: await available(probe) for name, probe in required.items()})
+    optional_results = {name: await available(probe) for name, probe in optional.items()}
+    failed_required = sum(not item for item in required_results.values())
+    failed_optional = sum(not item for item in optional_results.values())
+    if failed_required:
+        return 503, {
+            "status": "not_ready",
+            "detail": error_detail(SERVICE_NOT_READY, "required dependency is unavailable"),
+            "required_total": len(required_results),
+            "required_unavailable": failed_required,
+            "optional_unavailable": failed_optional,
+        }
+    return 200, {
+        "status": "degraded" if failed_optional else "ready",
+        "required_total": len(required_results),
+        "required_unavailable": 0,
+        "optional_unavailable": failed_optional,
+    }
+
+
+def _connector_health_for(engine: A1FactorResolutionEngine, explicit: Any) -> Any:
+    if explicit is not None:
+        return explicit
+    connectors = getattr(getattr(engine, "graph", None), "external_connectors", ())
+    return {type(item).__name__: item for item in connectors} if connectors else None
+
+
+def _register_public_routes(
+    app: Any,
+    resolver: A1FactorResolutionEngine,
+    connector_health: Any,
+    *,
+    resolution_authorizer: Callable[[Any, str], Awaitable[AuthorizationContext]] | None = None,
+    resolution_owners: dict[str, tuple[str, str]] | None = None,
+    resolution_fingerprints: dict[tuple[str, str, str], str] | None = None,
+    resolution_locks: dict[tuple[str, str, str], asyncio.Lock] | None = None,
+    engine_configured: bool = True,
+    required_readiness: Mapping[str, Any] | None = None,
+    optional_readiness: Mapping[str, Any] | None = None,
+) -> None:
+    from fastapi import Body, HTTPException, Request
+    from fastapi.responses import JSONResponse
+
+    globals()["Request"] = Request
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get(
+        "/readyz",
+        responses={503: _documented_error(
+            "Required dependency unavailable", SERVICE_NOT_READY, "required dependency is unavailable"
+        )},
+    )
+    async def readyz(request: Request):
+        status_code, payload = await _readiness(
+            engine_configured=engine_configured,
+            required=required_readiness or {},
+            optional=optional_readiness or {},
+        )
+        if status_code != 200:
+            payload["request_id"] = request.state.correlation_id
+        return JSONResponse(status_code=status_code, content=payload)
+
     @app.post(
         "/api/v1/resolve",
+        openapi_extra={"x-cfr-reason-codes": [
+            INVALID_RESOLUTION_REQUEST,
+            RESOLUTION_SCOPE_CONFLICT,
+            RESOLUTION_PAYLOAD_CONFLICT,
+            UNSUPPORTED_MEDIA_TYPE,
+            REQUEST_VALIDATION_FAILED,
+            INTERNAL_SERVER_ERROR,
+        ]},
         responses={
-            400: {
-                "description": "Invalid structured resolution request",
-                "content": {"application/json": {"example": {"detail": {
-                    "reason_code": INVALID_RESOLUTION_REQUEST,
-                    "message": "resolution request is invalid",
-                }}}},
-            },
+            400: _documented_error(
+                "Invalid structured resolution request",
+                INVALID_RESOLUTION_REQUEST,
+                "resolution request is invalid",
+            ),
+            409: _documented_error(
+                "Request ID scope conflict",
+                RESOLUTION_SCOPE_CONFLICT,
+                "resolution request id is already scoped",
+            ),
+            415: _documented_error(
+                "JSON media type required", UNSUPPORTED_MEDIA_TYPE, "application/json is required"
+            ),
+            422: _documented_error(
+                "JSON request validation failed",
+                REQUEST_VALIDATION_FAILED,
+                "request validation failed",
+            ),
+            500: _documented_error(
+                "Stable internal failure", INTERNAL_SERVER_ERROR, "internal server error"
+            ),
         },
     )
-    async def resolve(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
-        try:
-            result = await resolver.resolve(payload)
-        except (TypeError, ValueError) as exc:
+    async def resolve(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+        if content_type != "application/json" and not content_type.endswith("+json"):
             raise HTTPException(
-                status_code=400,
-                detail={
+                status_code=415,
+                detail=error_detail(UNSUPPORTED_MEDIA_TYPE, "application/json is required"),
+            )
+        payload = dict(payload)
+        payload["request_id"] = safe_request_id(
+            payload.get("request_id") or request.headers.get("x-request-id")
+            or request.headers.get(CORRELATION_ID_HEADER)
+        )
+        request.state.correlation_id = payload["request_id"]
+        context = (
+            await resolution_authorizer(request, "resolve:execute")
+            if resolution_authorizer is not None
+            else None
+        )
+        try:
+            parsed_request = ResolutionRequest.from_mapping(payload)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail={
+                "reason_code": INVALID_RESOLUTION_REQUEST,
+                "message": "resolution request is invalid",
+            }) from exc
+        fingerprint = resolution_request_fingerprint(parsed_request)
+        scope = (
+            (context.tenant_id, context.project_id)
+            if context is not None else ("__public__", "__public__")
+        )
+        key = (*scope, parsed_request.request_id)
+        fingerprints = resolution_fingerprints if resolution_fingerprints is not None else {}
+        locks = resolution_locks if resolution_locks is not None else {}
+        lock = locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            reserved_new = False
+            if context is not None and resolution_owners is not None:
+                owner = resolution_owners.get(parsed_request.request_id)
+                if owner is not None and owner != scope:
+                    raise HTTPException(status_code=409, detail={
+                        "reason_code": RESOLUTION_SCOPE_CONFLICT,
+                        "message": "resolution request id is already scoped",
+                    })
+                reserved_new = owner is None
+                resolution_owners[parsed_request.request_id] = scope
+            known_fingerprint = fingerprints.get(key)
+            if known_fingerprint is not None and known_fingerprint != fingerprint:
+                if reserved_new and resolution_owners is not None:
+                    resolution_owners.pop(parsed_request.request_id, None)
+                raise HTTPException(status_code=409, detail={
+                    "reason_code": RESOLUTION_PAYLOAD_CONFLICT,
+                    "message": "resolution request id is bound to different input",
+                })
+            state_reader = getattr(resolver, "state", None)
+            existing = (
+                await _maybe_await(state_reader(parsed_request.request_id))
+                if callable(state_reader) else None
+            )
+            if existing is not None:
+                if known_fingerprint is None:
+                    if reserved_new and resolution_owners is not None:
+                        resolution_owners.pop(parsed_request.request_id, None)
+                    raise HTTPException(status_code=409, detail={
+                        "reason_code": RESOLUTION_PAYLOAD_CONFLICT,
+                        "message": "stored resolution lacks an idempotency binding",
+                    })
+                serialized_existing = serialize_recommendation(existing)
+                serialized_existing["request_id"] = parsed_request.request_id
+                return serialized_existing
+            fingerprints[key] = fingerprint
+            try:
+                result = await resolver.resolve(payload)
+            except (TypeError, ValueError) as exc:
+                fingerprints.pop(key, None)
+                if reserved_new and resolution_owners is not None:
+                    resolution_owners.pop(parsed_request.request_id, None)
+                raise HTTPException(status_code=400, detail={
                     "reason_code": INVALID_RESOLUTION_REQUEST,
                     "message": "resolution request is invalid",
-                },
-            ) from exc
-        return serialize_recommendation(result)
+                }) from exc
+            except Exception:
+                fingerprints.pop(key, None)
+                if reserved_new and resolution_owners is not None:
+                    resolution_owners.pop(parsed_request.request_id, None)
+                raise
+            serialized = serialize_recommendation(result)
+            serialized["request_id"] = safe_request_id(
+                serialized.get("request_id") or parsed_request.request_id
+            )
+            request.state.correlation_id = serialized["request_id"]
+            return serialized
 
     @app.get("/api/v1/resolutions/{request_id}")
-    async def get_resolution(request_id: str) -> dict[str, Any]:
+    async def get_resolution(request: Request, request_id: str) -> dict[str, Any]:
+        if resolution_authorizer is not None:
+            context = await resolution_authorizer(request, "resolution:read")
+            if resolution_owners is None or resolution_owners.get(request_id) != (
+                context.tenant_id,
+                context.project_id,
+            ):
+                raise HTTPException(status_code=404, detail="resolution not found")
         result = await resolver.state(request_id)
         if result is None:
             raise HTTPException(status_code=404, detail="resolution not found")
         return serialize_recommendation(result)
 
+    @app.get("/api/v1/connectors/health")
+    async def connectors_health() -> dict[str, str]:
+        return _public_health(await _probe_connectors(connector_health))
+
+
+def create_app(
+    *,
+    engine: A1FactorResolutionEngine | None = None,
+    connector_health: Any = None,
+    required_readiness: Mapping[str, Any] | None = None,
+    optional_readiness: Mapping[str, Any] | None = None,
+    **legacy_admin_options: Any,
+):
+    """Build the production surface without benchmark, debug or full-trace routes."""
+
+    if any(value not in (None, False, (), []) for value in legacy_admin_options.values()):
+        raise ValueError("administration options require create_admin_app")
+    try:
+        from fastapi import FastAPI
+        from fastapi.responses import FileResponse
+        from fastapi.staticfiles import StaticFiles
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError("FastAPI delivery requires fastapi and uvicorn") from exc
+    resolver = engine or _unconfigured_engine()
+    engine_configured = _engine_is_configured(resolver, explicitly_supplied=engine is not None)
+    health = _connector_health_for(resolver, connector_health)
+    app = FastAPI(title="Carbon Factor Resolver", version=API_CONTRACT_VERSION)
+    app.state.engine = resolver
+    resolution_fingerprints: dict[tuple[str, str, str], str] = {}
+    resolution_locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+    app.state.resolution_fingerprints = resolution_fingerprints
+    _install_http_contract(app)
+    optional = dict(optional_readiness or {})
+    if connector_health is not None:
+        optional.setdefault("connectors", lambda: _probe_connectors(health))
+    _register_public_routes(
+        app,
+        resolver,
+        health,
+        resolution_fingerprints=resolution_fingerprints,
+        resolution_locks=resolution_locks,
+        engine_configured=engine_configured,
+        required_readiness=required_readiness,
+        optional_readiness=optional,
+    )
+    assets = Path(__file__).with_name("web_assets")
+
+    @app.get("/", include_in_schema=False)
+    async def dashboard_index():
+        return FileResponse(assets / "index.html")
+
+    app.mount("/assets", StaticFiles(directory=assets), name="assets")
+    return app
+
+
+def create_admin_app(
+    *,
+    engine: A1FactorResolutionEngine | None = None,
+    benchmark_runner: Any = None,
+    connector_health: Any = None,
+    benchmark_roots: Sequence[str | Path] = (),
+    authorizer: AdminAuthorizer | None = None,
+    max_benchmark_bytes: int = MAX_BENCHMARK_BYTES,
+    max_benchmark_runs: int = MAX_BENCHMARK_RUNS,
+    max_benchmark_cache_bytes: int = MAX_BENCHMARK_CACHE_BYTES,
+):
+    """Build an isolated admin/dev surface; sensitive routes require authorization."""
+
+    try:
+        from fastapi import Body, FastAPI, HTTPException, Request
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError("FastAPI delivery requires fastapi and uvicorn") from exc
+    # Route annotations are postponed; expose the lazily imported type for
+    # FastAPI/Pydantic resolution without making FastAPI a core dependency.
+    globals()["Request"] = Request
+    resolver = engine or _unconfigured_engine()
+    engine_configured = _engine_is_configured(resolver, explicitly_supplied=engine is not None)
+    health = _connector_health_for(resolver, connector_health)
+    roots = tuple(Path(item).resolve() for item in benchmark_roots)
+    runs: OrderedDict[tuple[str, str, str], tuple[Any, int]] = OrderedDict()
+    resolution_owners: dict[str, tuple[str, str]] = {}
+    resolution_fingerprints: dict[tuple[str, str, str], str] = {}
+    resolution_locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+    app = FastAPI(title="Carbon Factor Resolver Admin", version=API_CONTRACT_VERSION)
+    app.state.engine = resolver
+    app.state.benchmark_runner = benchmark_runner
+    app.state.benchmark_runs = runs
+    app.state.resolution_fingerprints = resolution_fingerprints
+    _install_http_contract(app)
+
+    async def require(request: Request, permission: str) -> AuthorizationContext:
+        try:
+            context = (
+                None
+                if authorizer is None
+                else await _maybe_await(authorizer(dict(request.headers), permission))
+            )
+        except Exception:
+            context = None
+        identity_complete = bool(
+            context
+            and context.actor_id.strip()
+            and context.tenant_id.strip()
+            and context.project_id.strip()
+        )
+        if not identity_complete or context is None or permission not in context.permissions:
+            raise HTTPException(status_code=403, detail={
+                "reason_code": ADMIN_AUTHORIZATION_REQUIRED,
+                "message": "administration authorization is required",
+            })
+        return context
+
+    _register_public_routes(
+        app,
+        resolver,
+        health,
+        resolution_authorizer=require,
+        resolution_owners=resolution_owners,
+        resolution_fingerprints=resolution_fingerprints,
+        resolution_locks=resolution_locks,
+        engine_configured=engine_configured,
+        optional_readiness={"connectors": lambda: _probe_connectors(health)} if health else {},
+    )
+
+    def require_resolution_owner(context: AuthorizationContext, request_id: str) -> None:
+        if resolution_owners.get(request_id) != (context.tenant_id, context.project_id):
+            raise HTTPException(status_code=404, detail="resolution not found")
+
+    @app.post("/api/v1/debug/resolve")
+    async def resolve_debug(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        context = await require(request, "resolve:debug")
+        payload = dict(payload)
+        payload["request_id"] = safe_request_id(
+            payload.get("request_id") or request.headers.get("x-request-id")
+            or request.headers.get(CORRELATION_ID_HEADER)
+        )
+        request.state.correlation_id = payload["request_id"]
+        try:
+            result = serialize_recommendation(await resolver.resolve_debug(payload))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail={
+                "reason_code": INVALID_RESOLUTION_REQUEST,
+                "message": "debug resolution request is invalid",
+            }) from exc
+        request_id = safe_request_id(result.get("request_id") or payload["request_id"])
+        result["request_id"] = request_id
+        request.state.correlation_id = request_id
+        if request_id:
+            resolution_owners[request_id] = (context.tenant_id, context.project_id)
+        return result
+
     @app.get("/api/v1/traces/{request_id}")
-    async def get_trace(request_id: str) -> dict[str, Any]:
+    async def get_trace(request: Request, request_id: str) -> dict[str, Any]:
+        context = await require(request, "trace:read")
+        require_resolution_owner(context, request_id)
         trace = await resolver.trace(request_id)
         if trace is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return serialize_trace(trace)
 
     @app.get("/api/v1/diagnostics/{request_id}")
-    async def get_diagnostics(request_id: str) -> dict[str, Any]:
+    async def get_diagnostics(request: Request, request_id: str) -> dict[str, Any]:
+        context = await require(request, "diagnostics:read")
+        require_resolution_owner(context, request_id)
         recommendation = await resolver.state(request_id)
         trace = await resolver.trace(request_id)
         if recommendation is None or trace is None:
@@ -194,107 +621,124 @@ def create_app(
             "excluded_candidates": to_jsonable(explanation.get("excluded_candidates", ())),
             "record_qualifications": to_jsonable(explanation.get("record_qualifications", ())),
             "candidate_admissions": to_jsonable(explanation.get("candidate_admissions", ())),
-            "qualification_diagnostics": to_jsonable(
-                explanation.get("qualification_diagnostics", ())
-            ),
-            "conversion_diagnostics": to_jsonable(
-                explanation.get("conversion_diagnostics", ())
-            ),
+            "qualification_diagnostics": to_jsonable(explanation.get("qualification_diagnostics", ())),
+            "conversion_diagnostics": to_jsonable(explanation.get("conversion_diagnostics", ())),
         }
 
+    @app.get("/api/v1/admin/connectors/health")
+    async def admin_connectors_health(request: Request) -> dict[str, Any]:
+        await require(request, "diagnostics:read")
+        return await _probe_connectors(health)
+
+    def checked_dataset(raw: Any) -> bytes:
+        if not isinstance(raw, str) or not raw.strip():
+            raise HTTPException(status_code=400, detail="path is required")
+        if not roots:
+            raise HTTPException(status_code=403, detail={
+                "reason_code": BENCHMARK_DATASET_REJECTED,
+                "message": "benchmark roots are not configured",
+            })
+        submitted = Path(raw).absolute()
+        if submitted.suffix.casefold() != ".jsonl" or not submitted.is_file() or submitted.is_symlink():
+            raise HTTPException(status_code=400, detail="benchmark path must be an existing JSONL file")
+        submitted_stat = submitted.lstat()
+        if not stat.S_ISREG(submitted_stat.st_mode):
+            raise HTTPException(status_code=400, detail="benchmark path must be a regular JSONL file")
+        path = submitted.resolve()
+        if not any(path.is_relative_to(root) for root in roots):
+            raise HTTPException(status_code=403, detail="benchmark path is outside configured roots")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(path, flags)
+            with os.fdopen(descriptor, "rb") as stream:
+                actual = os.fstat(stream.fileno())
+                if (actual.st_dev, actual.st_ino) != (submitted_stat.st_dev, submitted_stat.st_ino):
+                    raise HTTPException(status_code=400, detail="benchmark dataset changed while opening")
+                payload = stream.read(max_benchmark_bytes + 1)
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail="benchmark dataset cannot be opened") from exc
+        if len(payload) > max_benchmark_bytes:
+            raise HTTPException(status_code=413, detail="benchmark dataset is too large")
+        return payload
+
     @app.post("/api/v1/benchmarks/runs", status_code=201)
-    async def create_benchmark_run(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    async def create_benchmark_run(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        context = await require(request, "benchmark:execute")
         if benchmark_runner is None:
             raise HTTPException(status_code=503, detail="benchmark runner is not configured")
-        dataset_path = payload.get("path") or payload.get("dataset_path")
-        if not isinstance(dataset_path, str) or not dataset_path.strip():
-            raise HTTPException(status_code=400, detail="path is required")
-        resolved_dataset = Path(dataset_path).resolve()
-        if allowed_benchmark_roots and not any(
-            resolved_dataset.is_relative_to(root) for root in allowed_benchmark_roots
-        ):
-            raise HTTPException(status_code=403, detail="benchmark path is outside configured roots")
-        if resolved_dataset.suffix.casefold() != ".jsonl":
-            raise HTTPException(status_code=400, detail="benchmark path must be a JSONL file")
+        dataset = checked_dataset(payload.get("path") or payload.get("dataset_path"))
+        temporary_path: Path | None = None
         try:
-            result = await _run_benchmark(benchmark_runner, str(resolved_dataset))
+            with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as temporary:
+                temporary.write(dataset)
+                temporary_path = Path(temporary.name)
+            result = await _run_benchmark(benchmark_runner, str(temporary_path))
         except (OSError, TypeError, ValueError) as exc:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "reason_code": BENCHMARK_RUN_FAILED,
-                    "message": "benchmark run could not be completed",
-                },
-            ) from exc
+            raise HTTPException(status_code=400, detail={
+                "reason_code": BENCHMARK_RUN_FAILED,
+                "message": "benchmark run could not be completed",
+            }) from exc
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
         run_id = _run_id(result) or str(uuid4())
-        benchmark_runs[run_id] = result
         response = serialize_benchmark(result)
-        response.setdefault("run_id", run_id)
+        response["run_id"] = run_id
+        result_bytes = len(json.dumps(response, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        if result_bytes > max_benchmark_cache_bytes:
+            raise HTTPException(status_code=413, detail="benchmark result is too large")
+        scope = (context.tenant_id, context.project_id)
+        runs[(*scope, run_id)] = (result, result_bytes)
+        while len(runs) > max_benchmark_runs or sum(item[1] for item in runs.values()) > max_benchmark_cache_bytes:
+            runs.popitem(last=False)
         return response
 
     @app.get("/api/v1/benchmarks/runs/{run_id}")
-    async def get_benchmark_run(run_id: str) -> dict[str, Any]:
-        result = benchmark_runs.get(run_id)
-        if result is None:
+    async def get_benchmark_run(request: Request, run_id: str) -> dict[str, Any]:
+        context = await require(request, "benchmark:read")
+        stored = runs.get((context.tenant_id, context.project_id, run_id))
+        if stored is None:
             raise HTTPException(status_code=404, detail="benchmark run not found")
+        result = stored[0]
         response = serialize_benchmark(result)
         response.setdefault("run_id", run_id)
         return response
 
     @app.get("/api/v1/benchmarks/compare")
-    async def compare_benchmark_runs(
-        base: str | None = None,
-        candidate: str | None = None,
-        baseline: str | None = None,
-        base_run_id: str | None = None,
-        candidate_run_id: str | None = None,
-    ) -> dict[str, Any]:
-        base_id = base or baseline or base_run_id
-        candidate_id = candidate or candidate_run_id
-        if not base_id or not candidate_id:
-            raise HTTPException(status_code=400, detail="base and candidate run ids are required")
-        base = benchmark_runs.get(base_id)
-        candidate = benchmark_runs.get(candidate_id)
-        if base is None or candidate is None:
+    async def compare_benchmark_runs(request: Request, base: str, candidate: str) -> dict[str, Any]:
+        context = await require(request, "benchmark:read")
+        scope = (context.tenant_id, context.project_id)
+        base_stored = runs.get((*scope, base))
+        candidate_stored = runs.get((*scope, candidate))
+        if base_stored is None or candidate_stored is None:
             raise HTTPException(status_code=404, detail="benchmark run not found")
-        compare = getattr(benchmark_runner, "compare", None)
-        if not callable(compare):
-            try:
-                from .evaluation import compare_runs as compare
-            except ImportError:
-                compare = None
-        if not callable(compare):
-            raise HTTPException(status_code=503, detail="benchmark comparison is not configured")
+        base_result, candidate_result = base_stored[0], candidate_stored[0]
+        comparison = getattr(benchmark_runner, "compare", None)
+        if not callable(comparison):
+            from .evaluation import compare_runs
+
+            comparison = compare_runs
         try:
-            result = await _maybe_await(compare(base, candidate))
+            return serialize_benchmark(await _maybe_await(comparison(base_result, candidate_result)))
         except (TypeError, ValueError) as exc:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "reason_code": BENCHMARK_COMPARISON_FAILED,
-                    "message": "benchmark runs could not be compared",
-                },
-            ) from exc
-        return serialize_benchmark(result)
+            raise HTTPException(status_code=400, detail={
+                "reason_code": BENCHMARK_COMPARISON_FAILED,
+                "message": "benchmark runs could not be compared",
+            }) from exc
 
-    @app.get("/api/v1/connectors/health")
-    async def connectors_health() -> dict[str, Any]:
-        return await _connector_payload(connector_health)
-
-    assets = Path(__file__).with_name("web_assets")
-
-    @app.get("/", include_in_schema=False)
-    async def dashboard_index():
-        return FileResponse(assets / "index.html")
-
-    app.mount("/assets", StaticFiles(directory=assets), name="assets")
     return app
 
 
 __all__ = [
+    "ADMIN_AUTHORIZATION_REQUIRED",
+    "AuthorizationContext",
     "BENCHMARK_COMPARISON_FAILED",
+    "BENCHMARK_DATASET_REJECTED",
     "BENCHMARK_RUN_FAILED",
     "HEALTH_PROBE_FAILED",
     "INVALID_RESOLUTION_REQUEST",
+    "RESOLUTION_PAYLOAD_CONFLICT",
+    "RESOLUTION_SCOPE_CONFLICT",
+    "create_admin_app",
     "create_app",
 ]

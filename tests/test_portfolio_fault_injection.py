@@ -219,9 +219,15 @@ async def test_local_catalog_faults_are_explicit_at_repository_boundary(name, ex
 def test_api_contains_local_catalog_transport_failures_without_5xx_or_disclosure(name):
     from fastapi.testclient import TestClient
 
-    from a1_factor_engine.api import create_app
+    from a1_factor_engine.api import AuthorizationContext, create_admin_app
 
-    app = create_app(engine=A1FactorResolutionEngine(local_retrieval=local_fault(name)))
+    async def allow(_headers, _permission):
+        return AuthorizationContext(
+            "tester", "tenant", "project", ("resolve:execute", "trace:read")
+        )
+    app = create_admin_app(
+        engine=A1FactorResolutionEngine(local_retrieval=local_fault(name)), authorizer=allow
+    )
     with TestClient(app, raise_server_exceptions=False) as client:
         request_id = f"portfolio-local-{name}"
         response = client.post(
@@ -293,7 +299,7 @@ def test_connector_health_redacts_exception_secrets_and_stack_details():
     assert "postgres://" not in response.text
     assert "internal.py" not in response.text
     assert "Traceback" not in response.text
-    assert response.json()["connectors"]["catalog"]["reason_code"] == "HEALTH_PROBE_FAILED"
+    assert response.json() == {"status": "degraded"}
 
 
 def test_non_mapping_connector_health_failure_is_sanitized_and_degraded():
@@ -311,11 +317,7 @@ def test_non_mapping_connector_health_failure_is_sanitized_and_degraded():
         response = client.get("/api/v1/connectors/health")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "status": "unhealthy",
-        "error": "health probe failed",
-        "reason_code": "HEALTH_PROBE_FAILED",
-    }
+    assert response.json() == {"status": "degraded"}
     assert INJECTED_SECRET not in response.text
 
 

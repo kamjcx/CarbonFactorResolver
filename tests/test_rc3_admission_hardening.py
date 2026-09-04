@@ -6,6 +6,7 @@ import pytest
 
 from a1_factor_engine import (
     A1FactorResolutionEngine,
+    CatalogPolicyBundle,
     FactorKind,
     FactorSourceType,
     FactorSubjectType,
@@ -20,6 +21,7 @@ from a1_factor_engine.adapters import (
     HttpCatalogFactorRepository,
     InMemoryFactorRepository,
 )
+from a1_factor_engine.integrity import catalog_content_sha256
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import DatabaseVersionAnchor
 from a1_factor_engine.semantic_index import SemanticFactorIndex
@@ -167,7 +169,7 @@ async def test_recalled_hard_ineligible_record_is_unresolved_not_zero_hit() -> N
 
 
 @pytest.mark.asyncio
-async def test_geography_and_year_compatibility_precede_source_priority() -> None:
+async def test_explicit_geography_and_year_conflicts_are_hard_rejected() -> None:
     cn = source("cn-electricity", "rc3 electricity", geography="CN", year=2024, priority=100)
     preferred_us = source(
         "us-electricity", "rc3 electricity", geography="US", year=2025, priority=0,
@@ -184,21 +186,20 @@ async def test_geography_and_year_compatibility_precede_source_priority() -> Non
         top_k=2,
     ))
 
-    assert result.status == ResolutionStatus.RECOMMENDATION_READY
-    assert [item.source.source_id for item in result.candidates] == [
-        "cn-electricity",
-        "us-electricity",
-    ]
-    assert result.candidates[0].result_tier == ResultTier.PRIMARY_RECOMMENDATION
-    assert result.candidates[1].result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS
+    assert result.status == ResolutionStatus.UNRESOLVED
+    assert result.candidates == ()
+    exclusions = result.trace.explain()["excluded_candidates"]
+    reasons = {reason for item in exclusions for reason in item["reasons"]}
+    assert {"geography_mismatch", "year_mismatch"} <= reasons
 
 
 @pytest.mark.asyncio
-async def test_far_or_missing_year_is_not_a_primary_recommendation() -> None:
-    for record in (
-        source("stale-electricity", "stale electricity", year=2015),
-        source("undated-electricity", "undated electricity", year=None),
-    ):
+async def test_far_year_is_rejected_while_missing_year_remains_unknown() -> None:
+    cases = (
+        (source("stale-electricity", "stale electricity", year=2015), ResolutionStatus.UNRESOLVED),
+        (source("undated-electricity", "undated electricity", year=None), ResolutionStatus.RECOMMENDATION_READY),
+    )
+    for record, expected_status in cases:
         result = await A1FactorResolutionEngine(
             local_retrieval=InMemoryFactorRepository((record,))
         ).resolve(ResolutionRequest(
@@ -209,7 +210,11 @@ async def test_far_or_missing_year_is_not_a_primary_recommendation() -> None:
             geography="CN",
             year=2025,
         ))
-        assert result.candidates[0].result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS
+        assert result.status == expected_status
+        if record.year is None:
+            assert result.candidates[0].result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS
+        else:
+            assert result.candidates == ()
 
 
 @pytest.mark.asyncio
@@ -339,17 +344,31 @@ async def test_http_catalog_cache_rebuilds_when_decision_policy_changes() -> Non
         record_categories=("energy_factor",),
         geography="CN",
         year=2024,
+        catalog_content_sha256=catalog_content_sha256(payload["records"]),
     )
     repository = HttpCatalogFactorRepository(
         fetch_json=lambda _url: payload,
-        dataset_policies=(policy_cn,),
+        policy_bundle=CatalogPolicyBundle(
+            policy_id="deployment-policy:cache/v1",
+            version="1",
+            approved_catalog_content_sha256=catalog_content_sha256(payload["records"]),
+            effective_from="2026-09-04",
+            approved_by="test-reviewer",
+            policies=(policy_cn,),
+        ),
+        policy_effective_on="2026-09-04",
     )
     intent = DEFAULT_MATERIAL_REGISTRY.resolve("policy cache electricity").retrieval_intent
     assert intent is not None
 
     first = await repository.search(intent)
-    repository.dataset_policies = (
-        replace(policy_cn, geography="US", year=2025),
+    repository.policy_bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:cache/v2",
+        version="2",
+        approved_catalog_content_sha256=catalog_content_sha256(payload["records"]),
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(replace(policy_cn, geography="US", year=2025),),
     )
     second = await repository.search(intent)
 

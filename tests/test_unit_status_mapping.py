@@ -330,7 +330,7 @@ def test_unit_reason_fields_are_serialized_by_all_resolution_api_surfaces() -> N
     assert fastapi is not None
     from fastapi.testclient import TestClient
 
-    from a1_factor_engine.api import create_app
+    from a1_factor_engine.api import AuthorizationContext, create_admin_app
 
     request_id = "unit-api-contract"
     engine = A1FactorResolutionEngine(local_retrieval=InMemoryFactorRepository([_record()]))
@@ -348,7 +348,12 @@ def test_unit_reason_fields_are_serialized_by_all_resolution_api_surfaces() -> N
         "boundary": "cradle-to-gate",
     }
 
-    with TestClient(create_app(engine=engine)) as client:
+    async def allow(_headers, _permission):
+        return AuthorizationContext(
+            "tester", "tenant", "project",
+            ("resolve:execute", "resolution:read", "trace:read", "diagnostics:read"),
+        )
+    with TestClient(create_admin_app(engine=engine, authorizer=allow)) as client:
         posted = client.post("/api/v1/resolve", json=payload)
         assert posted.status_code == 200
         resolution = client.get(f"/api/v1/resolutions/{request_id}")

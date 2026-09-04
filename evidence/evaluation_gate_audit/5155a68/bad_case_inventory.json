@@ -1,0 +1,2462 @@
+{
+  "bad_case_count": 100,
+  "cases": [
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-BAUXITE_ORE"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-01-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-BAUXITE_ORE"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-01-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-01-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-01-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-02-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-02-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-02-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-HIGH_ALUMINA_PRODUCT"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-03-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-HIGH_ALUMINA_PRODUCT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-03-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-03-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-03-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-04-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-04-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-04-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-05-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-05-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-05-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-ALUMINA"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-06-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-ALUMINA"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-06-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-06-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-06-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRAPHITE_ELECTRODE"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-07-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-GRAPHITE_ELECTRODE"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRAPHITE_ELECTRODE"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-07-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-GRAPHITE_ELECTRODE"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-07-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-07-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-07-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRAPHITE_POWDER"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-08-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-GRAPHITE_POWDER"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRAPHITE_POWDER"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-08-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-GRAPHITE_POWDER"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-08-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-08-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-08-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-IRON_TURNINGS"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-09-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-IRON_TURNINGS"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-09-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-09-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-09-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-BALED_SCRAP"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-10-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-BALED_SCRAP"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-10-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-10-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-10-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-ROAD_FREIGHT"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-11-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-ROAD_FREIGHT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-ROAD_FREIGHT"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-11-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-ROAD_FREIGHT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "UNIT_SYNTAX_UNSUPPORTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-11-UNIT-EQ",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-ROAD_FREIGHT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "RETRIEVAL_FAILURE",
+      "risk": "CRITICAL",
+      "root_cause": "unit",
+      "suggested_follow_up_pr": "unit-syntax-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-11-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-11-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-11-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-RAIL_FREIGHT"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-12-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-RAIL_FREIGHT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-RAIL_FREIGHT"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-12-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-RAIL_FREIGHT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "UNIT_SYNTAX_UNSUPPORTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-12-UNIT-EQ",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-RAIL_FREIGHT"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "RETRIEVAL_FAILURE",
+      "risk": "CRITICAL",
+      "root_cause": "unit",
+      "suggested_follow_up_pr": "unit-syntax-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-12-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-12-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-12-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [
+          "AUTO-SYN-PHOTOVOLTAIC",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-13-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-PHOTOVOLTAIC",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-13-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-PHOTOVOLTAIC",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-13-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [
+          "AUTO-SYN-GRID_2024",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-14-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRID_2024",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-14-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRID_2024",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-14-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [
+          "AUTO-SYN-GRID_2024",
+          "AUTO-SYN-PHOTOVOLTAIC"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-15-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRID_2024",
+          "AUTO-SYN-PHOTOVOLTAIC"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-15-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-GRID_2024",
+          "AUTO-SYN-PHOTOVOLTAIC"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-15-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-COAL_MARKET"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-16-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-COAL_MARKET"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-16-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-16-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-16-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-COAL_COMBUSTION"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-17-POS-reviewed-alias",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-COAL_COMBUSTION"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-17-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-17-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-17-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-SPINEL_FUSED"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-18-POS-reviewed-typo",
+      "expected": {
+        "decision": "direct",
+        "status": "recommendation_ready",
+        "top_1": "AUTO-SYN-SPINEL_FUSED"
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "ALIAS_OR_ENTITY_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "process_model_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-18-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "process_model_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-18-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "process_model_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-18-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "process_model_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-19-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "process_model_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-19-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "process_model_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-19-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "more_input_needed"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-20-SUBJECT",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "SUBJECT_FAILURE",
+      "risk": "CRITICAL",
+      "root_cause": "subject",
+      "suggested_follow_up_pr": "subject-decision-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "SOURCE_DOCUMENT_HASH_REQUIRED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-20-PROV-HASH",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-20-PROV-QUALITY",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [
+          "ADMISSION_REJECTED"
+        ],
+        "reviewable_ids": [],
+        "status": "unresolved"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-20-PROV-ELIGIBLE",
+      "expected": {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "PROVENANCE_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-PHOTOVOLTAIC",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-MATRIX-A3-A1",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "BOUNDARY_FAILURE",
+      "risk": "CRITICAL",
+      "root_cause": "boundary",
+      "suggested_follow_up_pr": "boundary-reference-only-contract"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-PHOTOVOLTAIC",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-MATRIX-A3-A2",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "BOUNDARY_FAILURE",
+      "risk": "CRITICAL",
+      "root_cause": "boundary",
+      "suggested_follow_up_pr": "boundary-reference-only-contract"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [
+          "AUTO-SYN-PHOTOVOLTAIC",
+          "AUTO-SYN-GRID_2021"
+        ],
+        "status": "reference_review_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-MATRIX-A3-A1-A3",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "BOUNDARY_FAILURE",
+      "risk": "CRITICAL",
+      "root_cause": "boundary",
+      "suggested_follow_up_pr": "boundary-reference-only-contract"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-00",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-01",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-02",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-03",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-04",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-05",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-06",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-07",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-08",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-09",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-10",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "supplier_data_required"
+      },
+      "adjudication": null,
+      "case_id": "AUTO-UNKNOWN-11",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [],
+      "legacy_category": "CATALOG_COVERAGE_GAP",
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "actual": {
+        "primary_ids": [
+          "AUTO-SYN-GRID_2024"
+        ],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "recommendation_ready"
+      },
+      "adjudication": {
+        "authority": "CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION",
+        "case_id": "AUTO-GRID_2024-GEOGRAPHY-X",
+        "case_sha256": "176831d768a327b492375984b18a9b22301825203f1df2287f6e90b8faaac6e1",
+        "disposition": "accepted_limitation",
+        "effective_version": "0.14.2",
+        "input_sha256": "a5a106a83e4eff989774380ffadac411482a38651dc8982f375e5e5e6e7b8791",
+        "reason": "The published runtime treats geography mismatch as USABLE_WITH_ASSUMPTIONS, not a universal identity exclusion.",
+        "reviewer": "CarbonFactorResolver maintainer"
+      },
+      "case_id": "AUTO-GRID_2024-GEOGRAPHY-X",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [
+        "AUTO-SYN-GRID_2024"
+      ],
+      "legacy_category": "RANKING_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "geography",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "actual": {
+        "primary_ids": [
+          "AUTO-SYN-GRID_2024"
+        ],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "recommendation_ready"
+      },
+      "adjudication": {
+        "authority": "CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION",
+        "case_id": "AUTO-GRID_2024-YEAR-X",
+        "case_sha256": "679ac1c020b24d5b2df0c4de888d32d87bf35896c824471cf7bffdc1561bd0bc",
+        "disposition": "accepted_limitation",
+        "effective_version": "0.14.2",
+        "input_sha256": "d7e5df77f6460d901f6f46ca9fcf9cae21a6b6e2f6b96449ce53e376795221ce",
+        "reason": "The published runtime treats year mismatch as USABLE_WITH_ASSUMPTIONS, not a universal identity exclusion.",
+        "reviewer": "CarbonFactorResolver maintainer"
+      },
+      "case_id": "AUTO-GRID_2024-YEAR-X",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [
+        "AUTO-SYN-GRID_2024"
+      ],
+      "legacy_category": "RANKING_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "year_temporal",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "actual": {
+        "primary_ids": [
+          "AUTO-SYN-COAL_MARKET"
+        ],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "recommendation_ready"
+      },
+      "adjudication": {
+        "authority": "CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION",
+        "case_id": "AUTO-COAL_MARKET-GEOGRAPHY-X",
+        "case_sha256": "160b56d28cdd9d547517d62bb3a58ab026bcc953cecedc65b68be620b6c59acb",
+        "disposition": "accepted_limitation",
+        "effective_version": "0.14.2",
+        "input_sha256": "68e64204c63be6d5001121e33187e215d97d0a7e4e5060680a396e449653872c",
+        "reason": "The published runtime treats geography mismatch as USABLE_WITH_ASSUMPTIONS, not a universal identity exclusion.",
+        "reviewer": "CarbonFactorResolver maintainer"
+      },
+      "case_id": "AUTO-COAL_MARKET-GEOGRAPHY-X",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [
+        "AUTO-SYN-COAL_MARKET"
+      ],
+      "legacy_category": "RANKING_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "geography",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "actual": {
+        "primary_ids": [
+          "AUTO-SYN-COAL_MARKET"
+        ],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "recommendation_ready"
+      },
+      "adjudication": {
+        "authority": "CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION",
+        "case_id": "AUTO-COAL_MARKET-YEAR-X",
+        "case_sha256": "e7c4eb4cbb2fba6540aba8643c0fda36c2a01ded4161206b472fea5edb784a21",
+        "disposition": "accepted_limitation",
+        "effective_version": "0.14.2",
+        "input_sha256": "d4f35418d18c724bf1ba1cc446b798ca659fc3b015e2588cb6add98aa276f4c2",
+        "reason": "The published runtime treats year mismatch as USABLE_WITH_ASSUMPTIONS, not a universal identity exclusion.",
+        "reviewer": "CarbonFactorResolver maintainer"
+      },
+      "case_id": "AUTO-COAL_MARKET-YEAR-X",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [
+        "AUTO-SYN-COAL_MARKET"
+      ],
+      "legacy_category": "RANKING_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "year_temporal",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "actual": {
+        "primary_ids": [
+          "AUTO-SYN-COAL_COMBUSTION"
+        ],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "recommendation_ready"
+      },
+      "adjudication": {
+        "authority": "CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION",
+        "case_id": "AUTO-COAL_COMBUSTION-GEOGRAPHY-X",
+        "case_sha256": "b72df54654f236d875eaa48c93edc00fbb918ed65813404178e604d8b62b1896",
+        "disposition": "accepted_limitation",
+        "effective_version": "0.14.2",
+        "input_sha256": "5b79ba53e464a52f1f90b8ba2a8c3c07eb5b637b4238efb19a97b210d883f81d",
+        "reason": "The published runtime treats geography mismatch as USABLE_WITH_ASSUMPTIONS, not a universal identity exclusion.",
+        "reviewer": "CarbonFactorResolver maintainer"
+      },
+      "case_id": "AUTO-COAL_COMBUSTION-GEOGRAPHY-X",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [
+        "AUTO-SYN-COAL_COMBUSTION"
+      ],
+      "legacy_category": "RANKING_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "geography",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "actual": {
+        "primary_ids": [
+          "AUTO-SYN-COAL_COMBUSTION"
+        ],
+        "reason_codes": [],
+        "reviewable_ids": [],
+        "status": "recommendation_ready"
+      },
+      "adjudication": {
+        "authority": "CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION",
+        "case_id": "AUTO-COAL_COMBUSTION-YEAR-X",
+        "case_sha256": "268e5e064a835d211c22c5d98c6cc7edd8dd7473ceaf0bc211ad402760d780d4",
+        "disposition": "accepted_limitation",
+        "effective_version": "0.14.2",
+        "input_sha256": "d29bfa20894dda5307be2617b4e489d530a0bfe36933bb7c9ac85746cf668836",
+        "reason": "The published runtime treats year mismatch as USABLE_WITH_ASSUMPTIONS, not a universal identity exclusion.",
+        "reviewer": "CarbonFactorResolver maintainer"
+      },
+      "case_id": "AUTO-COAL_COMBUSTION-YEAR-X",
+      "expected": {
+        "decision": "abstain",
+        "status": "unresolved",
+        "top_1": null
+      },
+      "forbidden_candidate_escape_ids": [
+        "AUTO-SYN-COAL_COMBUSTION"
+      ],
+      "legacy_category": "RANKING_FAILURE",
+      "risk": "HIGH",
+      "root_cause": "year_temporal",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    }
+  ],
+  "evaluation_schema_version": "cfr-autonomous-evaluation-run/v1",
+  "forbidden_candidate_escape_cases": [
+    {
+      "candidate_ids": [
+        "AUTO-SYN-GRID_2024"
+      ],
+      "case_id": "AUTO-GRID_2024-GEOGRAPHY-X"
+    },
+    {
+      "candidate_ids": [
+        "AUTO-SYN-GRID_2024"
+      ],
+      "case_id": "AUTO-GRID_2024-YEAR-X"
+    },
+    {
+      "candidate_ids": [
+        "AUTO-SYN-COAL_MARKET"
+      ],
+      "case_id": "AUTO-COAL_MARKET-GEOGRAPHY-X"
+    },
+    {
+      "candidate_ids": [
+        "AUTO-SYN-COAL_MARKET"
+      ],
+      "case_id": "AUTO-COAL_MARKET-YEAR-X"
+    },
+    {
+      "candidate_ids": [
+        "AUTO-SYN-COAL_COMBUSTION"
+      ],
+      "case_id": "AUTO-COAL_COMBUSTION-GEOGRAPHY-X"
+    },
+    {
+      "candidate_ids": [
+        "AUTO-SYN-COAL_COMBUSTION"
+      ],
+      "case_id": "AUTO-COAL_COMBUSTION-YEAR-X"
+    }
+  ],
+  "generator_sha256": "5882e4de5b7831bc757eb2e0c3ab3cf25026773035f6bf7ead647f00417d4b6f",
+  "quality_gate": {
+    "adjudicated_bad_case_count": 6,
+    "adjudicated_case_ids": [
+      "AUTO-COAL_COMBUSTION-GEOGRAPHY-X",
+      "AUTO-COAL_COMBUSTION-YEAR-X",
+      "AUTO-COAL_MARKET-GEOGRAPHY-X",
+      "AUTO-COAL_MARKET-YEAR-X",
+      "AUTO-GRID_2024-GEOGRAPHY-X",
+      "AUTO-GRID_2024-YEAR-X"
+    ],
+    "execution_status": "completed",
+    "hard_gates_pass": false,
+    "quality_status": "FAIL",
+    "raw_bad_case_count": 100,
+    "raw_forbidden_escape_count": 6,
+    "unadjudicated_forbidden_escape_count": 0,
+    "unresolved_bad_case_count": 94
+  },
+  "root_cause_summary": [
+    {
+      "count": 3,
+      "representative_case_ids": [
+        "AUTO-GRID_2024-GEOGRAPHY-X",
+        "AUTO-COAL_MARKET-GEOGRAPHY-X",
+        "AUTO-COAL_COMBUSTION-GEOGRAPHY-X"
+      ],
+      "risk": "HIGH",
+      "root_cause": "geography",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "count": 3,
+      "representative_case_ids": [
+        "AUTO-GRID_2024-YEAR-X",
+        "AUTO-COAL_MARKET-YEAR-X",
+        "AUTO-COAL_COMBUSTION-YEAR-X"
+      ],
+      "risk": "HIGH",
+      "root_cause": "year_temporal",
+      "suggested_follow_up_pr": "temporal-geography-contract-v2"
+    },
+    {
+      "count": 3,
+      "representative_case_ids": [
+        "AUTO-MATRIX-A3-A1",
+        "AUTO-MATRIX-A3-A2",
+        "AUTO-MATRIX-A3-A1-A3"
+      ],
+      "risk": "CRITICAL",
+      "root_cause": "boundary",
+      "suggested_follow_up_pr": "boundary-reference-only-contract"
+    },
+    {
+      "count": 0,
+      "representative_case_ids": [],
+      "risk": "CRITICAL",
+      "root_cause": "declared_product",
+      "suggested_follow_up_pr": "declared-product-admission-hardening"
+    },
+    {
+      "count": 1,
+      "representative_case_ids": [
+        "AUTO-20-SUBJECT"
+      ],
+      "risk": "CRITICAL",
+      "root_cause": "subject",
+      "suggested_follow_up_pr": "subject-decision-contract-alignment"
+    },
+    {
+      "count": 2,
+      "representative_case_ids": [
+        "AUTO-11-UNIT-EQ",
+        "AUTO-12-UNIT-EQ"
+      ],
+      "risk": "CRITICAL",
+      "root_cause": "unit",
+      "suggested_follow_up_pr": "unit-syntax-contract-alignment"
+    },
+    {
+      "count": 16,
+      "representative_case_ids": [
+        "AUTO-01-POS-reviewed-typo",
+        "AUTO-03-POS-reviewed-alias",
+        "AUTO-06-POS-reviewed-typo",
+        "AUTO-07-POS-reviewed-alias",
+        "AUTO-07-POS-reviewed-typo"
+      ],
+      "risk": "HIGH",
+      "root_cause": "generic_exact_ambiguity",
+      "suggested_follow_up_pr": "review-tier-and-alias-contract-alignment"
+    },
+    {
+      "count": 0,
+      "representative_case_ids": [],
+      "risk": "CRITICAL",
+      "root_cause": "expected_more_input_but_recommended",
+      "suggested_follow_up_pr": "ambiguity-decision-hardening"
+    },
+    {
+      "count": 0,
+      "representative_case_ids": [],
+      "risk": "MEDIUM",
+      "root_cause": "expected_recommendation_but_asked",
+      "suggested_follow_up_pr": "ambiguity-question-regression"
+    },
+    {
+      "count": 0,
+      "representative_case_ids": [],
+      "risk": "MEDIUM",
+      "root_cause": "oracle_preset_error",
+      "suggested_follow_up_pr": "versioned-oracle-adjudication"
+    },
+    {
+      "count": 0,
+      "representative_case_ids": [],
+      "risk": "MEDIUM",
+      "root_cause": "stale_report",
+      "suggested_follow_up_pr": "dynamic-evaluation-reporting"
+    },
+    {
+      "count": 6,
+      "representative_case_ids": [
+        "AUTO-GRID_2024-GEOGRAPHY-X",
+        "AUTO-GRID_2024-YEAR-X",
+        "AUTO-COAL_MARKET-GEOGRAPHY-X",
+        "AUTO-COAL_MARKET-YEAR-X",
+        "AUTO-COAL_COMBUSTION-GEOGRAPHY-X"
+      ],
+      "risk": "ACCEPTED",
+      "root_cause": "accepted_limitation",
+      "suggested_follow_up_pr": "no-runtime-change; retain versioned adjudication"
+    },
+    {
+      "count": 60,
+      "representative_case_ids": [
+        "AUTO-01-PROV-HASH",
+        "AUTO-01-PROV-QUALITY",
+        "AUTO-01-PROV-ELIGIBLE",
+        "AUTO-02-PROV-HASH",
+        "AUTO-02-PROV-QUALITY"
+      ],
+      "risk": "HIGH",
+      "root_cause": "provenance",
+      "suggested_follow_up_pr": "provenance-reference-only-contract-alignment"
+    },
+    {
+      "count": 12,
+      "representative_case_ids": [
+        "AUTO-UNKNOWN-00",
+        "AUTO-UNKNOWN-01",
+        "AUTO-UNKNOWN-02",
+        "AUTO-UNKNOWN-03",
+        "AUTO-UNKNOWN-04"
+      ],
+      "risk": "MEDIUM",
+      "root_cause": "catalog_coverage",
+      "suggested_follow_up_pr": "abstention-status-contract-alignment"
+    },
+    {
+      "count": 0,
+      "representative_case_ids": [],
+      "risk": "MEDIUM",
+      "root_cause": "other",
+      "suggested_follow_up_pr": "bad-case-triage-follow-up"
+    }
+  ],
+  "schema_version": "cfr-bad-case-inventory/v1"
+}

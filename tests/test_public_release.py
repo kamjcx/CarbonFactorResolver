@@ -29,7 +29,10 @@ def test_runtime_dependency_groups_exclude_file_parsers() -> None:
     parser_packages = {"pdfplumber", "python-docx", "openpyxl"}
 
     def names(requirements: list[str]) -> set[str]:
-        return {re.split(r"[<>=!~ ]", item, 1)[0].casefold() for item in requirements}
+        return {
+            re.split(r"[<>=!~ ]", item, maxsplit=1)[0].casefold()
+            for item in requirements
+        }
 
     assert names(project["dependencies"]).isdisjoint(parser_packages)
     assert names(project["optional-dependencies"]["api"]).isdisjoint(parser_packages)

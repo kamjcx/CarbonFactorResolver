@@ -7,6 +7,11 @@
     "name": "cfr-byoc-public-synthetic-20",
     "sha256": "abababababababababababababababababababababababababababababababab"
   },
+  "manifest": {
+    "schema_version": "cfr.catalog/v2",
+    "catalog_content_sha256": "04828399c07123b6257346b7857cbfaf9014d537d250e3af1f82f1df1f93dca5",
+    "publisher_id": "cfr-public-synthetic"
+  },
   "records": [
     {"record_id":"byoc:bauxite-ore","category":"lifecycle_factor","code":"BYOC_BAUXITE_ORE","name":"bauxite ore","aliases":["铝土矿原矿","铝矾土原矿"],"primary_value":0.31,"primary_unit":"kgCO2e/kg","source":"CFR BYOC public-synthetic example","source_id":"BYOC-SYN-001","subject_type":"raw_material","source_quality_status":"VERIFIED","admission_eligible":true,"document_status":"PUBLISHED","boundary":"A1","boundary_modules":["A1"],"indicator":"GWP-total","declared_product":"bauxite ore","product_form":"ore","production_process":"mined","license":"MIT synthetic fixture","source_document_locator":"https://example.invalid/cfr-byoc/bauxite-ore","source_document_sha256":"0101010101010101010101010101010101010101010101010101010101010101"},
     {"record_id":"byoc:calcined-bauxite-clinker","category":"lifecycle_factor","code":"BYOC_BAUXITE_CLINKER","name":"calcined bauxite clinker","aliases":["高铝矾土熟料","煅烧铝矾土"],"primary_value":0.92,"primary_unit":"kgCO2e/kg","source":"CFR BYOC public-synthetic example","source_id":"BYOC-SYN-002","subject_type":"raw_material","source_quality_status":"VERIFIED","admission_eligible":true,"document_status":"PUBLISHED","boundary":"A1","boundary_modules":["A1"],"indicator":"GWP-total","declared_product":"calcined bauxite clinker","product_form":"clinker","production_process":"calcined","license":"MIT synthetic fixture","source_document_locator":"https://example.invalid/cfr-byoc/calcined-bauxite-clinker","source_document_sha256":"0202020202020202020202020202020202020202020202020202020202020202"},

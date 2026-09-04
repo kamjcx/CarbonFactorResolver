@@ -6,11 +6,12 @@ import hashlib
 import importlib.metadata
 import json
 import subprocess
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from statistics import median
 from time import perf_counter
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.engine import A1FactorResolutionEngine
@@ -377,7 +378,8 @@ class FactorBenchRunner:
     def _git_sha(self) -> str | None:
         try:
             return subprocess.run(
-                ["git", "rev-parse", "HEAD"], cwd=self.dataset_path.parent,
+                ["git", "rev-parse", "HEAD"],  # noqa: S607 - repository-controlled executable
+                cwd=self.dataset_path.parent,
                 check=True, capture_output=True, text=True,
             ).stdout.strip() or None
         except (OSError, subprocess.CalledProcessError):

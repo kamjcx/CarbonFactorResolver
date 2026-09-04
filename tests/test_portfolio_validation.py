@@ -6,11 +6,14 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from tools.portfolio_validation import (
     aggregate,
     combined_catalog,
     evaluate,
     load_cases,
+    load_portfolio_adjudications,
     metric_prf,
     predicted_decision,
 )
@@ -22,6 +25,7 @@ CATALOGS = (
     ROOT / "data" / "fixtures" / "catalog" / "factorbench_extended_catalog.json",
     ROOT / "data" / "fixtures" / "catalog" / "portfolio_catalog_additions.json",
 )
+ADJUDICATIONS = ROOT / "data" / "benchmarks" / "portfolio_challenge_v2_adjudications.json"
 
 
 def file_sha(path: Path) -> str:
@@ -74,20 +78,33 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
     ):
         assert (tmp_path / name).is_file(), name
     full = result["runs"]["full_cfr"]["metrics"]
+    effective = result["runs"]["full_cfr"]["effective_metrics"]
     lexical = result["runs"]["lexical"]["metrics"]
-    assert {finding["id"] for finding in result["known_findings"]} == {
-        "CFR-PV-001", "CFR-PV-002", "CFR-PV-003"
-    }
-    assert all(finding["status"] == "OPEN" for finding in result["known_findings"])
-    assert full["wrong_candidate_rate"] == 6 / 46
-    assert full["wrong_candidate_count"] == 6
-    assert full["returned_candidate_count"] == 46
+    assert result["execution_status"] == "completed"
+    assert result["raw_quality_gate"]["quality_status"] == "FAIL"
+    assert result["quality_gate"]["quality_status"] == "PASS"
+    assert result["quality_gate"]["hard_gates_pass"] is True
+    assert result["known_findings"] == []
+    assert [item["id"] for item in result["raw_known_findings"]] == [
+        "CFR-PV-WRONG_CANDIDATE_RATE_AT_MOST_5_PERCENT"
+    ]
+    assert full["wrong_candidate_rate"] == 14 / 54
+    assert full["wrong_candidate_count"] == 14
+    assert full["returned_candidate_count"] == 54
     assert full["top_1_correct_count"] == 40
+    assert full["decision_accuracy"] == 58 / 60
     assert full["boundary_violation_rate"] == 0
     assert full["subject_violation_rate"] == 0
     assert lexical["recall_at_5"] >= full["recall_at_5"]
     assert lexical["wrong_candidate_rate"] > full["wrong_candidate_rate"]
     assert lexical["subject_violation_rate"] > 0
+    assert effective["decision_accuracy"] == 1.0
+    assert effective["more_input"]["recall"] == 1.0
+    assert effective["wrong_candidate_rate"] == 0.0
+    assert effective["formal_candidate_escape_count"] == 0
+    assert effective["provisional_option_validity"] == {
+        "numerator": 8, "denominator": 8, "rate": 1.0,
+    }
     trace_rows = [json.loads(line) for line in (tmp_path / "portfolio_traces.jsonl").read_text(
         encoding="utf-8"
     ).splitlines()]
@@ -126,6 +143,45 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
     assert top_k["selected_candidate_ids"] == []
     assert top_k["reviewable_candidate_ids"] == ["local:pc:steel-fiber-product"]
     assert top_k["required_fields"] == ["steel_fiber_type"]
+    for case_id in ("MI-04", "MI-05", "MI-06"):
+        row = by_case[case_id]
+        assert row["observed_status"] == "more_input_needed"
+        assert row["selected_ids"] == []
+        assert row["reference_only_ids"] == ["fb:steel"]
+        assert row["required_choice"]["field"] == "steel_fiber_type"
+    for case_id in ("CNF-01", "MI-01", "MI-02", "MI-03"):
+        row = by_case[case_id]
+        assert row["observed_status"] == "more_input_needed"
+        assert row["selected_ids"] == []
+        assert set(row["reference_only_ids"]) == {
+            "fb:aluminium", "fb:primary-aluminium", "fb:secondary-aluminium",
+        }
+        assert row["required_choice"] == {
+            "field": "route", "options": ["primary", "secondary", "unknown"],
+        }
+
+
+def test_portfolio_v2_adjudications_are_sha_bound_and_fail_closed(tmp_path: Path) -> None:
+    cases = load_cases(CHALLENGE)
+    loaded = load_portfolio_adjudications(
+        ADJUDICATIONS, challenge_path=CHALLENGE, cases=cases
+    )
+    assert set(loaded) == {
+        "FIN-05", "CNF-01", "MI-01", "MI-02", "MI-03", "MI-04", "MI-05", "MI-06",
+    }
+    frozen = CHALLENGE.read_bytes()
+    payload = json.loads(ADJUDICATIONS.read_text(encoding="utf-8"))
+    payload["entries"][0]["input_sha256"] = "0" * 64
+    tampered = tmp_path / "tampered-adjudications.json"
+    tampered.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="input SHA mismatch"):
+        load_portfolio_adjudications(tampered, challenge_path=CHALLENGE, cases=cases)
+    del payload["entries"][0]["expected_reference_only_ids"]
+    incomplete = tmp_path / "incomplete-adjudications.json"
+    incomplete.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="incomplete portfolio adjudication"):
+        load_portfolio_adjudications(incomplete, challenge_path=CHALLENGE, cases=cases)
+    assert CHALLENGE.read_bytes() == frozen
 
 
 def test_error_is_not_counted_as_abstention() -> None:

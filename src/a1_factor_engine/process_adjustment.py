@@ -81,7 +81,8 @@ def _additional_process_value(
     present = {suffix: parameters.get(name) for suffix, name in names.items()}
     if all(present.values()):
         for suffix, evidence in present.items():
-            assert evidence is not None
+            if evidence is None:
+                raise ValueError("complete stoichiometric evidence unexpectedly became unavailable")
             observed_unit = evidence.unit.casefold().replace(" ", "")
             if observed_unit != STOICHIOMETRIC_SUFFIXES[suffix]:
                 raise ValueError(f"{names[suffix]} unit must be {STOICHIOMETRIC_SUFFIXES[suffix]}")

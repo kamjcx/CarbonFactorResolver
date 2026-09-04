@@ -56,7 +56,7 @@ async def test_primary_aluminium_ingot_enters_external_lane_with_hash_provenance
     assert all(item.source.source_id != "fixture-al-secondary-a1a3" for item in result.candidates)
 
 
-def test_default_api_reports_fixture_connector_health():
+def test_default_api_does_not_load_fixture_connector():
     from fastapi.testclient import TestClient
 
     from a1_factor_engine.api import create_app
@@ -65,8 +65,8 @@ def test_default_api_reports_fixture_connector_health():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["connectors"]["FixtureExternalConnector"]["available"] is True
+    assert payload["status"] == "not_configured"
+    assert set(payload) == {"status"}
 
 
 @pytest.mark.asyncio
@@ -111,4 +111,4 @@ def test_default_benchmark_api_rejects_paths_outside_configured_root(tmp_path):
         "/api/v1/benchmarks/runs", json={"path": str(outside)}
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404

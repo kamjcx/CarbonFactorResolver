@@ -1,0 +1,28 @@
+{
+  "schema_version": "cfr-resolution-safety-adjudications/v2",
+  "evaluator_contract_sha256": "5882e4de5b7831bc757eb2e0c3ab3cf25026773035f6bf7ead647f00417d4b6f",
+  "version": "2.0.0",
+  "supersedes": "autonomous_evaluation_v1_adjudications/1.0.0",
+  "runtime_source_sha256": {
+    "src/a1_factor_engine/qualification.py": "faa5e0109b031216592791b2797698e73a27d9c8f8fee6c178e6ab4a45c8e849",
+    "src/a1_factor_engine/nodes.py": "8538c19736a3a23991282af301a721e48a1416cb69c0ede00334f750f6329c72",
+    "src/a1_factor_engine/engine.py": "c2efab3af67ec2c0de7a0f53d07acb5f42de5f6bef1c16d6ad1c977501d485d1",
+    "src/a1_factor_engine/models.py": "a901fe54c7618103d1090197ef9f2180889010ed4eac5311b981912b7f830e0d",
+    "src/a1_factor_engine/units.py": "86260127d33428ab957c48353ebffe95f26f16394395e730d64c7a4486b02903",
+    "src/a1_factor_engine/reference_flow_resolution.py": "adde3d6bf02dc208a0a68b686a6f03f900d84167e212ba2c0d5f87d3e61db3bf",
+    "tools/autonomous_evaluation/runner.py": "6601f6a9243e3c7eb8259fcedf5d1ad89baa50ad91a469d8be7020a18210c4c9"
+  },
+  "entries": [
+    {"case_id":"AUTO-GRID_2024-GEOGRAPHY-X","case_sha256":"176831d768a327b492375984b18a9b22301825203f1df2287f6e90b8faaac6e1","input_sha256":"a5a106a83e4eff989774380ffadac411482a38651dc8982f375e5e5e6e7b8791","disposition":"fixed_runtime_defect","reason":"Explicit geography conflict was incorrectly treated as an approvable assumption; Safety V2 hard-rejects it unless a versioned substitution policy applies."},
+    {"case_id":"AUTO-GRID_2024-YEAR-X","case_sha256":"679ac1c020b24d5b2df0c4de888d32d87bf35896c824471cf7bffdc1561bd0bc","input_sha256":"d7e5df77f6460d901f6f46ca9fcf9cae21a6b6e2f6b96449ce53e376795221ce","disposition":"fixed_runtime_defect","reason":"Explicit year conflict was incorrectly treated as an approvable assumption; Safety V2 hard-rejects it unless a versioned substitution policy applies."},
+    {"case_id":"AUTO-COAL_MARKET-GEOGRAPHY-X","case_sha256":"160b56d28cdd9d547517d62bb3a58ab026bcc953cecedc65b68be620b6c59acb","input_sha256":"68e64204c63be6d5001121e33187e215d97d0a7e4e5060680a396e449653872c","disposition":"fixed_runtime_defect","reason":"Explicit geography conflict is a qualification failure, not an ordinary review assumption."},
+    {"case_id":"AUTO-COAL_MARKET-YEAR-X","case_sha256":"e7c4eb4cbb2fba6540aba8643c0fda36c2a01ded4161206b472fea5edb784a21","input_sha256":"d4f35418d18c724bf1ba1cc446b798ca659fc3b015e2588cb6add98aa276f4c2","disposition":"fixed_runtime_defect","reason":"Explicit year conflict is a qualification failure, not an ordinary review assumption."},
+    {"case_id":"AUTO-COAL_COMBUSTION-GEOGRAPHY-X","case_sha256":"b72df54654f236d875eaa48c93edc00fbb918ed65813404178e604d8b62b1896","input_sha256":"5b79ba53e464a52f1f90b8ba2a8c3c07eb5b637b4238efb19a97b210d883f81d","disposition":"fixed_runtime_defect","reason":"Explicit geography conflict is a qualification failure, including operational combustion factors."},
+    {"case_id":"AUTO-COAL_COMBUSTION-YEAR-X","case_sha256":"268e5e064a835d211c22c5d98c6cc7edd8dd7473ceaf0bc211ad402760d780d4","input_sha256":"d29bfa20894dda5307be2617b4e489d530a0bfe36933bb7c9ac85746cf668836","disposition":"fixed_runtime_defect","reason":"Explicit year conflict is a qualification failure, including operational combustion factors."}
+  ],
+  "environment_adjudication": {
+    "id": "AUTO-HTTP-DEPENDENCY-100-101",
+    "disposition": "fixed_harness_contract_defect",
+    "reason": "The missing API extra previously fabricated one extra failed case. Safety V2 raises an operational precondition error before evaluation; dependency availability no longer changes the case inventory."
+  }
+}

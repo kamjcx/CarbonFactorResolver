@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import FrozenInstanceError
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from a1_factor_engine.adapters import (
     HttpCatalogFactorRepository,
@@ -90,7 +91,7 @@ async def _expect_failure(
             "exception_type": type(exc).__name__,
             "sanitized_message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001 - unexpected exception is benchmark evidence
+    except Exception as exc:
         return {
             "attack_id": name,
             "passed": False,

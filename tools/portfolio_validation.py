@@ -18,19 +18,24 @@ import re
 import subprocess
 import sys
 import unicodedata
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from statistics import median
 from time import perf_counter
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from a1_factor_engine import A1FactorResolutionEngine, ResolutionStatus
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.serialization import serialize_trace
+from a1_factor_engine.units import UnitConversionError, parse_factor_unit
 
 SCHEMA_VERSION = "portfolio-challenge/v1"
+ADJUDICATION_SCHEMA_VERSION = "cfr-portfolio-adjudications/v2"
+ADJUDICATION_VERSION = "2.0.0"
+DEFAULT_ADJUDICATIONS = Path("data/benchmarks/portfolio_challenge_v2_adjudications.json")
 ABSTENTION_STATUSES = {
     ResolutionStatus.UNRESOLVED.value,
     ResolutionStatus.SUPPLIER_DATA_REQUIRED.value,
@@ -65,7 +70,7 @@ class ChallengeCase:
     expected_decision: str
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ChallengeCase":
+    def from_mapping(cls, value: Mapping[str, Any]) -> ChallengeCase:
         if value.get("schema_version") != SCHEMA_VERSION:
             raise ValueError("unsupported portfolio challenge schema")
         decision = str(value.get("expected_decision", ""))
@@ -89,6 +94,80 @@ def load_cases(path: Path) -> tuple[ChallengeCase, ...]:
     if len(ids) != len(set(ids)):
         raise ValueError("portfolio case IDs must be unique")
     return cases
+
+
+def load_portfolio_adjudications(
+    path: Path,
+    *,
+    challenge_path: Path,
+    cases: Sequence[ChallengeCase],
+) -> dict[str, dict[str, Any]]:
+    """Load a fail-closed V2 overlay without mutating the frozen V1 challenge."""
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != ADJUDICATION_SCHEMA_VERSION:
+        raise ValueError("unsupported portfolio adjudication schema")
+    challenge = payload.get("challenge")
+    if (
+        not isinstance(challenge, Mapping)
+        or challenge.get("name") != challenge_path.name
+        or challenge.get("sha256") != sha256_text_file(challenge_path)
+    ):
+        raise ValueError("portfolio adjudication challenge SHA does not match")
+    if payload.get("adjudication_version") != ADJUDICATION_VERSION or not all(
+        str(payload.get(field, "")).strip()
+        for field in ("authority", "effective_software_version")
+    ):
+        raise ValueError("portfolio adjudication authority and version bindings are required")
+    raw_cases = {
+        str(item["case_id"]): item
+        for line in challenge_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+        for item in (json.loads(line),)
+    }
+    known_cases = {case.case_id: case for case in cases}
+    entries: dict[str, dict[str, Any]] = {}
+    for raw_entry in payload.get("entries", ()):
+        entry = dict(raw_entry)
+        case_id = str(entry.get("case_id", ""))
+        if not case_id or case_id in entries or case_id not in known_cases:
+            raise ValueError(f"invalid or duplicate portfolio adjudication case: {case_id}")
+        required_fields = {
+            "case_sha256", "input_sha256", "disposition", "original_expected_decision",
+            "effective_expected_decision", "expected_reference_only_ids",
+            "expected_provisional_option_types", "expected_required_choice", "reason",
+        }
+        if required_fields - set(entry):
+            raise ValueError(f"incomplete portfolio adjudication: {case_id}")
+        if entry["disposition"] not in {
+            "benchmark_contract_error", "evaluation_contract_completion",
+            "runtime_contract_confirmation",
+        }:
+            raise ValueError(f"invalid portfolio adjudication disposition: {case_id}")
+        if not isinstance(entry["expected_reference_only_ids"], list) or not isinstance(
+            entry["expected_provisional_option_types"], list
+        ):
+            raise ValueError(f"invalid portfolio option contract: {case_id}")
+        expected_choice = entry["expected_required_choice"]
+        if (
+            not isinstance(expected_choice, Mapping)
+            or not str(expected_choice.get("field", "")).strip()
+            or not isinstance(expected_choice.get("options"), list)
+        ):
+            raise ValueError(f"invalid portfolio required-choice contract: {case_id}")
+        raw_case = raw_cases[case_id]
+        if entry.get("case_sha256") != sha256_json(raw_case):
+            raise ValueError(f"portfolio adjudication case SHA mismatch: {case_id}")
+        if entry.get("input_sha256") != sha256_json(raw_case["request"]):
+            raise ValueError(f"portfolio adjudication input SHA mismatch: {case_id}")
+        if entry.get("original_expected_decision") != known_cases[case_id].expected_decision:
+            raise ValueError(f"portfolio adjudication original decision mismatch: {case_id}")
+        if entry.get("effective_expected_decision") not in {"retrieve", "more_input", "abstain"}:
+            raise ValueError(f"invalid effective portfolio decision: {case_id}")
+        if not str(entry.get("reason", "")).strip():
+            raise ValueError(f"portfolio adjudication reason is required: {case_id}")
+        entries[case_id] = entry
+    return entries
 
 
 def combined_catalog(paths: Sequence[Path]) -> dict[str, Any]:
@@ -187,6 +266,7 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
         ranks.append(rank)
     boundary_violations = 0
     subject_violations = 0
+    unit_violations = 0
     for row in results:
         request = row["request"]
         for candidate_id in row["observed_ids"]:
@@ -199,6 +279,15 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
             observed_boundary = str(record.get("boundary") or "")
             if requested_boundary and observed_boundary != requested_boundary:
                 boundary_violations += 1
+            requested_factor_unit = str(request.get("target_factor_unit") or "")
+            observed_factor_unit = str(record.get("factor_unit") or "")
+            if requested_factor_unit and observed_factor_unit:
+                try:
+                    requested_dimension = parse_factor_unit(requested_factor_unit).activity_unit.dimension
+                    observed_dimension = parse_factor_unit(observed_factor_unit).activity_unit.dimension
+                    unit_violations += requested_dimension != observed_dimension
+                except UnitConversionError:
+                    unit_violations += 1
     abstain = metric_prf(
         [row["expected_decision"] == "abstain" for row in results],
         [row["observed_decision"] == "abstain" for row in results],
@@ -215,6 +304,9 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
         return latencies[min(len(latencies) - 1, math.ceil(q * len(latencies)) - 1)]
 
     errors = sum(row["observed_decision"] == "error" for row in results)
+    decision_correct = sum(
+        row["observed_decision"] == row["expected_decision"] for row in results
+    )
     returned_count = len(returned)
     retrieval_count = len(retrieval)
     return {
@@ -235,14 +327,175 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
         "boundary_violation_rate": _rate(boundary_violations, returned_count),
         "subject_violation_count": subject_violations,
         "subject_violation_rate": _rate(subject_violations, returned_count),
+        "unit_violation_count": unit_violations,
+        "unit_violation_rate": _rate(unit_violations, returned_count),
         "error_count": errors,
         "error_rate": _rate(errors, len(results)),
+        "decision_correct_count": decision_correct,
+        "decision_accuracy": _rate(decision_correct, len(results)),
         "abstention": abstain,
         "more_input": more_input,
         "p50_latency_ms": median(latencies) if latencies else 0.0,
         "p95_latency_ms": percentile(0.95),
         "p99_latency_ms": percentile(0.99),
     }
+
+
+def apply_portfolio_adjudications(
+    results: Sequence[Mapping[str, Any]],
+    adjudications: Mapping[str, Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Return effective rows plus explicit non-selectable-option validity metrics."""
+
+    effective_rows: list[dict[str, Any]] = []
+    contract_rows: list[dict[str, Any]] = []
+    for raw_row in results:
+        row = dict(raw_row)
+        entry = adjudications.get(str(row["case_id"]))
+        if entry is None:
+            effective_rows.append(row)
+            continue
+        selected_ids = tuple(map(str, row.get("selected_ids", row["observed_ids"])))
+        reference_ids = tuple(map(str, row.get("reference_only_ids", ())))
+        provisional_types = tuple(map(str, row.get("provisional_option_types", ())))
+        required_choice = row.get("required_choice") or {}
+        expected_choice = entry.get("expected_required_choice") or {}
+        reference_valid = set(reference_ids) == set(entry["expected_reference_only_ids"])
+        provisional_valid = set(provisional_types) == set(
+            entry["expected_provisional_option_types"]
+        )
+        choice_valid = (
+            required_choice.get("field") == expected_choice.get("field")
+            and set(required_choice.get("options", ())) == set(expected_choice.get("options", ()))
+        )
+        effective_decision = str(entry["effective_expected_decision"])
+        formal_escape = bool(selected_ids) and effective_decision != "retrieve"
+        row.update({
+            "expected_decision": effective_decision,
+            "acceptable_ids": list(entry.get("effective_acceptable_ids", ())),
+            "observed_ids": list(selected_ids),
+            "observed_decision": predicted_decision(selected_ids, row.get("observed_status")),
+            "adjudication": {
+                "version": ADJUDICATION_VERSION,
+                "disposition": entry["disposition"],
+                "reason": entry["reason"],
+            },
+        })
+        effective_rows.append(row)
+        contract_rows.append({
+            "case_id": row["case_id"],
+            "reference_only_valid": reference_valid,
+            "provisional_types_valid": provisional_valid,
+            "required_choice_valid": choice_valid,
+            "formal_candidate_escape": formal_escape,
+            "passed": reference_valid and provisional_valid and choice_valid and not formal_escape,
+        })
+
+    denominator = len(contract_rows)
+    passed = sum(bool(item["passed"]) for item in contract_rows)
+    return effective_rows, {
+        "adjudicated_case_count": denominator,
+        "provisional_option_validity": {
+            "numerator": passed,
+            "denominator": denominator,
+            "rate": _rate(passed, denominator),
+        },
+        "reference_only_set_validity": {
+            "numerator": sum(bool(item["reference_only_valid"]) for item in contract_rows),
+            "denominator": denominator,
+            "rate": _rate(sum(bool(item["reference_only_valid"]) for item in contract_rows), denominator),
+        },
+        "required_choice_validity": {
+            "numerator": sum(bool(item["required_choice_valid"]) for item in contract_rows),
+            "denominator": denominator,
+            "rate": _rate(sum(bool(item["required_choice_valid"]) for item in contract_rows), denominator),
+        },
+        "formal_candidate_escape_count": sum(
+            bool(item["formal_candidate_escape"]) for item in contract_rows
+        ),
+        "cases": contract_rows,
+    }
+
+
+def portfolio_quality_gate(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a fail-closed release gate separately from execution success."""
+
+    more_input = metrics.get("more_input", {})
+    more_input_recall = more_input.get("recall") if isinstance(more_input, Mapping) else None
+    checks = {
+        "decision_accuracy_at_least_95_percent": bool(
+            metrics.get("decision_accuracy") is not None and metrics["decision_accuracy"] >= 0.95
+        ),
+        "top_1_at_least_90_percent": bool(
+            metrics.get("top_1_accuracy") is not None and metrics["top_1_accuracy"] >= 0.90
+        ),
+        "recall_at_5_at_least_95_percent": bool(
+            metrics.get("recall_at_5") is not None and metrics["recall_at_5"] >= 0.95
+        ),
+        "more_input_positive_recall_at_least_90_percent": bool(
+            more_input_recall is not None and more_input_recall >= 0.90
+        ),
+        "wrong_candidate_rate_at_most_5_percent": bool(
+            metrics.get("wrong_candidate_rate") is not None
+            and metrics["wrong_candidate_rate"] <= 0.05
+        ),
+        "zero_forbidden_candidate_escape": metrics.get("forbidden_candidate_count") == 0,
+        "zero_boundary_violation": metrics.get("boundary_violation_count") == 0,
+        "zero_subject_violation": metrics.get("subject_violation_count") == 0,
+        "zero_unit_dimension_violation": metrics.get("unit_violation_count") == 0,
+        "zero_errors": metrics.get("error_count") == 0,
+    }
+    if "provisional_option_validity" in metrics:
+        option_metric = metrics["provisional_option_validity"]
+        checks["provisional_option_validity_100_percent"] = bool(
+            isinstance(option_metric, Mapping) and option_metric.get("rate") == 1.0
+        )
+        checks["zero_formal_candidate_escape"] = (
+            metrics.get("formal_candidate_escape_count") == 0
+        )
+    return {
+        "execution_status": "completed",
+        "quality_status": "PASS" if all(checks.values()) else "FAIL",
+        "hard_gates_pass": all(checks.values()),
+        "checks": checks,
+    }
+
+
+def dynamic_findings(gate: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Create findings from this run's failed checks; never carry stale prose."""
+
+    checks = gate.get("checks", {})
+    if not isinstance(checks, Mapping):
+        return [{
+            "id": "CFR-PV-GATE-MISSING",
+            "severity": "CRITICAL",
+            "status": "OPEN",
+            "summary": "Portfolio quality-gate checks are missing from this run.",
+        }]
+    severity = {
+        "decision_accuracy_at_least_95_percent": "HIGH",
+        "top_1_at_least_90_percent": "HIGH",
+        "recall_at_5_at_least_95_percent": "HIGH",
+        "more_input_positive_recall_at_least_90_percent": "HIGH",
+        "wrong_candidate_rate_at_most_5_percent": "HIGH",
+        "zero_forbidden_candidate_escape": "CRITICAL",
+        "zero_boundary_violation": "CRITICAL",
+        "zero_subject_violation": "CRITICAL",
+        "zero_unit_dimension_violation": "CRITICAL",
+        "zero_errors": "CRITICAL",
+        "provisional_option_validity_100_percent": "CRITICAL",
+        "zero_formal_candidate_escape": "CRITICAL",
+    }
+    return [
+        {
+            "id": f"CFR-PV-{name.upper()}",
+            "severity": severity[name],
+            "status": "OPEN",
+            "summary": f"Current run failed quality check: {name}.",
+        }
+        for name, passed in checks.items()
+        if passed is not True
+    ]
 
 
 async def run_full_cfr(cases: Sequence[ChallengeCase], catalog: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -260,20 +513,35 @@ async def run_full_cfr(cases: Sequence[ChallengeCase], catalog: Mapping[str, Any
         started = perf_counter()
         try:
             recommendation = await engine.resolve(request)
+            selected_ids = tuple(item.source.source_id for item in recommendation.candidates)
+            reference_only_ids = tuple(
+                item.source.source_id for item in recommendation.reviewable_candidates
+            )
             candidates = (*recommendation.candidates, *recommendation.reviewable_candidates)
             ids = tuple(dict.fromkeys(item.source.source_id for item in candidates))[:5]
             status = recommendation.status.value
             error = None
             trace = serialize_trace(recommendation.trace) if recommendation.trace else None
+            provisional_option_types = tuple(
+                str(item.get("option_type", ""))
+                for item in (trace or {}).get("provisional_options", ())
+            )
+            required_choice = (trace or {}).get("required_choice")
         except Exception as exc:  # retain failures in an auditable offline run
             ids, status, error, trace = (
                 (), ResolutionStatus.ERROR.value, f"{type(exc).__name__}: {exc}", None
             )
+            selected_ids, reference_only_ids = (), ()
+            provisional_option_types, required_choice = (), None
         results.append({
             "case_id": case.case_id, "category": case.category, "request": dict(case.request),
             "acceptable_ids": list(case.acceptable_ids), "forbidden_ids": list(case.forbidden_ids),
             "expected_decision": case.expected_decision, "observed_ids": list(ids),
             "observed_status": status, "observed_decision": predicted_decision(ids, status),
+            "selected_ids": list(selected_ids),
+            "reference_only_ids": list(reference_only_ids),
+            "provisional_option_types": list(provisional_option_types),
+            "required_choice": required_choice,
             "latency_ms": (perf_counter() - started) * 1000, "error": error, "trace": trace,
         })
     return results
@@ -338,6 +606,8 @@ def _format_rate(value: float | None) -> str:
 
 def _report(payload: Mapping[str, Any], *, chinese: bool) -> str:
     runs = payload["runs"]
+    gate = payload["quality_gate"]
+    raw_gate = payload["raw_quality_gate"]
     lines = [
         "# CFR 作品集验证报告" if chinese else "# CFR Portfolio Validation Report",
         "",
@@ -347,20 +617,40 @@ def _report(payload: Mapping[str, Any], *, chinese: bool) -> str:
             "This developer-only offline QA run approves no formal factor and is not a production-admission decision."
         ),
         "",
-        "| Method | Top-1 | Recall@5 | MRR | Wrong candidates | Boundary | Subject | Errors |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        (
+            f"评测进程：**{gate['execution_status']}**；V1原始门禁：**{raw_gate['quality_status']}**；"
+            f"V2有效门禁：**{gate['quality_status']}**。"
+            if chinese else
+            f"Evaluation execution: **{gate['execution_status']}**; raw V1 gate: "
+            f"**{raw_gate['quality_status']}**; effective V2 gate: **{gate['quality_status']}**."
+        ),
+        "",
+        "| Method | Decision | Top-1 | Recall@5 | Wrong candidates | Boundary | Subject | Unit | Errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for name, run in runs.items():
         metric = run["metrics"]
         lines.append(
-            f"| {name} | {_format_rate(metric['top_1_accuracy'])} | "
-            f"{_format_rate(metric['recall_at_5'])} | {_format_rate(metric['mrr'])} | "
+            f"| {name} | {_format_rate(metric['decision_accuracy'])} | "
+            f"{_format_rate(metric['top_1_accuracy'])} | {_format_rate(metric['recall_at_5'])} | "
             f"{_format_rate(metric['wrong_candidate_rate'])} "
             f"({metric['wrong_candidate_count']}/{metric['returned_candidate_count']}) | "
             f"{_format_rate(metric['boundary_violation_rate'])} | "
             f"{_format_rate(metric['subject_violation_rate'])} | "
+            f"{_format_rate(metric['unit_violation_rate'])} | "
             f"{metric['error_count']}/{metric['case_count']} |"
         )
+    effective = runs["full_cfr"]["effective_metrics"]
+    lines.append(
+        f"| full_cfr_effective_v2 | {_format_rate(effective['decision_accuracy'])} | "
+        f"{_format_rate(effective['top_1_accuracy'])} | {_format_rate(effective['recall_at_5'])} | "
+        f"{_format_rate(effective['wrong_candidate_rate'])} "
+        f"({effective['wrong_candidate_count']}/{effective['returned_candidate_count']}) | "
+        f"{_format_rate(effective['boundary_violation_rate'])} | "
+        f"{_format_rate(effective['subject_violation_rate'])} | "
+        f"{_format_rate(effective['unit_violation_rate'])} | "
+        f"{effective['error_count']}/{effective['case_count']} |"
+    )
     lines.extend([
         "",
         "## " + ("数据限制" if chinese else "Dataset limitations"),
@@ -379,26 +669,43 @@ def _report(payload: Mapping[str, Any], *, chinese: bool) -> str:
             "Full-CFR safety metrics score every returned candidate; unlisted candidates on MORE_INPUT or abstention cases count as wrong."
         ),
         "",
-        "## " + ("已知阻断" if chinese else "Known blockers"),
-        "",
         (
-            "故障注入确认：本地目录异常可能导致 resolve API 500；连接器健康端点可能回显异常中的敏感文本。"
+            "V2有效指标只从具备完整SHA绑定裁决的案例中分离不可选择的REFERENCE_ONLY/"
+            "provisional线索，并另外要求这些线索、required choice及正式候选逃逸全部通过。"
             if chinese else
-            "Fault injection confirms that a local-catalogue failure can produce a resolve API 500 and connector health can echo sensitive exception text."
+            "V2 effective metrics separate non-selectable REFERENCE_ONLY/provisional evidence only for "
+            "fully SHA-bound adjudicated cases, then independently require valid option sets, required "
+            "choices, and zero formal-candidate escape."
         ),
         "",
-        (
-            "治理审计还发现：人工 REJECTED 记录目前可被后续 APPROVED 覆盖；本验证只证明拒绝后不能直接锁定。"
-            if chinese else
-            "Governance audit also found that a human REJECTED record can currently be overwritten by a later APPROVED record; this validation proves only that a rejected candidate cannot be locked directly."
-        ),
+        "## " + ("V1原始动态发现" if chinese else "Raw V1 findings"),
         "",
-        (
-            "因此本次结果可用于作品集内部诊断，但在上述安全问题修复并复测前不应声明生产可用。"
-            if chinese else
-            "The run is useful as an internal portfolio diagnostic, but production-readiness must not be claimed before those safety findings are fixed and retested."
-        ),
     ])
+    findings = payload.get("raw_known_findings", ())
+    if findings:
+        for finding in findings:
+            lines.append(f"- **{finding['severity']}** `{finding['id']}`: {finding['summary']}")
+    else:
+        lines.append("- " + ("V1原始门禁没有发现。" if chinese else "No raw V1 gate finding."))
+    lines.extend((
+        "",
+        "## " + ("V2有效动态发现" if chinese else "Effective V2 findings"),
+        "",
+    ))
+    effective_findings = payload.get("known_findings", ())
+    if effective_findings:
+        for finding in effective_findings:
+            lines.append(f"- **{finding['severity']}** `{finding['id']}`: {finding['summary']}")
+    else:
+        lines.append("- " + ("V2有效门禁没有未解决发现。" if chinese else "No effective V2 gate finding."))
+    lines.extend((
+        "",
+        (
+            "脚本完成不等于质量通过；发布流程必须使用质量门禁退出码。"
+            if chinese else
+            "Successful script execution is not a quality PASS; release automation must enforce the quality-gate exit code."
+        ),
+    ))
     return "\n".join(lines) + "\n"
 
 
@@ -416,7 +723,11 @@ def write_outputs(output_dir: Path, payload: Mapping[str, Any], manifest: Mappin
             "observed_status", "candidate_id", "candidate_rank", "classification", "error", "latency_ms",
         ))
         writer.writeheader()
-        for method, run in payload["runs"].items():
+        tabular_runs = list(payload["runs"].items())
+        tabular_runs.append(("full_cfr_effective_v2", {
+            "results": payload["runs"]["full_cfr"]["effective_results"]
+        }))
+        for method, run in tabular_runs:
             for row in run["results"]:
                 candidate_ids = row["observed_ids"] or (None,)
                 for rank, candidate_id in enumerate(candidate_ids, 1):
@@ -434,6 +745,7 @@ def write_outputs(output_dir: Path, payload: Mapping[str, Any], manifest: Mappin
     (output_dir / "REPORT_EN.md").write_text(_report(payload, chinese=False), encoding="utf-8")
     (output_dir / "REPORT_ZH.md").write_text(_report(payload, chinese=True), encoding="utf-8")
     metrics = {name: run["metrics"] for name, run in payload["runs"].items()}
+    metrics["full_cfr_effective_v2"] = payload["runs"]["full_cfr"]["effective_metrics"]
     (output_dir / "retrieval_quality.svg").write_text(_svg_bar_chart(
         "Retrieval quality",
         [(f"{name} Top-1", metric["top_1_accuracy"] or 0.0) for name, metric in metrics.items()] +
@@ -443,7 +755,8 @@ def write_outputs(output_dir: Path, payload: Mapping[str, Any], manifest: Mappin
         "Safety and error rates",
         [(f"{name} wrong", metric["wrong_candidate_rate"] or 0.0) for name, metric in metrics.items()] +
         [(f"{name} boundary", metric["boundary_violation_rate"] or 0.0) for name, metric in metrics.items()] +
-        [(f"{name} subject", metric["subject_violation_rate"] or 0.0) for name, metric in metrics.items()],
+        [(f"{name} subject", metric["subject_violation_rate"] or 0.0) for name, metric in metrics.items()] +
+        [(f"{name} unit", metric["unit_violation_rate"] or 0.0) for name, metric in metrics.items()],
     ), encoding="utf-8")
     latency_max = max(metric["p99_latency_ms"] for metric in metrics.values()) or 1.0
     (output_dir / "latency_percentiles.svg").write_text(_svg_bar_chart(
@@ -453,8 +766,19 @@ def write_outputs(output_dir: Path, payload: Mapping[str, Any], manifest: Mappin
     ), encoding="utf-8")
 
 
-async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_dir: Path) -> dict[str, Any]:
+async def evaluate(
+    challenge_path: Path,
+    catalog_paths: Sequence[Path],
+    output_dir: Path,
+    adjudication_path: Path | None = DEFAULT_ADJUDICATIONS,
+) -> dict[str, Any]:
     cases = load_cases(challenge_path)
+    adjudications = (
+        load_portfolio_adjudications(
+            adjudication_path, challenge_path=challenge_path, cases=cases
+        )
+        if adjudication_path is not None else {}
+    )
     catalog = combined_catalog(catalog_paths)
     records = catalog["records"]
     records_by_id = {str(record["record_id"]): record for record in records}
@@ -471,8 +795,22 @@ async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_d
         runs[method] = {"metrics": aggregate(results, records_by_id), "results": results}
     full_results = await run_full_cfr(cases, catalog)
     runs["full_cfr"] = {"metrics": aggregate(full_results, records_by_id), "results": full_results}
+    for case_id, entry in adjudications.items():
+        unknown = set(entry["expected_reference_only_ids"]) - catalog_ids
+        if unknown:
+            raise ValueError(
+                f"portfolio adjudication {case_id} references unknown catalogue IDs: {sorted(unknown)}"
+            )
+    effective_results, option_metrics = apply_portfolio_adjudications(
+        full_results, adjudications
+    )
+    effective_metrics = {**aggregate(effective_results, records_by_id), **option_metrics}
+    runs["full_cfr"]["effective_metrics"] = effective_metrics
+    runs["full_cfr"]["effective_results"] = effective_results
+    raw_quality_gate = portfolio_quality_gate(runs["full_cfr"]["metrics"])
+    quality_gate = portfolio_quality_gate(effective_metrics)
     payload = {
-        "schema_version": "portfolio-validation-run/v1",
+        "schema_version": "portfolio-validation-run/v2",
         "challenge_sha256": sha256_text_file(challenge_path),
         "catalog_sha256": catalog["database"]["sha256"],
         "case_count": len(cases),
@@ -481,32 +819,23 @@ async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_d
             category: sum(case.category == category for case in cases)
             for category in sorted({case.category for case in cases})
         },
-        "known_findings": [
-            {
-                "id": "CFR-PV-001",
-                "severity": "P0",
-                "status": "OPEN",
-                "summary": "Local catalogue timeout/connection failures can return HTTP 500.",
-            },
-            {
-                "id": "CFR-PV-002",
-                "severity": "P0",
-                "status": "OPEN",
-                "summary": "Connector health can echo sensitive exception text.",
-            },
-            {
-                "id": "CFR-PV-003",
-                "severity": "P1",
-                "status": "OPEN",
-                "summary": "A human REJECTED record can be overwritten by a later approval.",
-            },
-        ],
+        "execution_status": "completed",
+        "raw_quality_gate": raw_quality_gate,
+        "quality_gate": quality_gate,
+        "raw_known_findings": dynamic_findings(raw_quality_gate),
+        "known_findings": dynamic_findings(quality_gate),
         "runs": runs,
+        "adjudication": {
+            "schema_version": ADJUDICATION_SCHEMA_VERSION,
+            "path": adjudication_path.name if adjudication_path else None,
+            "sha256": sha256_text_file(adjudication_path) if adjudication_path else None,
+            "case_ids": sorted(adjudications),
+        },
     }
     git_status = _git_value("status", "--porcelain")
     manifest = {
-        "schema_version": "portfolio-validation-manifest/v1",
-        "evaluator_version": "1.1.0",
+        "schema_version": "portfolio-validation-manifest/v2",
+        "evaluator_version": "1.2.0",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "commit": _git_value("rev-parse", "HEAD"),
         "git_dirty": bool(git_status),
@@ -521,24 +850,35 @@ async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_d
             for path in catalog_paths
         ],
         "combined_catalog_sha256": payload["catalog_sha256"],
+        "adjudication": dict(payload["adjudication"]),
     }
     write_outputs(output_dir, payload, manifest)
     return payload
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--challenge", type=Path, default=Path("data/benchmarks/portfolio_challenge_v1.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("outputs/portfolio_validation"))
-    args = parser.parse_args()
+    parser.add_argument("--adjudications", type=Path, default=DEFAULT_ADJUDICATIONS)
+    args = parser.parse_args(argv)
     catalog_paths = (
         Path("data/fixtures/catalog/factorbench_catalog.json"),
         Path("data/fixtures/catalog/factorbench_extended_catalog.json"),
         Path("data/fixtures/catalog/portfolio_catalog_additions.json"),
     )
-    result = asyncio.run(evaluate(args.challenge, catalog_paths, args.output))
-    print(json.dumps({name: run["metrics"] for name, run in result["runs"].items()}, indent=2))
+    result = asyncio.run(evaluate(
+        args.challenge, catalog_paths, args.output, args.adjudications
+    ))
+    full_run = result.get("runs", {}).get("full_cfr", {})
+    print(json.dumps({
+        "execution_status": result["execution_status"],
+        "quality_gate": result["quality_gate"],
+        "raw_metrics": {name: run["metrics"] for name, run in result["runs"].items()},
+        "effective_metrics": full_run.get("effective_metrics"),
+    }, indent=2))
+    return 0 if result["quality_gate"]["hard_gates_pass"] else 2
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

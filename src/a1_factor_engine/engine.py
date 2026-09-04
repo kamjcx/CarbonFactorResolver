@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Mapping, Sequence
 
 from .adapters import (
     DeterministicMaterialUnderstanding,
@@ -27,10 +27,13 @@ from .models import (
     ApprovalRecord,
     ApprovalStatus,
     Candidate,
+    CandidateAdmission,
     CandidateExclusion,
     CandidateOrigin,
+    CandidateQualification,
     GapType,
     LockedResolution,
+    LockedResolutionEvidenceSnapshot,
     QualificationDiagnostic,
     Recommendation,
     RequestGap,
@@ -63,6 +66,7 @@ from .nodes import (
     ValidateNode,
     evaluate_records,
 )
+from .policy import DeploymentPolicy
 from .ports import (
     ExternalSourceConnectorPort,
     FactorEvidenceExtractorPort,
@@ -92,6 +96,7 @@ class A1ResolutionGraph:
     rule_suggestions: MaterialRuleSuggestionPort = NullMaterialRuleSuggestion()
     external_connectors: Sequence[ExternalSourceConnectorPort] = ()
     external_extractor: FactorEvidenceExtractorPort | None = None
+    deployment_policy: DeploymentPolicy = DeploymentPolicy()
 
     def __post_init__(self) -> None:
         self.validate = ValidateNode()
@@ -107,7 +112,7 @@ class A1ResolutionGraph:
         self.material = MaterialResolutionNode(self.understanding)
         self.proxy = ProxyResolutionNode(self.proxy_retrieval)
         self.proxy_evaluate = ProxyEvaluateNode(self.understanding, self.material_registry)
-        self.re_evaluate = ReEvaluateNode()
+        self.re_evaluate = ReEvaluateNode(self.deployment_policy.min_score)
         self.pool = CandidatePoolNode()
         self.rank = RankNode()
         self.top_k = TopKNode()
@@ -150,7 +155,7 @@ class A1ResolutionGraph:
         intent = state.normalized.retrieval_intent
         if intent is None:
             return
-        records = []
+        records: list[SourceRecord] = []
         for connector in self.external_connectors:
             try:
                 references = await connector.discover(intent)
@@ -212,8 +217,8 @@ class A1ResolutionGraph:
             "source_ids": tuple(record.source_id for record in records),
         })
         if records:
-            qualifications = []
-            admissions = []
+            qualifications: list[CandidateQualification] = []
+            admissions: list[CandidateAdmission] = []
             observations = list(state.recall_observations)
             candidates, exclusions = await evaluate_records(
                 state.normalized, records, CandidateOrigin.EXTERNAL,
@@ -265,7 +270,7 @@ class A1ResolutionGraph:
                         required=True,
                         options=tuple(subject.value for subject in external_subjects),
                     )
-                    state.request_gaps = tuple((*state.request_gaps, subject_gap))
+                    state.request_gaps = (*state.request_gaps, subject_gap)
                     state.required_fields = tuple(dict.fromkeys((*state.required_fields, "subject_type")))
                     state.request_resolution_plan = RequestResolutionPlan(
                         request_id=state.request.request_id,
@@ -283,14 +288,13 @@ class A1ResolutionGraph:
                     "primary aluminium production": "primary",
                     "secondary aluminium production": "secondary",
                 }
-                variants = tuple(dict.fromkeys(
+                candidate_variants = (
                     product_routes.get(item.source.metadata.get("product_entity_id", ""))
                     or process_routes.get((item.source.production_process or "").casefold())
                     for item in candidates
-                    if (
-                        product_routes.get(item.source.metadata.get("product_entity_id", ""))
-                        or process_routes.get((item.source.production_process or "").casefold())
-                    )
+                )
+                variants = tuple(dict.fromkeys(
+                    variant for variant in candidate_variants if variant is not None
                 ))
                 if len(variants) > 1 and not any(gap.field == "route" for gap in state.request_gaps):
                     route_gap = RequestGap(
@@ -304,7 +308,7 @@ class A1ResolutionGraph:
                         required=True,
                         options=variants + ("unknown",),
                     )
-                    state.request_gaps = tuple((*state.request_gaps, route_gap))
+                    state.request_gaps = (*state.request_gaps, route_gap)
                     state.required_fields = tuple(dict.fromkeys((*state.required_fields, "route")))
                     state.request_resolution_plan = RequestResolutionPlan(
                         request_id=state.request.request_id,
@@ -328,6 +332,7 @@ class A1ResolutionGraph:
             state.recommendation = Recommendation(
                 request_id=request.request_id,
                 status=ResolutionStatus.ERROR,
+                candidates=(),
                 message="input could not be normalized; correct the quantity or unit and retry",
                 trace=state.trace,
             )
@@ -443,6 +448,7 @@ class A1FactorResolutionEngine:
         external_connectors: Sequence[ExternalSourceConnectorPort] = (),
         external_extractor: FactorEvidenceExtractorPort | None = None,
         store: ResolutionStorePort | None = None,
+        deployment_policy: DeploymentPolicy | None = None,
     ) -> None:
         self.store = store or InMemoryResolutionStore()
         self.graph = A1ResolutionGraph(
@@ -456,6 +462,7 @@ class A1FactorResolutionEngine:
             rule_suggestions or NullMaterialRuleSuggestion(),
             external_connectors,
             external_extractor,
+            deployment_policy or DeploymentPolicy(),
         )
 
     async def resolve(self, request: ResolutionRequest | Mapping[str, object]) -> Recommendation:
@@ -464,9 +471,38 @@ class A1FactorResolutionEngine:
         if await self.store.has_resolution_run(request.request_id):
             raise ValueError(f"duplicate request_id: {request.request_id}")
         state = await self.graph.run(request)
-        assert state.recommendation is not None
-        await self.store.save_resolution_run(state.recommendation, state.trace)
-        return state.recommendation
+        if state.recommendation is None:
+            raise RuntimeError("resolution graph completed without a recommendation")
+        recommendation = self._bind_recommendation(state.recommendation, state.trace)
+        await self.store.save_resolution_run(recommendation, state.trace)
+        stored = await self.store.get_recommendation(recommendation.request_id)
+        if stored is None:
+            raise RuntimeError("resolution store did not persist the recommendation")
+        return stored
+
+    async def resolve_debug(
+        self, request: ResolutionRequest | Mapping[str, object]
+    ) -> Recommendation:
+        """Resolve with debug-only request controls in an explicitly separate entry point."""
+
+        if isinstance(request, Mapping):
+            request = ResolutionRequest.from_mapping(request, allow_debug_controls=True)
+        if await self.store.has_resolution_run(request.request_id):
+            raise ValueError(f"duplicate request_id: {request.request_id}")
+        if request.min_score is not None:
+            graph = replace(self.graph, deployment_policy=DeploymentPolicy(request.min_score))
+            state = await graph.run(request)
+            if state.recommendation is None:
+                raise RuntimeError("resolution graph completed without a recommendation")
+            recommendation = self._bind_recommendation(
+                state.recommendation, state.trace, policy=graph.deployment_policy
+            )
+            await self.store.save_resolution_run(recommendation, state.trace)
+            stored = await self.store.get_recommendation(recommendation.request_id)
+            if stored is None:
+                raise RuntimeError("resolution store did not persist the recommendation")
+            return stored
+        return await self.resolve(request)
 
     async def state(self, request_id: str) -> Recommendation | None:
         return await self.store.get_recommendation(request_id)
@@ -503,6 +539,15 @@ class A1FactorResolutionEngine:
             candidate = reviewable
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        incomplete = tuple(
+            item for item in candidate.limitations
+            if item.startswith("formal_admission_incomplete:")
+        )
+        if incomplete:
+            raise ValueError(
+                "candidate lacks mandatory formal evidence and cannot be approved: "
+                + ", ".join(incomplete)
+            )
         hard_rejections = candidate_hard_rejection_reasons(candidate)
         if hard_rejections:
             raise ValueError(
@@ -522,11 +567,24 @@ class A1FactorResolutionEngine:
         existing_approval = await self.store.get_approval(request_id, candidate_id)
         if existing_approval is not None and existing_approval.status == ApprovalStatus.REJECTED:
             raise ValueError("rejected candidate cannot be approved in the same resolution run")
-        approval = ApprovalRecord(request_id, candidate_id, reviewer, ApprovalStatus.APPROVED, note, mode=mode)
-        await self.store.save_approval(approval)
-        await self._append_trace(request_id, "human_approval", "candidate approved", {
+        trace = await self.store.get_trace(request_id)
+        if trace is None:
+            raise KeyError(f"trace not found: {request_id}")
+        expected_trace_revision = trace.revision
+        updated_trace = trace.clone()
+        updated_trace.append("human_approval", "candidate approved", {
             "candidate_id": candidate_id, "reviewer": reviewer, "note": note, "approval_mode": mode.value,
         })
+        approval = self._bound_approval(
+            recommendation, candidate, updated_trace, reviewer, ApprovalStatus.APPROVED,
+            note=note, mode=mode,
+        )
+        await self.store.save_approval(
+            approval,
+            updated_trace,
+            expected_recommendation_sha256=recommendation.content_sha256,
+            expected_trace_revision=expected_trace_revision,
+        )
         return approval
 
     async def reject(self, request_id: str, candidate_id: str, reviewer: str, note: str = "") -> ApprovalRecord:
@@ -541,11 +599,24 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
-        approval = ApprovalRecord(request_id, candidate_id, reviewer, ApprovalStatus.REJECTED, note)
-        await self.store.save_approval(approval)
-        await self._append_trace(request_id, "human_approval", "candidate rejected", {
+        trace = await self.store.get_trace(request_id)
+        if trace is None:
+            raise KeyError(f"trace not found: {request_id}")
+        expected_trace_revision = trace.revision
+        updated_trace = trace.clone()
+        updated_trace.append("human_approval", "candidate rejected", {
             "candidate_id": candidate_id, "reviewer": reviewer, "note": note,
         })
+        approval = self._bound_approval(
+            recommendation, candidate, updated_trace, reviewer, ApprovalStatus.REJECTED,
+            note=note,
+        )
+        await self.store.save_approval(
+            approval,
+            updated_trace,
+            expected_recommendation_sha256=recommendation.content_sha256,
+            expected_trace_revision=expected_trace_revision,
+        )
         return approval
 
     async def lock(self, request_id: str, candidate_id: str, reviewer: str) -> LockedResolution:
@@ -568,6 +639,18 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        trace = await self.store.get_trace(request_id)
+        if trace is None:
+            raise KeyError(f"trace not found: {request_id}")
+        incomplete = tuple(
+            item for item in candidate.limitations
+            if item.startswith("formal_admission_incomplete:")
+        )
+        if incomplete:
+            raise ValueError(
+                "candidate lacks mandatory formal evidence and cannot be locked: "
+                + ", ".join(incomplete)
+            )
         hard_rejections = candidate_hard_rejection_reasons(candidate)
         if hard_rejections:
             raise ValueError(
@@ -586,17 +669,33 @@ class A1FactorResolutionEngine:
                 raise ValueError(
                     "candidate total emissions are inconsistent with factor value and resolved quantity"
                 )
-        locked = LockedResolution(
-            request_id=request_id,
-            candidate=candidate,
-            reviewer=reviewer,
-            approval=ApprovalRecord(
-                request_id, candidate_id, approval.reviewer, ApprovalStatus.LOCKED, approval.note, approval.created_at,
-                approval.mode,
-            ),
+        if not approval.is_integrity_bound:
+            raise ValueError("legacy approval without integrity digests cannot be locked")
+        expected_bindings = (
+            candidate.content_sha256,
+            recommendation.content_sha256,
+            recommendation.revision,
+            recommendation.database_anchor_sha256,
+            recommendation.registry_anchor_sha256,
+            recommendation.policy_anchor_sha256,
+            trace.revision,
+            trace.chain_sha256,
         )
-        await self.store.save_locked(locked)
-        await self._append_trace(request_id, "lock", "approved factor result locked", {
+        observed_bindings = (
+            approval.candidate_content_sha256,
+            approval.recommendation_content_sha256,
+            approval.recommendation_revision,
+            approval.database_anchor_sha256,
+            approval.registry_anchor_sha256,
+            approval.policy_anchor_sha256,
+            approval.trace_revision,
+            approval.trace_chain_sha256,
+        )
+        if observed_bindings != expected_bindings:
+            raise ValueError("approval binding no longer matches candidate, recommendation, anchors or trace")
+        expected_trace_revision = trace.revision
+        updated_trace = trace.clone()
+        updated_trace.append("lock", "approved factor result locked", {
             "candidate_id": candidate_id,
             "reviewer": reviewer,
             "locked_result_is_immutable": True,
@@ -607,6 +706,28 @@ class A1FactorResolutionEngine:
             "override_reason": approval.note if approval.mode == ApprovalMode.REFERENCE_OVERRIDE else None,
             "unresolved_warnings": candidate.warnings,
         })
+        snapshot = LockedResolutionEvidenceSnapshot.from_trace(
+            updated_trace,
+            registry_anchor_sha256=recommendation.registry_anchor_sha256 or "",
+            policy_anchor_sha256=recommendation.policy_anchor_sha256 or "",
+        )
+        locked_approval = replace(approval, status=ApprovalStatus.LOCKED)
+        locked = LockedResolution(
+            request_id=request_id,
+            candidate=candidate,
+            reviewer=reviewer,
+            approval=locked_approval,
+            evidence_snapshot=snapshot,
+            candidate_content_sha256=candidate.content_sha256,
+            recommendation_content_sha256=recommendation.content_sha256,
+            approval_content_sha256=approval.content_sha256,
+        )
+        await self.store.save_locked(
+            locked,
+            updated_trace,
+            expected_recommendation_sha256=recommendation.content_sha256,
+            expected_trace_revision=expected_trace_revision,
+        )
         return locked
 
     async def locked(self, request_id: str) -> LockedResolution | None:
@@ -668,8 +789,62 @@ class A1FactorResolutionEngine:
         trace = await self.store.get_trace(request_id)
         if trace is None:
             raise KeyError(f"trace not found: {request_id}")
-        trace.append(stage, message, details)
-        await self.store.save_trace(trace)
+        updated = trace.clone()
+        updated.append(stage, message, details)
+        await self.store.save_trace(updated)
+
+    def _bind_recommendation(
+        self,
+        recommendation: Recommendation,
+        trace: ResolutionTrace,
+        *,
+        policy: DeploymentPolicy | None = None,
+    ) -> Recommendation:
+        database_anchor_sha256 = (
+            trace.database_anchor.anchor_sha256 if trace.database_anchor else None
+        )
+        return replace(
+            recommendation,
+            trace=trace,
+            database_anchor_sha256=database_anchor_sha256,
+            registry_anchor_sha256=self.graph.material_registry.sha256,
+            policy_anchor_sha256=(policy or self.graph.deployment_policy).anchor_sha256,
+        )
+
+    @staticmethod
+    def _bound_approval(
+        recommendation: Recommendation,
+        candidate: Candidate,
+        trace: ResolutionTrace,
+        reviewer: str,
+        status: ApprovalStatus,
+        *,
+        note: str = "",
+        mode: ApprovalMode = ApprovalMode.STANDARD,
+    ) -> ApprovalRecord:
+        if not all((
+            recommendation.database_anchor_sha256,
+            recommendation.registry_anchor_sha256,
+            recommendation.policy_anchor_sha256,
+        )):
+            raise ValueError("recommendation is missing integrity anchors")
+        return ApprovalRecord(
+            request_id=recommendation.request_id,
+            candidate_id=candidate.candidate_id,
+            reviewer=reviewer,
+            status=status,
+            note=note,
+            mode=mode,
+            candidate_content_sha256=candidate.content_sha256,
+            recommendation_content_sha256=recommendation.content_sha256,
+            recommendation_revision=recommendation.revision,
+            database_anchor_sha256=recommendation.database_anchor_sha256,
+            registry_anchor_sha256=recommendation.registry_anchor_sha256,
+            policy_anchor_sha256=recommendation.policy_anchor_sha256,
+            trace_revision=trace.revision,
+            trace_chain_sha256=trace.chain_sha256,
+            reviewer_identity=reviewer,
+        )
 
     @staticmethod
     def _trace_ids(

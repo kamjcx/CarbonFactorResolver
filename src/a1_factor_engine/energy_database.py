@@ -5,14 +5,19 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from math import isfinite
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping, Sequence
+from typing import cast
 
-from .material_registry import DEFAULT_MATERIAL_REGISTRY, MaterialSemanticRegistryPort
+from .material_registry import (
+    DEFAULT_MATERIAL_REGISTRY,
+    MaterialSemanticRegistryPort,
+    RegistryResolution,
+)
 from .models import (
     NormalizedActivity,
     ParameterEvidence,
@@ -728,9 +733,10 @@ class SqliteEnergyProcessParameterRepository:
             raise ValueError("quota_level must be 1, 2 or 3")
 
     def _connect(self) -> sqlite3.Connection:
-        if not self.path.is_file():
-            raise FileNotFoundError(f"energy database not found: {self.path}")
-        connection = sqlite3.connect(f"file:{self.path.as_posix()}?mode=ro", uri=True)
+        path = cast(Path, self.path)
+        if not path.is_file():
+            raise FileNotFoundError(f"energy database not found: {path}")
+        connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -738,7 +744,7 @@ class SqliteEnergyProcessParameterRepository:
         metadata = {row["key"]: row["value"] for row in connection.execute("SELECT key, value FROM metadata")}
         if metadata.get("schema_version") != ENERGY_DATABASE_SCHEMA_VERSION:
             raise ValueError("unsupported energy database schema version")
-        observed = _sha256(self.path)
+        observed = _sha256(cast(Path, self.path))
         expected = (self.expected_database_sha256 or "").strip().lower()
         if expected and observed != expected:
             raise ValueError("energy database SHA-256 does not match the expected version anchor")
@@ -747,7 +753,11 @@ class SqliteEnergyProcessParameterRepository:
         return metadata
 
     @staticmethod
-    def _identity(resolution: object, fallback_name: str, fallback_process: str | None) -> tuple[str, str]:
+    def _identity(
+        resolution: RegistryResolution,
+        fallback_name: str,
+        fallback_process: str | None,
+    ) -> tuple[str, str]:
         identity = resolution.identity
         return (
             _norm(identity.head_material or fallback_name),
@@ -764,11 +774,13 @@ class SqliteEnergyProcessParameterRepository:
         keys = tuple(dict.fromkeys(_norm(value) for value in product_keys if _norm(value)))
         if keys:
             placeholders = ",".join("?" for _ in keys)
-            exact = tuple(connection.execute(
-                f"""SELECT * FROM energy_quota
-                    WHERE canonical_product IN ({placeholders})
+            quota_query_template = """SELECT * FROM energy_quota
+                    WHERE canonical_product IN (__PARAMETERS__)
                       AND quota_level = ? AND active = 1
-                    ORDER BY record_id""",
+                    ORDER BY record_id"""
+            query = quota_query_template.replace("__PARAMETERS__", placeholders)
+            exact = tuple(connection.execute(
+                query,
                 (*keys, self.quota_level),
             ))
             if len(exact) > 1:
@@ -797,14 +809,20 @@ class SqliteEnergyProcessParameterRepository:
         if not keys:
             return None
         placeholders = ",".join("?" for _ in keys)
-        eligibility_clause = "" if self.allow_review_profiles else "AND runtime_eligible = 1"
+        profile_query_template = """SELECT * FROM enterprise_energy_profile
+            WHERE canonical_product IN (__PARAMETERS__)
+              AND quota_level = ? AND active = 1
+              AND allocation_status NOT LIKE '%AMBIGUOUS_DUPLICATE%'
+              __ELIGIBILITY__
+            ORDER BY profile_id"""
+        query = profile_query_template.replace(
+            "__PARAMETERS__", placeholders
+        ).replace(
+                "__ELIGIBILITY__",
+                "" if self.allow_review_profiles else "AND runtime_eligible = 1",
+            )
         rows = tuple(connection.execute(
-            f"""SELECT * FROM enterprise_energy_profile
-                WHERE canonical_product IN ({placeholders})
-                  AND quota_level = ? AND active = 1
-                  AND allocation_status NOT LIKE '%AMBIGUOUS_DUPLICATE%'
-                  {eligibility_clause}
-                ORDER BY profile_id""",
+            query,
             (*keys, self.quota_level),
         ))
         if len(rows) > 1:
@@ -822,13 +840,19 @@ class SqliteEnergyProcessParameterRepository:
         if not keys:
             return ()
         placeholders = ",".join("?" for _ in keys)
-        eligibility_clause = "" if self.allow_review_profiles else "AND runtime_eligible = 1"
+        process_query_template = """SELECT * FROM enterprise_process_emission
+            WHERE canonical_product IN (__PARAMETERS__)
+              AND quota_level = ? AND active = 1
+              __ELIGIBILITY__
+            ORDER BY emission_name, emission_id"""
+        query = process_query_template.replace(
+                "__PARAMETERS__", placeholders
+            ).replace(
+                "__ELIGIBILITY__",
+                "" if self.allow_review_profiles else "AND runtime_eligible = 1",
+            )
         rows = tuple(connection.execute(
-            f"""SELECT * FROM enterprise_process_emission
-                WHERE canonical_product IN ({placeholders})
-                  AND quota_level = ? AND active = 1
-                  {eligibility_clause}
-                ORDER BY emission_name, emission_id""",
+            query,
             (*keys, self.quota_level),
         ))
         canonical_products = {row["canonical_product"] for row in rows}
@@ -851,7 +875,7 @@ class SqliteEnergyProcessParameterRepository:
     @staticmethod
     def _scope_suffix(common_scope: Mapping[str, str]) -> str:
         return hashlib.sha1(
-            common_scope["reference_source_id"].encode("utf-8")
+            common_scope["reference_source_id"].encode("utf-8"), usedforsecurity=False
         ).hexdigest()[:12]
 
     async def search(
@@ -926,34 +950,35 @@ class SqliteEnergyProcessParameterRepository:
                 "energy_selection_policy_id": DATABASE_PRIORITY_POLICY_ID,
                 **self._database_metadata(database),
             }
-            evidence = [
-                (
-                    self._profile_evidence(
-                        reference_profile,
-                        "reference_total_energy_kgce_per_t",
-                        reference_profile["total_energy_kgce_per_t"],
-                        "kgce/t",
-                        common_scope,
-                    )
-                    if reference_profile is not None
-                    else self._quota_evidence(
-                        reference_quota, "reference_total_energy_kgce_per_t", common_scope
-                    )
-                ),
-                (
-                    self._profile_evidence(
-                        target_profile,
-                        "target_total_energy_kgce_per_t",
-                        target_profile["total_energy_kgce_per_t"],
-                        "kgce/t",
-                        common_scope,
-                    )
-                    if target_profile is not None
-                    else self._quota_evidence(
-                        target_quota, "target_total_energy_kgce_per_t", common_scope
-                    )
-                ),
-            ]
+            if reference_profile is not None:
+                reference_evidence = self._profile_evidence(
+                    reference_profile,
+                    "reference_total_energy_kgce_per_t",
+                    reference_profile["total_energy_kgce_per_t"],
+                    "kgce/t",
+                    common_scope,
+                )
+            else:
+                if reference_quota is None:
+                    raise ValueError("reference energy evidence is unavailable")
+                reference_evidence = self._quota_evidence(
+                    reference_quota, "reference_total_energy_kgce_per_t", common_scope
+                )
+            if target_profile is not None:
+                target_evidence = self._profile_evidence(
+                    target_profile,
+                    "target_total_energy_kgce_per_t",
+                    target_profile["total_energy_kgce_per_t"],
+                    "kgce/t",
+                    common_scope,
+                )
+            else:
+                if target_quota is None:
+                    raise ValueError("target energy evidence is unavailable")
+                target_evidence = self._quota_evidence(
+                    target_quota, "target_total_energy_kgce_per_t", common_scope
+                )
+            evidence = [reference_evidence, target_evidence]
             if (
                 reference_profile is not None
                 and target_profile is not None
@@ -1013,7 +1038,7 @@ class SqliteEnergyProcessParameterRepository:
                 grouped: dict[str, list[sqlite3.Row]] = {}
                 for row in generic:
                     grouped.setdefault(row["name"], []).append(row)
-                for name, rows in grouped.items():
+                for _name, rows in grouped.items():
                     distinct = {(row["value"], _norm(row["unit"])) for row in rows}
                     if len(distinct) == 1:
                         evidence.append(self._generic_energy_evidence(

@@ -1,0 +1,2124 @@
+{
+  "api_case_count": 4,
+  "api_cases": [
+    {
+      "case_id": "AUTO-HTTP-1",
+      "case_sha256": "42d7519ccbb043bbcb505ee47e4e8136944e7ad5c7d15af5fd9a4a2e3f7ee47a",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-HTTP-2",
+      "case_sha256": "762a97fde5a1a6ae78697baec241e9d9ecd8637eaa7c61e44ed3384dce913677",
+      "input_sha256": "c3c7ae19fe44b13312bdfd7d12dcb32be2369d820d7e7d22c3824831aaec064b"
+    },
+    {
+      "case_id": "AUTO-HTTP-3",
+      "case_sha256": "47dc857cd07ba415b08895b35ef0ac99a1aa425b52a63b90d3d63a53a2e4d2da",
+      "input_sha256": "749565b211e4608861b8ffda67947484fc3ef6ac2fa19a1361a678ce4f5a9ee5"
+    },
+    {
+      "case_id": "AUTO-HTTP-4",
+      "case_sha256": "09d272ab0df18bcb9d9f80079686d0f44b8f3b61dd954edd73baa2907753e177",
+      "input_sha256": "2bf93e4f6677b7ff5bfb12b3756bb961f2dde582cb601eb16b727c8b00e3ffee"
+    }
+  ],
+  "baseline_commit": "1d0956d7ea7697ed65c0dee1565a991bfef92b46",
+  "baseline_inventory": {
+    "forbidden_candidate_escape_count": 0,
+    "prior_adjudicated_count": 13,
+    "raw_bad_case_count": 103,
+    "root_causes": {
+      "catalog_coverage": 12,
+      "expected_recommendation_but_asked": 1,
+      "generic_exact_ambiguity": 16,
+      "prior_oracle_preset_error": 13,
+      "provenance": 60,
+      "subject": 1
+    },
+    "unresolved_bad_case_count": 90
+  },
+  "generated_case_count": 414,
+  "generated_cases": [
+    {
+      "case_id": "AUTO-01-POS-canonical",
+      "case_sha256": "5feb22ce92144e74b2a00cd144ae320acfac79b38901f17a970be9a4ae380f35",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-01-POS-reviewed-alias",
+      "case_sha256": "454fb21c8ed6791907de44997a840fa117120e0862670bf3ea8e0db7e21949fe",
+      "input_sha256": "32a69aa24760fb1905668595706b48b85439e6becb51a576a74be7bb6fe4865b"
+    },
+    {
+      "case_id": "AUTO-01-POS-casefold",
+      "case_sha256": "749cb29bcf686c7c9f8f50548994e22e9ec055a4e8510e14f83ce493ff484dad",
+      "input_sha256": "56b3320b365d653cb696c5b983510d7970f49a9ed6db6d7f7f5d292cfed1abe2"
+    },
+    {
+      "case_id": "AUTO-01-POS-symbol",
+      "case_sha256": "7c343de40883050dd53b39b725880ba9c2f9468c00559b300686b6785412e87b",
+      "input_sha256": "7855f7aaa337cd7e91c4965f866835f07a684025f4f31a4d8497c30ccd33a707"
+    },
+    {
+      "case_id": "AUTO-01-POS-reviewed-typo",
+      "case_sha256": "f4f1710dd3666fd53e92f44943481419724ed929ee32cfae0d26cb758dc26a66",
+      "input_sha256": "1f3bd52da8b4c1267dfd1b7edf6dd3640b22a49d06bbacbd97afe2be26aea26f"
+    },
+    {
+      "case_id": "AUTO-01-Q-0_001",
+      "case_sha256": "383b540b8fa798717ce1b11e6aa64110a36b444a2c444cab3ef466ca1f530d24",
+      "input_sha256": "0d7c0a4b2df36fd84a8f53dde615611b0ede2fbde3ea3d1e6df2b6ef2503d9fe"
+    },
+    {
+      "case_id": "AUTO-01-Q-10_0",
+      "case_sha256": "c2692c81f394ecf22253adcc778cf598a76f9f5ab93bc6d2b5876590b33bf6ea",
+      "input_sha256": "0bd6344d9c01fcf13b1691c71407bf0d14142b9f6e19de7196fa554a72e10a21"
+    },
+    {
+      "case_id": "AUTO-01-Q-1000000_0",
+      "case_sha256": "d828b2186e2b95ee3689cc46f1634c73715e3687ad01d206e94f538c1cbd007e",
+      "input_sha256": "6a464202a555f36792a593f6d4204d3f3b9db36e0d4d6f7628ae96566d06ba19"
+    },
+    {
+      "case_id": "AUTO-01-ORDER",
+      "case_sha256": "e13af0fb016b3a27039c71b5d4a0ac1bdafbdac4582ff2923c7c450f188ae1bb",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-01-NOISE",
+      "case_sha256": "c40336ffd51f5c84538de229e3f0768b0462dbdbb4bfd9a54cecc26d8e58244b",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-01-DUP",
+      "case_sha256": "548059acfac637b92bdc70e7c50e46ac7d23cc9102df3c52bff3cb913a31f050",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-01-BOUNDARY",
+      "case_sha256": "f6bf63e899cde9a78a041ed139721fbe8782c086a9143a4489ed53c9384aa057",
+      "input_sha256": "d06ca2583a641e2a7c813454620039e69f7b610384b2bcaed12b8ee2e87ee6b3"
+    },
+    {
+      "case_id": "AUTO-01-SUBJECT",
+      "case_sha256": "0c2aacca12d8220b6dc32b4b169ce16d119a4d66e925df078bc29b61f6b83d72",
+      "input_sha256": "52a66469413fd655490433b972e9b8de76fe340ceacefbdff369b7eff4896ba8"
+    },
+    {
+      "case_id": "AUTO-01-UNIT-X",
+      "case_sha256": "a568b1133a9518faa8e04fcfb948ca9fd94438616372471d08bd0044f4f4107f",
+      "input_sha256": "8e2ad4d6a7457c449b61b82afdccb3b121d5e1961d98878ff09c6036cb2ea441"
+    },
+    {
+      "case_id": "AUTO-01-UNIT-EQ",
+      "case_sha256": "5751570ca23d418f48596db2b49a98fef4558786bc87e6ba41bbb1399e5b963b",
+      "input_sha256": "31a190006d8348e79b7d4bcbb72c7102cf20633e81ded30cbad9de2817e8995f"
+    },
+    {
+      "case_id": "AUTO-01-PROV-HASH",
+      "case_sha256": "4a0608e5ba64b4f4f84352a12a96e62f2215ba755de407dbe233dbf8335c01e4",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-01-PROV-QUALITY",
+      "case_sha256": "655dcd23150a752d67d3e8f950f0a6ece6e0481424bf78e35d329364f66979c1",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-01-PROV-ELIGIBLE",
+      "case_sha256": "79175acdc2d99a39ce6424caa98f7aa895d8b58d9e8a5a6399a032f9c5f9ac25",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-02-POS-canonical",
+      "case_sha256": "d82f2577bf45af895831bad0d5aa8856522d95bf536739d6a816d803a3dc9345",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-02-POS-reviewed-alias",
+      "case_sha256": "c7f4e9a2457705be1bcbd78d41a1779afe2eb4120e64539b3784573244dd46c9",
+      "input_sha256": "7ac1a95246e767de02acf11fe1ac023c18e4b333b57c23965845547cff1835c2"
+    },
+    {
+      "case_id": "AUTO-02-POS-casefold",
+      "case_sha256": "55cf6fa5d8d91fbcbf96c25a3c1e5dd1da81b2181135b122e6b07f246ec9a0e2",
+      "input_sha256": "0010fa8729dfe380e5d281918adc82e47ba40f4fcbd1be7a3c514fb96b264129"
+    },
+    {
+      "case_id": "AUTO-02-POS-symbol",
+      "case_sha256": "d2c436a17d8d50a62f3e57d66bc28793bf9e0e63a0143543d0c86f46ab803c54",
+      "input_sha256": "53cea0496b340b3e4d72927255bf6ce9ded2777ad99339fa7452d5ec909ea690"
+    },
+    {
+      "case_id": "AUTO-02-POS-reviewed-typo",
+      "case_sha256": "444340ce78c94e2b6cf7667e90103cab7dec45474e91eb7f9f2304625563a215",
+      "input_sha256": "c12532d437d8bacfc30c03796954a8b6a9605a46b68c6bd3dba0e83a2d9ec40b"
+    },
+    {
+      "case_id": "AUTO-02-Q-0_001",
+      "case_sha256": "87ce5359e205827d7dde0e5fbd4c2f6779c472c037e915b58477786dccdec22b",
+      "input_sha256": "f03f02c7e94899711707f47ef5c561a1f07c50e3c5800f81fb5182f8359ed1f8"
+    },
+    {
+      "case_id": "AUTO-02-Q-10_0",
+      "case_sha256": "4b1bb414839d48593eae17808a322e253216f473304ab77f4ddad51f1ce9e72c",
+      "input_sha256": "d30d837066cb81f48929f3346f228dfac9f3716e776b3ba0fe0565e9d360dc19"
+    },
+    {
+      "case_id": "AUTO-02-Q-1000000_0",
+      "case_sha256": "8ea9374f3276e2535032c9780710a4ff5ce56bddcf52d6ddb71780be90af51e7",
+      "input_sha256": "c323d12aa52e30e0a2b3ea668a32b727327e3b4a99a508680514278513d1ca67"
+    },
+    {
+      "case_id": "AUTO-02-ORDER",
+      "case_sha256": "b3ab4876812d53c0d5a51b91a70c4cd2aa40a5f2d257d348945834ce0225e7c2",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-02-NOISE",
+      "case_sha256": "4bf452afdeeaa4b5194e6023d642b1bd551aafaf4c0b1b2c13b2d9fbc7e20400",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-02-DUP",
+      "case_sha256": "0162dd75b688b477416a6b5e053ed89dea163b42e67fe92da6668f9fd5d7871a",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-02-BOUNDARY",
+      "case_sha256": "2ece423dc1c879f7cdb884e977f2ef1f3b11fef701eae9e19402a7b8b1fe93c7",
+      "input_sha256": "193fcb30c2471bb95b4740eeee58e9b242e8822e05d662ad456ffb723edb2ed1"
+    },
+    {
+      "case_id": "AUTO-02-SUBJECT",
+      "case_sha256": "c02b85735c29962e99f480520c461003e79b35f5b53367eb0acc215c7da04e7d",
+      "input_sha256": "36fdf4fa2bc16b9067adb852f72830577c5f14dc7d1d5c47024cf22698215eb8"
+    },
+    {
+      "case_id": "AUTO-02-UNIT-X",
+      "case_sha256": "c4b1079384da7bbc7c0d3b9275fe90c89ccaf42b08579dc7c417d713f539eb93",
+      "input_sha256": "2cc7319419eb4c910c2d0ff8245c59346757e8b0e0567ba7b1057ea6d7c0e033"
+    },
+    {
+      "case_id": "AUTO-02-UNIT-EQ",
+      "case_sha256": "1866c5b7b15292e248216e38f6232b1fd9825bd055c022bcdfdb3610c70aa407",
+      "input_sha256": "2b8c72956511d559ca21e5f6832ad238147d79563aabba6a635639d3a7ef0738"
+    },
+    {
+      "case_id": "AUTO-02-PROV-HASH",
+      "case_sha256": "dc14b3217d22398d0864ccf9dab271abbae1ee4e110fe987e537161d5e73f7f8",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-02-PROV-QUALITY",
+      "case_sha256": "19ff900c4e337ac1fc1ffc838365d45bb6262da0b8ae5181882ba3c7ffd1ffe9",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-02-PROV-ELIGIBLE",
+      "case_sha256": "6a78620c6106f4975a6712a45b665b293a20ed0ba722f0ee9ed4ef03f931a1be",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-03-POS-canonical",
+      "case_sha256": "e5ac118aab47ef1572e8c466cf345d5a480cda7f05cd4463f537ae3d76ad1148",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-03-POS-reviewed-alias",
+      "case_sha256": "5eaa63de7df1516ecd87434b4a308d29b22094ef9a57d2614bf2ad9007ea9eee",
+      "input_sha256": "5d1b053eeca43db508ade551d57ee08bd2297f2d8f5157aaa09eed0ebbfc9158"
+    },
+    {
+      "case_id": "AUTO-03-POS-casefold",
+      "case_sha256": "334c862710fcd33feeb2ea5e785c8c014538fbae2836a922d7247272804c5120",
+      "input_sha256": "dc3423faa9708e516e62c0da3dec3d1d5d3246693b0caf4052894b3b21a03ec7"
+    },
+    {
+      "case_id": "AUTO-03-POS-symbol",
+      "case_sha256": "df325535061b99cd54d6620f379d50ed83b0768ad1831ec304d73701e55d9b5d",
+      "input_sha256": "bf3b215a410edd90c7ee1be45c5e75c6dd1a4fe435acfcaa2cdba04c69f87e87"
+    },
+    {
+      "case_id": "AUTO-03-POS-reviewed-typo",
+      "case_sha256": "08b4de15b7475c88dbf74d9a2f8451d5dd2f0a542e78ccb33173d50bc8ece073",
+      "input_sha256": "7f4e18754e6b25473c742cb02d233b2323a810322514f0eaa98b157a54dedc42"
+    },
+    {
+      "case_id": "AUTO-03-Q-0_001",
+      "case_sha256": "fb7bf103fa6d00e63d6d77885963cf73d0c45988f5bd97816428cfec35d4bc43",
+      "input_sha256": "7d86cc2f8ced4472243bbb155df93695861d50bf9c72b1a78389a402edeae7ee"
+    },
+    {
+      "case_id": "AUTO-03-Q-10_0",
+      "case_sha256": "48782b546058484c3383881d6418fd94ba00543c27034872b4df4874e402d92b",
+      "input_sha256": "26d9595ad873320c7435a92422b906a03c82dad081f54a0ab7dbdfcb255eeb92"
+    },
+    {
+      "case_id": "AUTO-03-Q-1000000_0",
+      "case_sha256": "304942c1f5efde5885b280dd9fd44de1f77ebbda138db2a7cbe0d0b5eadccb9b",
+      "input_sha256": "bfec6b51d5611b84c26c345779934a1abe08f55ec8b76c0161c01d72b9abd2cf"
+    },
+    {
+      "case_id": "AUTO-03-ORDER",
+      "case_sha256": "514e424fdf03057a1cfb37b9ca24838c730632960fff8cb6b17dcfd301688dcc",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-03-NOISE",
+      "case_sha256": "cf8dd13911e015834f8925d5be36f22f8aafb61bafa91c400243bdbfc9370a7e",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-03-DUP",
+      "case_sha256": "2d87a1153151f3e7ff5b662b58d3e24d2ae8dce2099deb75df113b221bd34d92",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-03-BOUNDARY",
+      "case_sha256": "0157fcea168824f74ac985c72eb5b54463e27b2c7a6cd8d464f972ae749fd17f",
+      "input_sha256": "c607af1cf48891a4dfe43dd081494e0f28577a096fa3638eae8ac45f2f24d393"
+    },
+    {
+      "case_id": "AUTO-03-SUBJECT",
+      "case_sha256": "aec510e515ea0a12ea953523719a7da2c5472cfc8254f54e0b04111e9609289e",
+      "input_sha256": "6781cc3c89e29e7d64aa37a38fd0ef438419e65e08ddf41e73201ff72a285526"
+    },
+    {
+      "case_id": "AUTO-03-UNIT-X",
+      "case_sha256": "300194cbb21b7ad85f8db670ad97a529b725d62ddbcb7a0459bbdaff26e418f3",
+      "input_sha256": "add41e61bec047da34786881cda174f642a0f065afc75cc57f31279333400a5f"
+    },
+    {
+      "case_id": "AUTO-03-UNIT-EQ",
+      "case_sha256": "d53137e1b6219e739b2884332a1bfc84fa6b21bd23a0c6bd279453a95001c5ff",
+      "input_sha256": "4b42dc7a6f36d714efc963755d1c0d1d98d803402b25454cb3fb2a4c275f1e7c"
+    },
+    {
+      "case_id": "AUTO-03-PROV-HASH",
+      "case_sha256": "92d87486362e7f9dc841d051689cec8f87d95e465c29761313da7d8d0f1564e7",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-03-PROV-QUALITY",
+      "case_sha256": "83227b20d3a2b408e7f9f0e1e7984a0adf3a19a7bf00ce66aa172ff64e558973",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-03-PROV-ELIGIBLE",
+      "case_sha256": "e0ee46b884216e1d08564e19dd71bd8e2718a631269ec686bffaad388fa1be25",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-04-POS-canonical",
+      "case_sha256": "cedc3fba359b6a16debc2733ef1267301e1b30db74f5b0791f899314ed631e88",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-04-POS-reviewed-alias",
+      "case_sha256": "47102d5d4e316df5f2dfe349cf009cdc09a9b351fa8ceae74d8ec17fb53c3754",
+      "input_sha256": "2d428fee61e36c3815be45c13612467901c67daccd2a6ad20e37922f3768a7d0"
+    },
+    {
+      "case_id": "AUTO-04-POS-casefold",
+      "case_sha256": "bfaedfd48abc5bf50c3a225d391a00434bb2994c063deafa2b07fcc3e86cf79c",
+      "input_sha256": "a1d4fbc98bf07e24bae88a8757953332a2d04f43f4c06d3bfa3c611e84c34909"
+    },
+    {
+      "case_id": "AUTO-04-POS-symbol",
+      "case_sha256": "36e1c88bc53b0d9507fa8ed0a68683fc20359fe0a938db1809c9340c353305c1",
+      "input_sha256": "898813ecee8b8b8ed55f044368c1fa26464a7ee5e13fa41d8e401ba7cb10ba0f"
+    },
+    {
+      "case_id": "AUTO-04-POS-reviewed-typo",
+      "case_sha256": "21d0d7d978314d851f3c35af40e4453052d74dba7306df1db377526fc9a407ee",
+      "input_sha256": "510cf9d88b2a5fb4788bc4dd9b70ea2d95aa719e76dd5e489bf7a8a34429ca2a"
+    },
+    {
+      "case_id": "AUTO-04-Q-0_001",
+      "case_sha256": "7891efb18ad1b17d3becd258f035ec9e42976b5e18c4616564e090e257a60c03",
+      "input_sha256": "2ec60c809da125fe46e172ce2da0f916d9b4bc7acbe1a4ff298dddbfab6885a7"
+    },
+    {
+      "case_id": "AUTO-04-Q-10_0",
+      "case_sha256": "8b8b815ffc048f8c3a700ec1cc29fe913c7af4bdccd8770495cd45c3f7f4dc11",
+      "input_sha256": "39eea276f2b5b646fa2279b1dbac1441076699fafcd08f9185f8ffcd5c27723f"
+    },
+    {
+      "case_id": "AUTO-04-Q-1000000_0",
+      "case_sha256": "518069e3e4dfcfed26726f0d854d1ce8e406d75445b4d467380240ecc36084a9",
+      "input_sha256": "f0e7769a1fdd246cacc41f9011b9094cdb0a6aba858e07d9a7f5158c186661d9"
+    },
+    {
+      "case_id": "AUTO-04-ORDER",
+      "case_sha256": "80ee5126926c1f74a7d65ebc1c94a5c5598537278e5bfb0a82ac738ae5d94152",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-04-NOISE",
+      "case_sha256": "088d4ec837d045cd757affdc702fe5d0b3a6a278d06971110229879f68e54b00",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-04-DUP",
+      "case_sha256": "652386fee51b1c01bb1fa98aabac7366f0fbf45ec3506b84fac28be05abf2a42",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-04-BOUNDARY",
+      "case_sha256": "4d3ae6a9c5014346a94ee9e08cff858796917feb01275be97759630ebb33941e",
+      "input_sha256": "2b87cec01a6e259e53ab71290baada51b7a21dfb2ebfe165c8fb728627a9f60c"
+    },
+    {
+      "case_id": "AUTO-04-SUBJECT",
+      "case_sha256": "14078020a1d331e5f1c7264d71ff98e3e4ae22bea623ca8fb3aa565c0c74f799",
+      "input_sha256": "85ea343c6ccf0740d8a495d23fe6bcbf9e7bdbed666947330cafebb1c6184bd3"
+    },
+    {
+      "case_id": "AUTO-04-UNIT-X",
+      "case_sha256": "3ad77fd7cc7ca56729d3acff87dd276fb9e634019dcda6b657ee71d7a28f1bf3",
+      "input_sha256": "fbf9bfca9e3ba08e62bff6b58a30148600d4070ac62d7f26402b3f31f545a9ff"
+    },
+    {
+      "case_id": "AUTO-04-UNIT-EQ",
+      "case_sha256": "7b8306698f65e64500f49897464f1f7a73204878c1e1b12236628a072cf19fa5",
+      "input_sha256": "faa9a3c01f04c4a814d13c90893d27072196affe162268a82e4bf084e61d3836"
+    },
+    {
+      "case_id": "AUTO-04-PROV-HASH",
+      "case_sha256": "069c34178058138a05e959fa67b73918339c8340777525c7faf6146cd3db44ad",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-04-PROV-QUALITY",
+      "case_sha256": "200bff20c9e910afb31ca019eff86023cf684a6d8cd9ecb44a22f68e3950ae69",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-04-PROV-ELIGIBLE",
+      "case_sha256": "d74cd34600d0e9962c1c209eeaddd9a363e9747f1fd69ddafd5cfd587129a79a",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-05-POS-canonical",
+      "case_sha256": "ff86119749c59c22d194bf21836bdeef98747115fb4a1a6d4676cc043cf05f8b",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-05-POS-reviewed-alias",
+      "case_sha256": "0d4e1d040c69ab0f8f7e6fe3dfef374783cd2c43c29e9f165f0b216e5fac34d6",
+      "input_sha256": "b3f490eb7d605a335e320e2eb82dec51b85078b5997bd58123588bc023e01dca"
+    },
+    {
+      "case_id": "AUTO-05-POS-casefold",
+      "case_sha256": "fb75d719e2f2293ec8ac0819160fb1dd70ca55eb20159f22cbfb106fb064a065",
+      "input_sha256": "2f8041f86c47a50c3194c587dc83ead81063a5a26973e9eb05a66695e84e33bd"
+    },
+    {
+      "case_id": "AUTO-05-POS-symbol",
+      "case_sha256": "97a0941cbf3eba63c9a22f343ee25ae829a2272e5799a26939152248ac51683e",
+      "input_sha256": "666eb9c1bfc2fb59f1a86df98998d708dc6d2e159812436b3f0472db7624d34d"
+    },
+    {
+      "case_id": "AUTO-05-POS-reviewed-typo",
+      "case_sha256": "d773663eb2e50e545d556a91b2d6968670e306f60ea3689953b803cbe410dac5",
+      "input_sha256": "b3b30eebfe71c58d63cd813585c1c87232222cf6698cb7e2f522ef63de5580fe"
+    },
+    {
+      "case_id": "AUTO-05-Q-0_001",
+      "case_sha256": "7ce222c00bcfc9739430287f466b0b7e3e4239ac7f636398dd59f5215b804a83",
+      "input_sha256": "00a23e087bb4fe6a5a33de68c189645010c35770b5c6b3fe790cc5a3016dac7e"
+    },
+    {
+      "case_id": "AUTO-05-Q-10_0",
+      "case_sha256": "56fddc7e68a1d673fae7efb74314ea9eb5f7cd61e4bcf9c977ba6d5d9003c042",
+      "input_sha256": "112ac53825de587be21a70e9e27f7b6693bae45963d45b76e94437ea70560b4d"
+    },
+    {
+      "case_id": "AUTO-05-Q-1000000_0",
+      "case_sha256": "8eda283d8c8d9711c32d4f46d2fefd47abcc13b6ae01ad746c2681085a2c1002",
+      "input_sha256": "84e57d8c2055a2475320140e0443bf2e579e10d2b3dc94a7c461fb49a953f0db"
+    },
+    {
+      "case_id": "AUTO-05-ORDER",
+      "case_sha256": "00c18ede1bed4368b1142d5590cb8ed08d9dc56441acc519fc16f457a2f58acb",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-05-NOISE",
+      "case_sha256": "e17d0b0ed9811f933821e602bd829642e4ec2f905446f8f7c4fa7bf7cc80bbba",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-05-DUP",
+      "case_sha256": "b151ef3d8b524ab077c9068646e9e26c9ff99ad54b45ce7f1098029319f78024",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-05-BOUNDARY",
+      "case_sha256": "12b4c41c947bf7decd2da5d5bf3516c317a336e151032489538c298f0d1236fd",
+      "input_sha256": "265cc75edda782c7094fded1cfe4cea3cdcd4b24c6364ca8dfae4751a078e5ef"
+    },
+    {
+      "case_id": "AUTO-05-SUBJECT",
+      "case_sha256": "277a38efd6cb37303bb7ffa95fac54bbef446890098943c730ad43bf047561b1",
+      "input_sha256": "e49f5c41e5728363592bf9baf3553e4f85e675719885950470ea04f103252919"
+    },
+    {
+      "case_id": "AUTO-05-UNIT-X",
+      "case_sha256": "1427491a0d29c6c59b7ba816674709d99c393070c707444be99278228a7c26da",
+      "input_sha256": "26e12375adece8946936be87668f01f1866b5f76717e2dd8d46cf816b00a4bf3"
+    },
+    {
+      "case_id": "AUTO-05-UNIT-EQ",
+      "case_sha256": "694a0ccc12d30479e88c99abc9cf48d5edc826956994ac34d133c0381e81e616",
+      "input_sha256": "5075aead900c449d45ab38e849a3ed264cae4ee95cba92493f7d9cef0135ee1c"
+    },
+    {
+      "case_id": "AUTO-05-PROV-HASH",
+      "case_sha256": "97cd3d67ba01dd29760693e7e6bd42a92a13910f21f6cb8d1c98597b0b9912e2",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-05-PROV-QUALITY",
+      "case_sha256": "202801661bfb1de64e771bd06cf8c46e1becfc530e2fb9a50d947c28d965c6f7",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-05-PROV-ELIGIBLE",
+      "case_sha256": "90b991ca33a82b1583e80dfcae887cb16042a4cb2f7a8251ede54fd84a1772ce",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-06-POS-canonical",
+      "case_sha256": "f8c551acae43d5b03aa0d22f78620d46000cddb0dc94289a425f05983049bcb7",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-06-POS-reviewed-alias",
+      "case_sha256": "ee1c9d75ae743232518fddc92c167450009bb3aa3ae030a7989b64f591f7f124",
+      "input_sha256": "6e3fa8cca5f5433c042617b1ae20a23049584c433f370299afb91b76afe2536b"
+    },
+    {
+      "case_id": "AUTO-06-POS-casefold",
+      "case_sha256": "feb9bce2910043be6c7123f1f64ea19ab74c7b4b443fecdca733cf242fcc89f9",
+      "input_sha256": "6e8df11953f575ca42b818d3eac555d10689df7b092c23a08321659d9af5158c"
+    },
+    {
+      "case_id": "AUTO-06-POS-symbol",
+      "case_sha256": "688e23dd187b914c712441fe17f6ad61fb78640baf791c35f7f851bff7987f32",
+      "input_sha256": "b80e4c4edf203e25c06c11d96d5268e9a6e8338c73105aae18a50eea569cc9ca"
+    },
+    {
+      "case_id": "AUTO-06-POS-reviewed-typo",
+      "case_sha256": "652bad2deffd6add229bc4a764d59ce6c5d26ba8b321bb8096654d9702966ed3",
+      "input_sha256": "f1d4be1c62dc1fcca61ffc8a445136a3c9172014907b77a8592701421b0e84fa"
+    },
+    {
+      "case_id": "AUTO-06-Q-0_001",
+      "case_sha256": "23bcfa1673344b528a055df50e0ab51614f02afc26c5aeb661055ad10fca2185",
+      "input_sha256": "eebdb94824ab215d17fc1e5606ed7a258d997604cb466ed43e80585bcc7f80ed"
+    },
+    {
+      "case_id": "AUTO-06-Q-10_0",
+      "case_sha256": "30bd837260f1f3db105a826efc4166c18c0cc4bfd8ef5532669fbe91d78dbabb",
+      "input_sha256": "9a77168a13b2b14143430758e0f7e0eb9d3f9eea313450cb2bc9022458ca8068"
+    },
+    {
+      "case_id": "AUTO-06-Q-1000000_0",
+      "case_sha256": "9980ec540eb445ff54b1093d829920aeec08d2c23f924325f831e05bfb41e66b",
+      "input_sha256": "1f46ac5b63db0c3ffb8feabd6e5016074cae5f84c3b25e457484129ed17a3a5f"
+    },
+    {
+      "case_id": "AUTO-06-ORDER",
+      "case_sha256": "6b95de24bf55f703e384c6bde33e84e1fd5cfbec3ba14887a46e665c7d7199fb",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-06-NOISE",
+      "case_sha256": "5277c53c3a84914c7f57b5bd99bf0210ece7664775e1ee9f3e7dbc4eb083a1ab",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-06-DUP",
+      "case_sha256": "0fe79bd2ec0906d505bcf0985a9271bdc4e22da39a8729c43596211509fd7e13",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-06-BOUNDARY",
+      "case_sha256": "21e8f1c338c1479d2dbbb754dea37cdf8677a219989b7ac750b803619c9bc245",
+      "input_sha256": "16c7d466103329a4c3e2fe4385628560b946fd3c9453b0123e79669b40ccf084"
+    },
+    {
+      "case_id": "AUTO-06-SUBJECT",
+      "case_sha256": "d0d69663f85338d7373cd8f85491e173ab10e502dd7574320aaf7463aad8e22a",
+      "input_sha256": "b5508296928170d8b9c6b0cda1ab2471b168ad49875ff8c5d78e8fa362f211b6"
+    },
+    {
+      "case_id": "AUTO-06-UNIT-X",
+      "case_sha256": "946f9387340a010b1108cca9e2d306fe7b39c84ada7cce8605dbd3cb2fb4a990",
+      "input_sha256": "cdbb732f964d1e67b5a3a32070762735fe2bea9821e5d8e86bdd9e036583a6fc"
+    },
+    {
+      "case_id": "AUTO-06-UNIT-EQ",
+      "case_sha256": "e828a74e746b040392ea1c68891e0cd2c448162243ac917e5c637db146e884a6",
+      "input_sha256": "c41037a12a4f4d78011676fbfec821a3f5eb38c518bc7d4bb04ebe75d23e6361"
+    },
+    {
+      "case_id": "AUTO-06-PROV-HASH",
+      "case_sha256": "ac28133a86842a4f62b0fa5a3dc2675b89f343e5167a92f42cf6523b978dfc8a",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-06-PROV-QUALITY",
+      "case_sha256": "5ff6b9428aa06f9843c5666645ffbc587743012bfceff700c10faf21a8e265ff",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-06-PROV-ELIGIBLE",
+      "case_sha256": "2cba4eb4b06d111e94e775080d89c5ca685616e95cb6197bff3c98ac286276bc",
+      "input_sha256": "fe95b9967764f1091f4e1bc1399073fd5a1fbe64dd77a797b07e85197052a738"
+    },
+    {
+      "case_id": "AUTO-07-POS-canonical",
+      "case_sha256": "374d3c287d80ed6bb0ed475854e1edbc739d2ef1967a57eb662960bb91a849f8",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-07-POS-reviewed-alias",
+      "case_sha256": "980e199bf29920403e21827614cf4c3e1e4628f981967e1934621fb23a3c4630",
+      "input_sha256": "727a05e749f94e43b36b1edd37ce88c1cac60e23777059b2ee3531bb75942551"
+    },
+    {
+      "case_id": "AUTO-07-POS-casefold",
+      "case_sha256": "5e4522291ba7e63603f7f29960fa53d1bf3bd2fc62b79ba2b9afe406a3c181ba",
+      "input_sha256": "cc4c9ae03ff6c8a7c4c0b92ca8f24398b6574f7743cd17168fb0531e49463fbc"
+    },
+    {
+      "case_id": "AUTO-07-POS-symbol",
+      "case_sha256": "d24f5ed05f9f00d61062c1307b228c3e2fb819c3264122dfe0a1e7ed46e287c3",
+      "input_sha256": "9e975c2bc68c431ec07163f33465a3fbc22e78e69ffd35b3b95a97bd5f31ad21"
+    },
+    {
+      "case_id": "AUTO-07-POS-reviewed-typo",
+      "case_sha256": "46e8330359ff56fc42a30327efdda218b892d60d0b6930bad7273bc0a4ef74cc",
+      "input_sha256": "679447afc2903c80aa20cc0969f959c040f5c7b23a53f27a6491725a7ef66a50"
+    },
+    {
+      "case_id": "AUTO-07-Q-0_001",
+      "case_sha256": "3ea6482bb95e7178772c839ecb6b80041a186636c918e8b8467b50bba0265576",
+      "input_sha256": "4a3071df20ac5702b8884c5f61b9a862413fd1a9ce9f2587f9652940b69d4986"
+    },
+    {
+      "case_id": "AUTO-07-Q-10_0",
+      "case_sha256": "37dd07eb8e1c1b14f3c63b4f13d4ad0290ec220209c27e3960b0daa7dcdce5ec",
+      "input_sha256": "1eca55007f0d179bc40e2ef765a26cf08d7f760561b0bee911164efc715c64a6"
+    },
+    {
+      "case_id": "AUTO-07-Q-1000000_0",
+      "case_sha256": "e2f76d4fa3af620d7f947aaeb17783f05b8f7d400edfae4aafc31337db99cf02",
+      "input_sha256": "59033f0dd4fce6834f2402cb41c3f3dc1114c2484e9ff8b6f9df52d9ad9b0c9c"
+    },
+    {
+      "case_id": "AUTO-07-ORDER",
+      "case_sha256": "466eaf1a6e6b5a65f5437083050f3b1e544760842012dfdbf6869cb2cb2e50d8",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-07-NOISE",
+      "case_sha256": "8794b4ec61cc3c82e862f10038f906f4bb1eed792703024192387083013dc298",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-07-DUP",
+      "case_sha256": "b07f46029eee34587cb4686cba60281cb4ab58ae15159595b0088c6085cd8614",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-07-BOUNDARY",
+      "case_sha256": "308e319dd4b682bbb5eb42a1ad692e0b21fe85c47f8b376f25c3604f09d59b4b",
+      "input_sha256": "c8613896b18376e46d3f3e5231e30475f6324cd67f66151641a579521c1207e5"
+    },
+    {
+      "case_id": "AUTO-07-SUBJECT",
+      "case_sha256": "50017e43722d7c9099cca2111410cd402040010a0bdca9579624ed4d7cf4d0d8",
+      "input_sha256": "56c9b8bd90226bf075e07f3d5432f33707975176b763e6f3b5c453df51414306"
+    },
+    {
+      "case_id": "AUTO-07-UNIT-X",
+      "case_sha256": "9ef0e0a3381c88b893efd4506b47457ecb5b31af34e41ef865328d06a00d59c9",
+      "input_sha256": "3c81a4c03366c8c6a19f944afbbb6835ffc440e63622808d04b2a9a431626eba"
+    },
+    {
+      "case_id": "AUTO-07-UNIT-EQ",
+      "case_sha256": "99e4c20d92673286823c2e4ac8e40719721eade4a2fdfded15880f5ef9d77777",
+      "input_sha256": "57eb13700fe4cf80aeb0a631780a32b6727f7cea0b13f957a4cf50e2d079ab49"
+    },
+    {
+      "case_id": "AUTO-07-PROV-HASH",
+      "case_sha256": "28a7d79ea6a1bc4976a43f21fffe6680b05e37f5ac6653cb6de0a831701e83e4",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-07-PROV-QUALITY",
+      "case_sha256": "6762d5cca19b85ef5772fea4f82948371ee0e89b2000c4fcec02e53d694efe41",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-07-PROV-ELIGIBLE",
+      "case_sha256": "d99f3a455b864f91b16a97c6f8ba572c533dee8d8f1826f2fbf0ec7a1e141dd5",
+      "input_sha256": "053acef22bed5e78c8430de40e44eac264844ce74d49e95d8d209759156647d5"
+    },
+    {
+      "case_id": "AUTO-08-POS-canonical",
+      "case_sha256": "6487c7c824484992fedc60f4b8fa1df2d9e4a272d43a2e1955c6bfbf0bb5d523",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-08-POS-reviewed-alias",
+      "case_sha256": "46c63a8fe644d03f5dd3c2b219a670b8f4333e4bce821c7d15cdf49c41390ffa",
+      "input_sha256": "f0d86cbc53de03d56e40ba44d4f0eed406d71395badbc9ad522ee2cedd657f6e"
+    },
+    {
+      "case_id": "AUTO-08-POS-casefold",
+      "case_sha256": "751f237bfa5fc45d83942ffd6d0e761c0e2adeb03ca30884e7810198424640d4",
+      "input_sha256": "fe4b8e26b7da49fcc4a35f7e0d74353a28af78cbed5c62b4a237eeb3e158b99f"
+    },
+    {
+      "case_id": "AUTO-08-POS-symbol",
+      "case_sha256": "bc7f48399a2281521945470777dabba3231b64dc636d4c0693dc39ec0e2cf802",
+      "input_sha256": "6b200e29bd9447182a2b8aa273c0cc0a872d888c58dd405cecd6459ac8c96a6b"
+    },
+    {
+      "case_id": "AUTO-08-POS-reviewed-typo",
+      "case_sha256": "82e97a8f112ae5cc3a879b35e771b76449b51beaadb18340c72d20786aab066f",
+      "input_sha256": "b6bc27c2fa5a1618dffba098b8a214cf0e38cb55a449a798a269b4f4b87a30f2"
+    },
+    {
+      "case_id": "AUTO-08-Q-0_001",
+      "case_sha256": "7a5439e8565d7b593bcac293c5ab04ed1d8c8654bbdeae391d82b3f321f3a2e9",
+      "input_sha256": "8a358b4ad05ffea14417ec99ce870b370fe2ad27ba117fabe86118342f066dde"
+    },
+    {
+      "case_id": "AUTO-08-Q-10_0",
+      "case_sha256": "45865158565d81bb90ba78f3bb45113b2013994b3b6cf9cd1637f164859efb29",
+      "input_sha256": "6741c4e7ec6d2f79be2b3b778b7d0ec4a9567ac085f79f41b800785cf9d88c22"
+    },
+    {
+      "case_id": "AUTO-08-Q-1000000_0",
+      "case_sha256": "5bb19d2ec5cbd5fe5869eaaa918ec3987f469b8f99f3fa319f54f40375547803",
+      "input_sha256": "82ea1f3791ad9bc5b8cf03dcd4868170e0a23387443fd1d7b7f7049907953759"
+    },
+    {
+      "case_id": "AUTO-08-ORDER",
+      "case_sha256": "5506b2059c5a6ce51e0571757741f252aaf5ab9e8706c1e8d1c994293dd15895",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-08-NOISE",
+      "case_sha256": "55a0970e3f11ef6018747fcc198f14b11fb9a0a6d95fe31a0eff2df93aac0233",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-08-DUP",
+      "case_sha256": "f7ed7ff5ea3fa1343adea7d6d85ebd2be21a71e730ef3e5d27918e27af204fef",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-08-BOUNDARY",
+      "case_sha256": "38bf2e60aaa8214d9f8578cdb1eaf5d7f5bdcd8c42eddeda652a8e492a0db155",
+      "input_sha256": "13499ac293e0e9a77d8f9e2e8b807a0ccb0f7fca0df3136e0bdc7f6b2cda061c"
+    },
+    {
+      "case_id": "AUTO-08-SUBJECT",
+      "case_sha256": "ee1608ade4207af1f03354684781fd0189479d55f2ec5443b9d9c651eca256e3",
+      "input_sha256": "0c8b3a9e1a5fe0139dbc76471af34ce7a60e8a7eb816414b1da00ce09867ffbf"
+    },
+    {
+      "case_id": "AUTO-08-UNIT-X",
+      "case_sha256": "0b7a44b7362e4d2fd2868d498022eaa3ce97638f38e277b059e4695e7fcb2a38",
+      "input_sha256": "8b0b8a9e7bbe61cf523c6ee071e03a466d9ca84bc91d96a4854f624c4d6a9367"
+    },
+    {
+      "case_id": "AUTO-08-UNIT-EQ",
+      "case_sha256": "b1a5af22292c24c0793935710231cf7be23043d42a1c95716a4b1c35ad61f48d",
+      "input_sha256": "f543c41ca90e0d8d5fcdaf386c8f76d5da869ece42a3d9eada97b39731e1f695"
+    },
+    {
+      "case_id": "AUTO-08-PROV-HASH",
+      "case_sha256": "3bbbd0384b3b3f1c79b9fd5c9ca900c513dd90cb02d0ecddf8767f0c7a6de3c4",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-08-PROV-QUALITY",
+      "case_sha256": "66d3ad397020e782845cb98a981c5f3d5c51c709095b29033baae2652f21c04c",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-08-PROV-ELIGIBLE",
+      "case_sha256": "566d0116bb4a5654a2626be2cac6f07aea925f526a6174554c39c7fadad0d707",
+      "input_sha256": "60c63ae65a4d65decd37380f0bce89d9847f8dd4ce6e7431ed2c73e0dcc038aa"
+    },
+    {
+      "case_id": "AUTO-09-POS-canonical",
+      "case_sha256": "f66c3f9276df14cf88db78643d6879bcc405f2929726b6c414c744ec1c819c19",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-09-POS-reviewed-alias",
+      "case_sha256": "61ed7521075c10945757901067d843e9c86afefe5195e2813be55f82dac60b83",
+      "input_sha256": "75b839e569d373455c95a2b6304e2e74d18b0af41d8913c4f9e7d66ccc0e03a3"
+    },
+    {
+      "case_id": "AUTO-09-POS-casefold",
+      "case_sha256": "0e945861f70ec8789f608f6e0a32252a7e4be271e2a7d60240c6271c03795360",
+      "input_sha256": "e7e9f2db555a6c9b7d96587274f86130f831870fc8145081f00dda8540e6a4de"
+    },
+    {
+      "case_id": "AUTO-09-POS-symbol",
+      "case_sha256": "27f085ef4fe02438e906bf03e5329e3c57774b30aae6da85b1644664fd474342",
+      "input_sha256": "757720cc8a12b5a8608d7d1b5af75002b0e5980153a7b60cfb9cfee7737bc9c2"
+    },
+    {
+      "case_id": "AUTO-09-POS-reviewed-typo",
+      "case_sha256": "df2bbef28d627752828f90afbad3923311010415977e97f0bc26d94310c8ed5f",
+      "input_sha256": "e3d3fc25ee4fb3119a1222bdee93658ec4e173d18c8ef95a506658bb3e0fc409"
+    },
+    {
+      "case_id": "AUTO-09-Q-0_001",
+      "case_sha256": "cad1fb10126798777fdce440c937bde3f4caf102c1feebd4aec8a8a9840644e0",
+      "input_sha256": "9ab16e69dcc904d8ff1d212b95fce6b463794ad2fdf746b67cf6c03833ea9f90"
+    },
+    {
+      "case_id": "AUTO-09-Q-10_0",
+      "case_sha256": "1bd62e7fc71b3af8d49c5be37425f7e96dfeb53cbb16e7177daa1090126bbfee",
+      "input_sha256": "b59e4747fb3420c75c851a5297af1359177fa4a3b75e7b8523dbc99439257f17"
+    },
+    {
+      "case_id": "AUTO-09-Q-1000000_0",
+      "case_sha256": "d92a1316042e1107b8751b6bcb5e8a64c58f0478d8d385480ef956f6a997fddc",
+      "input_sha256": "9f7fde7ed72c6389fd629514ff4357f3cc7abc90758b123c73cb78caad492001"
+    },
+    {
+      "case_id": "AUTO-09-ORDER",
+      "case_sha256": "95073d64abba4582cb745559a2ee3acb3aa4839535c459d14d70b515488fce6f",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-09-NOISE",
+      "case_sha256": "7e14ac1f8905fd91da1a60ab4f3bb2813a75922fbd1793d3d1d2f3b192954ef3",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-09-DUP",
+      "case_sha256": "592f5e41360cee7e23a0e8095580bcaa1d5ed2fea4efce234e3c2f15db14358e",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-09-BOUNDARY",
+      "case_sha256": "b76465706e013bb1b5658a19e4de93e53ead44d32c1c4fe94fff44c916190629",
+      "input_sha256": "6fb92bb719ae1d21710f2343e13ec9512dadc3ad525182d866b9a56639bfe0c3"
+    },
+    {
+      "case_id": "AUTO-09-SUBJECT",
+      "case_sha256": "7b6703c764cb4fb467aabf3d8817966887c385ee425141ca0f9fc5e35d701451",
+      "input_sha256": "d8cf8c0091bb30ba2959861a1f1fd58302a22dc8442a0cb7e5f471da9a57695d"
+    },
+    {
+      "case_id": "AUTO-09-UNIT-X",
+      "case_sha256": "c259eea139df379c91117954d1bb456b12b8b8258cca7941d4458282c11c9421",
+      "input_sha256": "f967bb549a1eca744a6cea10a7a07f7af310b0da6e33719f505175805985c1a0"
+    },
+    {
+      "case_id": "AUTO-09-UNIT-EQ",
+      "case_sha256": "526f050e90b2127b0c4b1cb524f50f8d66a4e744d72406d5a1aa22a0f0cbac30",
+      "input_sha256": "663040cddafc37878f2306a77f5d9606d78ba5e775165b7f7c2d0c4e15e9c50a"
+    },
+    {
+      "case_id": "AUTO-09-PROV-HASH",
+      "case_sha256": "56d9914ab300d10e1ff429a7f6aacb67b2f909b16ef7ec0e48d46dd120748027",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-09-PROV-QUALITY",
+      "case_sha256": "96c1f13a5b855404ad57fa0e3ae0e91ac9cf3c53d45fe9bdde1614f37770ed22",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-09-PROV-ELIGIBLE",
+      "case_sha256": "b42919abd4f75bae274db42ab7b696800a122f3262572b513e7cd166c4755a62",
+      "input_sha256": "d833a478dc20485c3f991f0dcd90bd15afaf16c90810b678e8edae7d400ad935"
+    },
+    {
+      "case_id": "AUTO-10-POS-canonical",
+      "case_sha256": "df793ef8cdb1a4144dd7d641aa3060877b5498b34cdd1fe4339bea837dbb6861",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-10-POS-reviewed-alias",
+      "case_sha256": "53c28cd2fbb5201360b48f3c4b6495d233882a4da7b6f78ad5608e2e44127dc9",
+      "input_sha256": "1088385d2eb6395c9251b1faf4f49c7cfa485bf29cda5f224f2e96e42306a698"
+    },
+    {
+      "case_id": "AUTO-10-POS-casefold",
+      "case_sha256": "07bd7198c6de41132984486cb7e1a718dbf9fedc33a04fca0333b0f0262470ae",
+      "input_sha256": "ef8510d277bef7fd9ddfdc76b142e75ba3807dfb767d06d0432697a53515b14a"
+    },
+    {
+      "case_id": "AUTO-10-POS-symbol",
+      "case_sha256": "c98f7b851255412419947694d5fe020bcff561f2f08d39d2cef14cb109dd2169",
+      "input_sha256": "2a2f3d86405434f833cf85262717b5527a7e6a5950a8fe92ce695dcc2236fadc"
+    },
+    {
+      "case_id": "AUTO-10-POS-reviewed-typo",
+      "case_sha256": "02bfbb36ccc25e6cc2294d533ca7085f8a89369759bca3a9dc6dcf7220078589",
+      "input_sha256": "6f3866ff873d689f814e175b030ac9e7d0a93b5bba76a3deeeea2474d4ac323a"
+    },
+    {
+      "case_id": "AUTO-10-Q-0_001",
+      "case_sha256": "eaea5a5e03826908979ae15de88312fdc8182e6c8fd1b14b2b3a409fbe531e5b",
+      "input_sha256": "91b869f63153779da501dbb15a13f17cba958f779aeed70daffc13e1351351dc"
+    },
+    {
+      "case_id": "AUTO-10-Q-10_0",
+      "case_sha256": "bc5830cbab6a74bb825d1b956bc1c9102c615c27d27732dd8918a6fcba4bae16",
+      "input_sha256": "eb4a7fc02850e15597498dff31fa034926107f19ff9439b81edb3783d40f9bca"
+    },
+    {
+      "case_id": "AUTO-10-Q-1000000_0",
+      "case_sha256": "b71ad02ce231d1f7ba573fac2359656beb86874aba3974ecfa1dd502107e5aa1",
+      "input_sha256": "a2bd26e014bc9238270bc925b59071f876d5ad087b3df3d93a405541886c1267"
+    },
+    {
+      "case_id": "AUTO-10-ORDER",
+      "case_sha256": "492fda3af33e177627f8c7881f4a40997a40fa2ac9cfddcc657e9137516bda6d",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-10-NOISE",
+      "case_sha256": "c72a69c918dece9050035cb57aefeed7304bebf2d43d5abde60b9567d88251e6",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-10-DUP",
+      "case_sha256": "d3840da64d6a3556a5c56b51f2d5178af3baa06e6c692985e40f8190d42ea678",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-10-BOUNDARY",
+      "case_sha256": "e8f0df21b594e9c387f663974f4d46253d8e95d5bde94e6dde53c1257c5de3f1",
+      "input_sha256": "553ea611a903b228a5141ab86da2b6c716b7f5b9b68a83c1c0a1b7a4aae12bd4"
+    },
+    {
+      "case_id": "AUTO-10-SUBJECT",
+      "case_sha256": "e03468234330916c6c3d5419c0e4661d619704d02d7ec3d53d280880b9df4be0",
+      "input_sha256": "633d1e8060ee363edc27cba1dd92f56123f97175af8aaad06395a4754b7c057a"
+    },
+    {
+      "case_id": "AUTO-10-UNIT-X",
+      "case_sha256": "103a43ec95f0636665459762e651a65e09800ae6a07f3575c72afc33d5bcd25f",
+      "input_sha256": "fe0ed0e4de066322a325179e70ed75eff7e71a6d765d507a8956090b0b4034de"
+    },
+    {
+      "case_id": "AUTO-10-UNIT-EQ",
+      "case_sha256": "d75ec9bc34fa37367ae6f95e9524b9904e1d853ed0094b8c0e2d1590b36adc98",
+      "input_sha256": "394f850379b4a77ddb2dbf724136f555be5bc2be445e132ce1407e05e21ca408"
+    },
+    {
+      "case_id": "AUTO-10-PROV-HASH",
+      "case_sha256": "6c82791d5e1866d62c3ef015edff5251ffa00df2c2b14ed861af13e96e83e01f",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-10-PROV-QUALITY",
+      "case_sha256": "cacf673196a09ba399d8112811973c2d75e95309ecc4a22a592af6aaa489e18b",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-10-PROV-ELIGIBLE",
+      "case_sha256": "3ea646cca8f84c902da38e56e5ffd7b81a04258db6109c9d0b9cec002c4193fa",
+      "input_sha256": "9c5656bb4c3a520e25e455a9252987a9a2ec6452ca08197f4e5a5c015a3a78f0"
+    },
+    {
+      "case_id": "AUTO-11-POS-canonical",
+      "case_sha256": "7461ed5bec151de8b056b83678e2ef0cdf54c5b424b676fdadadb3473ee51e2a",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-11-POS-reviewed-alias",
+      "case_sha256": "0df621abc8992c8102ce9afa101e643cf7e416b215bb93bb2a9937be97c1c2bf",
+      "input_sha256": "ff4eb770a18c2198b75fc2bde17041cb03de37c3f5e621f7f6ddfbabe1621043"
+    },
+    {
+      "case_id": "AUTO-11-POS-casefold",
+      "case_sha256": "0490c32da1540fe91f4bd217a4e703d5c939834ef571eddcf9a9c668fc809f6b",
+      "input_sha256": "98b8a7fcaede45245f23c365a99bd93abc9783e149984d16a34ec33864c3f39b"
+    },
+    {
+      "case_id": "AUTO-11-POS-symbol",
+      "case_sha256": "7c6060d20942453739f651b7a5d449bd39a120dfc4b43d6a8f1208d9a366e7f0",
+      "input_sha256": "263a760b99daba2f8159e927d0598627fbf289e0ba866417449cba381a372ba1"
+    },
+    {
+      "case_id": "AUTO-11-POS-reviewed-typo",
+      "case_sha256": "00e4ce821fd3886acf0b61bb3a23542c4bff92bc7614b0f507e48876bbdf0e42",
+      "input_sha256": "4db86281d9c13054fc91fafb00fba90ab9802a08fbb6ce74dc7e4cc7210209e1"
+    },
+    {
+      "case_id": "AUTO-11-Q-0_001",
+      "case_sha256": "daab6eb1a6dcb13ec7a398019c3170bd37be70e535a24c0cdc2f62b844ebe7f0",
+      "input_sha256": "fe53694a7b1592998e4d0049d416cecc1398ad34d2e7aa9cd074860b459384c7"
+    },
+    {
+      "case_id": "AUTO-11-Q-10_0",
+      "case_sha256": "b62c04f519b1ca7eb2aa5928127d921001decc76bb46897e5552e83a02a6fd3b",
+      "input_sha256": "7c6bec6eb96bc64c02eba5ff182a902e89c15929099cc7cf2c4f74b515f1d9c7"
+    },
+    {
+      "case_id": "AUTO-11-Q-1000000_0",
+      "case_sha256": "c66155f2fd8589ed3ce66db524913cc5de3568357074545c535ef5133427cd32",
+      "input_sha256": "b5c8802569a2870856ee5aca8de642d76b86c519d1168ab56e9a391c3f5d3d31"
+    },
+    {
+      "case_id": "AUTO-11-ORDER",
+      "case_sha256": "afd45634e1e2dca6a25c5c8009d9b0b8c32523927e5ebcb928d7392bbe862aae",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-11-NOISE",
+      "case_sha256": "e42b8ae2aa139b3643fe5f64e8f38928e79d2f9a8776c47a30b6d0671c0d0f10",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-11-DUP",
+      "case_sha256": "9a7778d0fbd8cdfa22c909eed7d0d2fd5c6e29f4b6c84e889a0a92037cc5a03c",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-11-BOUNDARY",
+      "case_sha256": "111b27460790c8475c2926e4492f658f07bf5890e59790b1bf226ec1dad1f0b1",
+      "input_sha256": "57352181992654eb907d453185f3fdb02ab25afa48d6c960ea125d592e0342be"
+    },
+    {
+      "case_id": "AUTO-11-SUBJECT",
+      "case_sha256": "2873feea7a76ef9477b6c639967fcf46485ca351da964e27ac42f846762baa88",
+      "input_sha256": "65fea2631e7a3f8c57547edadcf4d8bf7b561dcc12aefd60e8da2e421f1b8969"
+    },
+    {
+      "case_id": "AUTO-11-UNIT-X",
+      "case_sha256": "a5eaf8a9b387c8058742218f9f3ad46a9df9e5b7f951b20729c12b9d8b00469a",
+      "input_sha256": "b6f7d3e616f27991f62c7c881ae0bcc1783fe760f0c9eff026cf7e158e17c2e1"
+    },
+    {
+      "case_id": "AUTO-11-UNIT-EQ",
+      "case_sha256": "088d94306365e9b0ebc6397e545c44d1b2bf0b9097699dbbd871ab03b62ad3cf",
+      "input_sha256": "4056fc11701c937f9463511b9c6181721cc535f4e89b5569ac24ae4792b45a95"
+    },
+    {
+      "case_id": "AUTO-11-PROV-HASH",
+      "case_sha256": "2efbb5a5aacb1d7749f2369d484e2dee1a174fa4accb963631aaf337d5a8262a",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-11-PROV-QUALITY",
+      "case_sha256": "250bfbd7aa8d706bb7db43c2e554f81a4444dc07060ad23133a60359beb5a4aa",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-11-PROV-ELIGIBLE",
+      "case_sha256": "e3ed1c7ba1c63e03c5a7172c0e6fc0cfe214b3590c2cc49f28d7e483cf1bfbca",
+      "input_sha256": "21a25f860d6c1c5f9345f2ff183086a560d0fb10191e5abe185ce860189f8e80"
+    },
+    {
+      "case_id": "AUTO-12-POS-canonical",
+      "case_sha256": "5169de8d193432c2b3ef947381f6fadac6bf6974f034cfe62a163c2ece2a2eac",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-12-POS-reviewed-alias",
+      "case_sha256": "a277111d8a86a41f957eebbd96198edaf32e70949862121334eb5336c7d56156",
+      "input_sha256": "e56dfc0ad86d58845a33f924402c39a8295b15ac8ea63635612d6932cdb82635"
+    },
+    {
+      "case_id": "AUTO-12-POS-casefold",
+      "case_sha256": "12fe8b5560f86df92d40926eaed26d05a43f0b7da73bbfe0e095ed3fd9491fe3",
+      "input_sha256": "4ceefbc695d4d713ab461dadc7ef3af1e14be7cc5a4f83554537fee0d76c78a7"
+    },
+    {
+      "case_id": "AUTO-12-POS-symbol",
+      "case_sha256": "ec3519fc203a3a20bb24771bd50c8c4d043db7e6d5e6d5949142f1830bdfb481",
+      "input_sha256": "75fd462ca671e81f3cbf8016df65cb5451115e968f1bdf686de1f6f0d8c439e5"
+    },
+    {
+      "case_id": "AUTO-12-POS-reviewed-typo",
+      "case_sha256": "da05965a41b3fc3edb3e9fb310b9bf7f56cffffa4b3bf8ebf0a53d45e782b68f",
+      "input_sha256": "909f85b039972972d4f531ef84b6600841cb72e1f34b31ac329fa99c827f7e16"
+    },
+    {
+      "case_id": "AUTO-12-Q-0_001",
+      "case_sha256": "709430af087dc0cb8ac269bba6cb160ca5aac0f4a88a04de703e2445ed8b9c96",
+      "input_sha256": "bb1ecd1f4b83610964e9471b6425afb14125542b9c7b38fad10ebdb2a8c5e303"
+    },
+    {
+      "case_id": "AUTO-12-Q-10_0",
+      "case_sha256": "6701d73b8e2cf99eddf47c7b35fa476312cc6f043321c8cc917ddb3a4a4ed2b6",
+      "input_sha256": "ff38f18412dc535d62670413d9eef41bcf2ae9a30f9396cd219f36fbd903bac3"
+    },
+    {
+      "case_id": "AUTO-12-Q-1000000_0",
+      "case_sha256": "7d61ad4fff094eb81d871866ac02f0b39e86dc99abed102cde90a235e7d7e2e4",
+      "input_sha256": "bdcd80acaea138b07b2deaee95dfef324f4a61273c6c48dc5a0534f2989b66ef"
+    },
+    {
+      "case_id": "AUTO-12-ORDER",
+      "case_sha256": "ee5df20c639787d06745d06d2604aa64c150e8bebb6e1a6156c05f977afb30c8",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-12-NOISE",
+      "case_sha256": "cce16cd34009ae70b379b50d9f52fc05fab6c8a772f6439671a96fd3d3161d34",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-12-DUP",
+      "case_sha256": "2d077cefffe01e4ec57e8c4e07aec6668a81c61d020afbe2ae2ca2a74ee640be",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-12-BOUNDARY",
+      "case_sha256": "3275bbaa2397b951ee05beb7e87bc0a0dc84ab08fd71aabc152e9a184c784eda",
+      "input_sha256": "f73135fb08976d6f424c7a56ac056870f1253da870472c82613d69ab32272117"
+    },
+    {
+      "case_id": "AUTO-12-SUBJECT",
+      "case_sha256": "a303d629af747f8fd07ddfa34bbbc2be400508771b0b3d7c75018c8727235de2",
+      "input_sha256": "3dea579f4714f3a4958c77d6eb477a3951d4882afc85fb2da4b65dd9b69b7a8d"
+    },
+    {
+      "case_id": "AUTO-12-UNIT-X",
+      "case_sha256": "93465087cd53070da79f09a24e01d2286403749b3c45cfbfe0cac6e2d28388fd",
+      "input_sha256": "8988fe67867a1999ea5375e9489561fe11fb51ab624001b21741893bbfa9e524"
+    },
+    {
+      "case_id": "AUTO-12-UNIT-EQ",
+      "case_sha256": "542e2402ccc538db8d43d08628962c9d8a03157912c8a3c49134fe28b69c2863",
+      "input_sha256": "20ba4326990699bc6404f9e2df90e940ebb4211fa56f9e9e66906c025dcc7042"
+    },
+    {
+      "case_id": "AUTO-12-PROV-HASH",
+      "case_sha256": "b15cb09114c60e49347fdb108ed52ec6eb6d6587a3b3ae8d3bcb88c2bc522dbb",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-12-PROV-QUALITY",
+      "case_sha256": "bf226a9df07e47720a816f37bbb9ddf83fcce386b667dcc187043efedca0b73d",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-12-PROV-ELIGIBLE",
+      "case_sha256": "aaf75ee37df31b6d061671dec392f5c7570a7fb8a410379ecb4a731d4cb31aed",
+      "input_sha256": "3ab82b7d3058579c1cf61508d00b2b69b8c362b674f89cbfd6003d696a43329f"
+    },
+    {
+      "case_id": "AUTO-13-POS-canonical",
+      "case_sha256": "ace787d7b3d42963a7908f049c98474ea1cf5b5929dd776d82f6caae5d09e90f",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-13-POS-reviewed-alias",
+      "case_sha256": "4d40ff31595f4a774db8b978694b79d6e739276e37fc27e57d504eeb2206aade",
+      "input_sha256": "ee10928a8534a7f3d98314f4874f8ed32bbe25353433529e76ccba4e693b5349"
+    },
+    {
+      "case_id": "AUTO-13-POS-casefold",
+      "case_sha256": "023a84ba85ecedfa846aa3edcc53408bf4fc75eab57747b3d78b42feda3b8fad",
+      "input_sha256": "32156cc44cebc03419bce703ac557861a385cc877a36b1a3c58342fcf837be75"
+    },
+    {
+      "case_id": "AUTO-13-POS-symbol",
+      "case_sha256": "c3aa24e70296640a81c72064de41b05742fbef675bb4b716e437448168bd8b9a",
+      "input_sha256": "83b3765f004b60cbcf9e84078432edc6c5b6014b7455a966e9274b9fec3f5c1f"
+    },
+    {
+      "case_id": "AUTO-13-POS-reviewed-typo",
+      "case_sha256": "8373562147cb0f02a40cef8bda12a3b0877c58cc85a0851d113e648b07136033",
+      "input_sha256": "dae3267aedfb300e129aebb08cbb290ae52643881c98c772ba815f9221541d2d"
+    },
+    {
+      "case_id": "AUTO-13-Q-0_001",
+      "case_sha256": "e8639f06bc3706cdd513e3695337b522e2c84827369e4aba953dd500db749c54",
+      "input_sha256": "f3f0e375506988100fcddac3934a35bdf571e0d0df80ddd46a06a0f783e7d059"
+    },
+    {
+      "case_id": "AUTO-13-Q-10_0",
+      "case_sha256": "c9f1eb5b323a9635683b47c17e6d9eef4bbd98bb97f3a5d99ca2b8b7e3e89167",
+      "input_sha256": "37289c7dc4377a36e1f1d7db95b893b15f960cebac73ce0694951c42c0df619e"
+    },
+    {
+      "case_id": "AUTO-13-Q-1000000_0",
+      "case_sha256": "54d53a46861c69d9ee8417d9876cf56d02e3e9fe81fe4961f52ef673926656f8",
+      "input_sha256": "23105ea59687c1b2feda8f4b241c37ac7c271890fd2f729fe0a95ba3e7e88dfc"
+    },
+    {
+      "case_id": "AUTO-13-ORDER",
+      "case_sha256": "d7d54775d754506426ce12200167d4b516a68774ca209cb9360ce9a942e94199",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-13-NOISE",
+      "case_sha256": "17826b0738f5803411fa3cc31240f005fcac5a53e5e219250d3ac8cbfc4e6b20",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-13-DUP",
+      "case_sha256": "03642bb00a0f59d32ae547c182c37f506c4a40b00f2da6ca180aae0c418eaadc",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-13-BOUNDARY",
+      "case_sha256": "b68e5384b4aa688cab981e729a1a849940e05f7a85704b264e094285246d5e0c",
+      "input_sha256": "166d0944bc2c17e5101168e187d48d2e2cc34541591753a57ef4891e52dcf2c2"
+    },
+    {
+      "case_id": "AUTO-13-SUBJECT",
+      "case_sha256": "7d469f57359f089c9ddba09df02cc5b312fa45809c9d6819be877b8ac7050ba9",
+      "input_sha256": "317990d6f66d1cb1212855bed5a973e29ee3c0ed58a5e30ac607c329304fff31"
+    },
+    {
+      "case_id": "AUTO-13-UNIT-X",
+      "case_sha256": "c6c751afaa08cb7dafb827cbf61b9a2c6b42c4581f2d09ad3d500de989fc6645",
+      "input_sha256": "f03933699794fda0fef9c429f76a0eb4ecfc6df6087b5e309a0ff1fcca980750"
+    },
+    {
+      "case_id": "AUTO-13-UNIT-EQ",
+      "case_sha256": "baae99e80ff0f6284653b5655d5414b2b87de011acc21604cbb969e3b76b5e3d",
+      "input_sha256": "018c47ebe6bafa0e99c15bb9805853f934acdf001d042d073a88f010301689f4"
+    },
+    {
+      "case_id": "AUTO-13-PROV-HASH",
+      "case_sha256": "56dbe711d42d47b937e0ec252c96d0a26bc1f289d64495a2728e9a5b016f2c78",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-13-PROV-QUALITY",
+      "case_sha256": "412cf90b3fbb4a0e0438eef752046e922dab07b38f2e7850e72dfd22fb5714af",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-13-PROV-ELIGIBLE",
+      "case_sha256": "d7a34b15f25e05f30c0ca66f9d825fe40ea40deef7b28c5600c1ec00c74f9a9f",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-14-POS-canonical",
+      "case_sha256": "499e302b5f589e01807bdcc4f4aaef96ae71a06f44506bd45ecfd10d95bc00a2",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-14-POS-reviewed-alias",
+      "case_sha256": "3b20b1b55deeba813cc4698df5cbfb1f1ba746ef5a2cb59d283a628ec69645e7",
+      "input_sha256": "052a3f0e1440413d0f89b83a71331f155bcfc28e7c227701c474644affa5b850"
+    },
+    {
+      "case_id": "AUTO-14-POS-casefold",
+      "case_sha256": "cf399d730cc02ef32e1c3deb11ad2fc232c070d5702119b61d235e7e8f98a895",
+      "input_sha256": "90189311cfdb7e62440cc33bbc86eebe703cef66c39b9dc1560a88451b703b98"
+    },
+    {
+      "case_id": "AUTO-14-POS-symbol",
+      "case_sha256": "5da59743a3bdcd7724a2bfd1a2452b69ad9a52add9fce1f96938d364c882a0b4",
+      "input_sha256": "22f30f7fddef6bcd30d31d282f5584a205e388a12cc4b81a4b0d346363b03e77"
+    },
+    {
+      "case_id": "AUTO-14-POS-reviewed-typo",
+      "case_sha256": "3e7a733cb71fcc3b7b3834bd9336b2a03924a16509780e7f6fd62a59ca41976a",
+      "input_sha256": "d31bca09643c945853f24ee2eaf25982b48cc410bcba1ea57d14e529144ec90f"
+    },
+    {
+      "case_id": "AUTO-14-Q-0_001",
+      "case_sha256": "4ffb96ea08309d776c6568a96fac326f3c23688a8b304de061ef5bfe4d078f37",
+      "input_sha256": "d2ff7ef3e45d22cd1d3354ea20403caa4d142c59e9b247dbc304354c8127eeb5"
+    },
+    {
+      "case_id": "AUTO-14-Q-10_0",
+      "case_sha256": "598d2d3a539dae57eb046dbfd434414c9f45f606a9ffece0fe6e4d91f343236e",
+      "input_sha256": "ba45a2b1089cb73ac52aa90583c57ff100c4e35d10e09077c5b9e4158829c8b4"
+    },
+    {
+      "case_id": "AUTO-14-Q-1000000_0",
+      "case_sha256": "383274ba7ead0c6e0a6fefb5ab0374106a96d136ed5fd81ff8c826f2c986726e",
+      "input_sha256": "18488db5ed5c8c821089258bb155a50788dfc02598db802df32f71fb88c99194"
+    },
+    {
+      "case_id": "AUTO-14-ORDER",
+      "case_sha256": "fa672188637336204042df06e5d56607828bbb552c7dcefda7ae1f4ca5a20ed2",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-14-NOISE",
+      "case_sha256": "2ed6bc6072a99eb0744279eeca03a1287586d9ccfec6afb9ec20f9ac9c06d5dc",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-14-DUP",
+      "case_sha256": "5af4c6691640423fb803fa65531a0b62bf009ec4459f424978e7c7413af0bd7c",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-14-BOUNDARY",
+      "case_sha256": "172028f89948b5c079850c8272612973f431afed631e4a213d042c2f8278784c",
+      "input_sha256": "271afc5ef04e898aa0a5ef2f585c718ee57e8f72fa7565522e7996ecdd7587df"
+    },
+    {
+      "case_id": "AUTO-14-SUBJECT",
+      "case_sha256": "9d3c38419dae28200c73a4846bf4ebc847f56f32f9173c9e7973c33a14aec4f0",
+      "input_sha256": "6142d20c1ace55544970d21d8bdb1d6cb2ff65039897bcd10151211e33497461"
+    },
+    {
+      "case_id": "AUTO-14-UNIT-X",
+      "case_sha256": "6af4d6626c9bb9f691e1721527ae693fccb5206edc5041c31537841848c3054c",
+      "input_sha256": "20e3689b81bb04f40d6c9a31888d9ad3d049e140e9e0753d10976073fca5304c"
+    },
+    {
+      "case_id": "AUTO-14-UNIT-EQ",
+      "case_sha256": "1950528e0cfc933603b1d5085f986b296d9fd2e20f89cecee3931f74d84e21dd",
+      "input_sha256": "575374b454a36ad27776d48f3445c6d3e6d62e47fd77e198b595f203e40d8698"
+    },
+    {
+      "case_id": "AUTO-14-PROV-HASH",
+      "case_sha256": "bd28ec0a16a37ef071ac74ba62177352361c9d5a4e37782133624522f5382394",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-14-PROV-QUALITY",
+      "case_sha256": "92d99db822e97fcf4f253fa5bcf06043799fa63e47729894e2fddf6fef933b28",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-14-PROV-ELIGIBLE",
+      "case_sha256": "bfd306b9e1f0faa07b4a5382b3a717e870ac108c9a7ad6794a175a59a03899be",
+      "input_sha256": "1c47362717453e0169763964ebbcf9313d2b5550c7855b99719abe77ebc09ea3"
+    },
+    {
+      "case_id": "AUTO-15-POS-canonical",
+      "case_sha256": "4eb5fb8bc1c71d905a5e545d7a56bb9b231ac689e6b93a7904127642b00bc5f4",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-15-POS-reviewed-alias",
+      "case_sha256": "82b562e25e5e5a5bf0cde5d21f5f079ad45187ba7c58d04c900e2ae76dbe6130",
+      "input_sha256": "b482db941a340f701d840f0204bff6b65b0415b79f7d9738c98f80b659907eac"
+    },
+    {
+      "case_id": "AUTO-15-POS-casefold",
+      "case_sha256": "88e0606d63231c973acd1752ef4b4bccd6fc59495736c3460b352b5ba5e8acd2",
+      "input_sha256": "bf8ba22337b50923aab409412984a8fddce760bc096e7f4ab27eae87fef3f916"
+    },
+    {
+      "case_id": "AUTO-15-POS-symbol",
+      "case_sha256": "40696f067f044e353cf36d4659cb3d140b0b060f3afc794e6f21253ff29197d8",
+      "input_sha256": "1d0144dbda6acc6ded17c0820539a6ea830f22c0513b66c4f0fe30978a724a79"
+    },
+    {
+      "case_id": "AUTO-15-POS-reviewed-typo",
+      "case_sha256": "1a1de6674d528c7334028bea9ec46e5d59aff420c987cfadc7c829801d64e02e",
+      "input_sha256": "42c17299f4874b87e6280edced9a058b537fe84fb303841dece42b8111331788"
+    },
+    {
+      "case_id": "AUTO-15-Q-0_001",
+      "case_sha256": "ff91247fdb867b44e85b7f2831baf80262632aafc19e97284bc798e75559fe41",
+      "input_sha256": "e77cb37a0c95c09317b7bf6e10f67a600162abb28863bf13c37bf6106726c014"
+    },
+    {
+      "case_id": "AUTO-15-Q-10_0",
+      "case_sha256": "bd91a5c8ad2e232754f9beaaa011578896fb98fcb125754f56a79b4e6fea3a17",
+      "input_sha256": "e4a7d52d93a6517fcaffb3249deb26e44a01927d70a75e1421e3f4ba515de47a"
+    },
+    {
+      "case_id": "AUTO-15-Q-1000000_0",
+      "case_sha256": "e54c6c50861c2486c069ed8d6bb6992b922b38105d9700ae332016c6c648bdba",
+      "input_sha256": "80e9c32a59c131fbc1b58611bcba35ca565b5ee9f0f0a4957589bb2d0b3362b6"
+    },
+    {
+      "case_id": "AUTO-15-ORDER",
+      "case_sha256": "5942dcde1226f21020dd0cbe4b7449b5631bc48a42fb87c8fb02780415003ab7",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-15-NOISE",
+      "case_sha256": "4f4765c155172de968948f68eab0658b1197a2b924ee3365ac1ec62d54604b24",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-15-DUP",
+      "case_sha256": "871bf9c093ac481427c64650d11c6da70c45cdcf27d73e0bc85315503fab43b3",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-15-BOUNDARY",
+      "case_sha256": "8e16c6a73dc3ced2f4d512ba77fddc20860d543a2fb1fb4e7ecdc57055f44ac4",
+      "input_sha256": "ea25de3662e83675003752b65838f078509a9f16ae193f8b07029687bcd30313"
+    },
+    {
+      "case_id": "AUTO-15-SUBJECT",
+      "case_sha256": "deb645cd5eb03516d44de4896cf7405c821db5f53c8349a49071a36125d46d3a",
+      "input_sha256": "ba79cc93d23ec8af4c4eea5c665b5b92b7bec066fd50afa2cb5fba4541a64c1a"
+    },
+    {
+      "case_id": "AUTO-15-UNIT-X",
+      "case_sha256": "5503b6d0ee192e4cdbdc3ef1cfe1751d8e28846495f0b3f97bb5c953dbeec69f",
+      "input_sha256": "0fd46f5dd3e8f7f4e3836a712ff0926ed07b1c1553769cddbb1d738520d63836"
+    },
+    {
+      "case_id": "AUTO-15-UNIT-EQ",
+      "case_sha256": "61b2dc4859108b7f0ae636d81a3fddd8b99bf3060cb8cbca32d24c64cf7e3fce",
+      "input_sha256": "da80392acff747ac229876a2e02e205ef38222333fcf6e411b75462831013f5f"
+    },
+    {
+      "case_id": "AUTO-15-PROV-HASH",
+      "case_sha256": "49ecf8767c0bb6a5ea8f83508d1546672eac1b474fec2b018b719dd4031c8ab2",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-15-PROV-QUALITY",
+      "case_sha256": "bbfacdebc4470e00547cf51eb62209f15fd00c9f8e77c0e3ee10dcabc06ff841",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-15-PROV-ELIGIBLE",
+      "case_sha256": "bf014eee94bb6f4c45fb602b158aa4abe990cfdcbbb4988e6056032a0b785469",
+      "input_sha256": "62e44685954697a2ec4027d106884234e51d919d17379a7dec775e757ccf0ff8"
+    },
+    {
+      "case_id": "AUTO-16-POS-canonical",
+      "case_sha256": "ba61cd379b1cb9005d1c4044f27778daa8ba4866f864a6225c18fe10abde93d4",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-16-POS-reviewed-alias",
+      "case_sha256": "b22aabff0162d05c8720ae50c584b44ec2e8701c771d67ea457181167bd13da9",
+      "input_sha256": "c615f3d400a290897658ef58eeabd79682513285afb337e9ff7d9cc07449701d"
+    },
+    {
+      "case_id": "AUTO-16-POS-casefold",
+      "case_sha256": "dcf29c669a07f23da5c462e307f9cf69f73e2bfc21cd32190f55edb1495b599d",
+      "input_sha256": "cbe025be2a8eed648ce4612c50d152e28664179b0bc316f358d8fc371ef91642"
+    },
+    {
+      "case_id": "AUTO-16-POS-symbol",
+      "case_sha256": "83c68d04a0db76e1de30c84dd893d0fb2a64210adde8b91f22e20d6153c6c47f",
+      "input_sha256": "0355b0f2640933fa51c49600ae13b8d44f139f18b70852ae630cac0560ab7c11"
+    },
+    {
+      "case_id": "AUTO-16-POS-reviewed-typo",
+      "case_sha256": "1348fa387e3f78d7bbf95344c62cb1d385a6c769840820c9a97d3a107be53369",
+      "input_sha256": "7ec8ac81a1e7d44129e2c09bd6c04e4d019ee58d4ab154f1c76c63613b41710c"
+    },
+    {
+      "case_id": "AUTO-16-Q-0_001",
+      "case_sha256": "ac72f67a908d52ad247561b51fcaad837d9f033f3ed2671c0573065268e98820",
+      "input_sha256": "4f9d6a21ec7b0dca97742341e8e98142e50e999d09e853d999cc34a86ee5011d"
+    },
+    {
+      "case_id": "AUTO-16-Q-10_0",
+      "case_sha256": "134545d2eae503720f5aba279f29f80a0c511925dad167d3b72c1fcfcbb23c31",
+      "input_sha256": "a49763f0b77d754054a36a1a05e6af5873328dfdbe25618d7dc9cf0f50c0a56d"
+    },
+    {
+      "case_id": "AUTO-16-Q-1000000_0",
+      "case_sha256": "8769fa1f29c903be2e444b37a1a588b0b7812a89302afc7e287033ee3ec06a9e",
+      "input_sha256": "f11d2a435363783de24ce68b29fdd2011e41f8f88187836a6314996fbdeaa910"
+    },
+    {
+      "case_id": "AUTO-16-ORDER",
+      "case_sha256": "6e851b60ee28164be4474d8f23c524194312596aba6fd24346c5fbd9f87c3a07",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-16-NOISE",
+      "case_sha256": "a492e2b935ae9f5fb6115061ad03149e1cefd9d77858dfbc2a4bde082e39468c",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-16-DUP",
+      "case_sha256": "2c8061f2df308302c977b873ee8a91f96b6e1f38476a2eae11f71c910c3b42c8",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-16-BOUNDARY",
+      "case_sha256": "d8c0b7acfef89426b74c582a1538ef348db78574a3ec3ed0a3c5f056d5cbe52a",
+      "input_sha256": "e814e4d2ecfeace9a59185499b8c1a35a252a2aada18f4b60e6dd1ae5a35f454"
+    },
+    {
+      "case_id": "AUTO-16-SUBJECT",
+      "case_sha256": "d12efd8c693b6b7e23d80854171c0dc1db67b69732f6fcae506500c3d4501860",
+      "input_sha256": "237bd247bcbc8714275804b84ca4929b36c59ae3fedcb6fb71da2ae2e0bae807"
+    },
+    {
+      "case_id": "AUTO-16-UNIT-X",
+      "case_sha256": "c47d075282429b6b35e553b0b80beed09280bb76f7824fb6a791e49cfbc8c651",
+      "input_sha256": "7d5bd1a9887e31d2faa961af6ddb9ba819a5780299c33e9d2c03ba60c8d3caa0"
+    },
+    {
+      "case_id": "AUTO-16-UNIT-EQ",
+      "case_sha256": "ae04d5df566fa9bdc458d020a7d9d99e5daf3d9776d991d1e57c57c5062be728",
+      "input_sha256": "db39304167959ea2dcfbd5d773c8f80c7efb56c0b25f17d53c6ee669ea3643f0"
+    },
+    {
+      "case_id": "AUTO-16-PROV-HASH",
+      "case_sha256": "1ebaccdd927de40944ec50ce8314e63633ac9b429bd8628ea404fe1351bc856a",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-16-PROV-QUALITY",
+      "case_sha256": "0edfcec9778f32c34e096e679674611908b4dfc7e9943982bd174360902523af",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-16-PROV-ELIGIBLE",
+      "case_sha256": "4c13c9b81c82337cd75c12ce15f5d922596413370e2ac0ff8b71e875cc0ff989",
+      "input_sha256": "f1080799ce9191ddbf96ac79c813181511718e7fa6af30a92c11bb04f37c72b0"
+    },
+    {
+      "case_id": "AUTO-17-POS-canonical",
+      "case_sha256": "3d0247581b108fc7389d83dea262876bbc7fe5850a7262cff29fa7c18a0d04dd",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-17-POS-reviewed-alias",
+      "case_sha256": "979cf04373020c04cac63c8daf7e1caad9bdecfa0e49c61bdc3b98d161ecf7dc",
+      "input_sha256": "f2dbcae25809aef567c3c8bb5b125faed9a8a42e10689fc09d299fa3cc83a215"
+    },
+    {
+      "case_id": "AUTO-17-POS-casefold",
+      "case_sha256": "d3c0992c0e669335fd1a879858a3d2926d38378d3bfbace3a8ca7f35ad737b4c",
+      "input_sha256": "e9718794e6d9a393cc9e744585b009a9619a3bdec8e608eccd87852e4e8b72f4"
+    },
+    {
+      "case_id": "AUTO-17-POS-symbol",
+      "case_sha256": "93c732703b9e47044cf2c1067b76f7ae50da054d00af85c78e504a71ebfae089",
+      "input_sha256": "13618a1c20333ec3895a18f298e04522d6a55c40e3905746cebed6ad770dae35"
+    },
+    {
+      "case_id": "AUTO-17-POS-reviewed-typo",
+      "case_sha256": "967b23a27a13e030972c2a707465c7dee9f857d106be32e5c17255add12c9889",
+      "input_sha256": "9366d0197f69ccd7853cd77ca931a46639fb2896d2d54a2aa05a6461db9ab571"
+    },
+    {
+      "case_id": "AUTO-17-Q-0_001",
+      "case_sha256": "e5fe70ee3cc94cb3a06f243871099dce11e855f530d27cdee7ba34511228278f",
+      "input_sha256": "05a33f23415bd7a1f0da8baf42629711dad76460c7225fdead937a3cf6c84b51"
+    },
+    {
+      "case_id": "AUTO-17-Q-10_0",
+      "case_sha256": "c1a75ecac3c6ef160b8171b6993a15d26ef1ca9f32f75cd4af761f80d4f66570",
+      "input_sha256": "90f9ea5c0c83fd903b5c0fe8cdcb62c84c135853085dd79ed581bdd97f7fdf81"
+    },
+    {
+      "case_id": "AUTO-17-Q-1000000_0",
+      "case_sha256": "89fd064bef245d05996307438c1557c1cb6998b588029ffc784816576f023c99",
+      "input_sha256": "f32dd6c35e374a655a09990acacab37a342bed564648e6a2ae1c46c5338ff896"
+    },
+    {
+      "case_id": "AUTO-17-ORDER",
+      "case_sha256": "fb2a127d9c5451198eb25120a6dd66716a06c4a857b1f498f0ddb1bdfdb35d5a",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-17-NOISE",
+      "case_sha256": "06466b299ce7546d5ff70dcbd70d7ca38ba710b807c04c72f62d677084752554",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-17-DUP",
+      "case_sha256": "fe563250526b620708064a581497733e7ddeef5926cd4395a547293b8678b6aa",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-17-BOUNDARY",
+      "case_sha256": "81410d814e67bc80ec208c1462517d41a0f26a234f634ad31c259dcf59efdae5",
+      "input_sha256": "ed410fc50abf5cc4ec66a7431d7d90f671531c86223332648ef5756485319d55"
+    },
+    {
+      "case_id": "AUTO-17-SUBJECT",
+      "case_sha256": "09f7b8c4901a95c83ec07764d2f811b220a463e6a5d34e3c85d5f5b116709f87",
+      "input_sha256": "8147a0378939f0919af6c320419a21776fa9142d6434a4612ffd938b1b5813eb"
+    },
+    {
+      "case_id": "AUTO-17-UNIT-X",
+      "case_sha256": "ec356528eb92e95f6926f348c3a6063e20d8808a715b92496849e96031d4b1ca",
+      "input_sha256": "dffea99457a23c302e0fc50cf3117a166e27ccdf3e058f32563dce849ed80da6"
+    },
+    {
+      "case_id": "AUTO-17-UNIT-EQ",
+      "case_sha256": "fe0dac3cf42ab246715eabf346bdb84319a7cc49ea0e30df30ec22fe0f077e77",
+      "input_sha256": "3a59eb8dae1d197079327712393fbe6c1d4bc0a6d95402445d3cdad92d7e0eee"
+    },
+    {
+      "case_id": "AUTO-17-PROV-HASH",
+      "case_sha256": "8e90224a718e1dce16becd04bfb59c3befc441f5222278912a3866851fd1dea0",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-17-PROV-QUALITY",
+      "case_sha256": "e2d63bb934ba2f07fcc0a9dede763b2ca2720b5388b74833c1ae17a7d165a1e4",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-17-PROV-ELIGIBLE",
+      "case_sha256": "2912e76aeadc06b6994d216d2a03edc6270837b24de60aec32d3295acea6639d",
+      "input_sha256": "5f5e7bf9fd38665355ce77c5cc2433dc779e792e813a76f8ba536635d0db9c81"
+    },
+    {
+      "case_id": "AUTO-18-POS-canonical",
+      "case_sha256": "75bfc21548fae4c594cce9617d2b907febeef7ca5252e818ac0396faab1feb43",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-18-POS-reviewed-alias",
+      "case_sha256": "7391016f7be711be4e9059b582248973ec24d6e87653ac1bbffa85c9bcf84db3",
+      "input_sha256": "980091d66e724f0de5b6c80e61ae76ac1cdd642e01ab837ad2726eef5365d311"
+    },
+    {
+      "case_id": "AUTO-18-POS-casefold",
+      "case_sha256": "afdb6906a91c9eeddfbbec7351fcab401604549106e2b35420a1ba1a81908595",
+      "input_sha256": "7215617727b2bb1b6e199dfb15ce97e526da643fb88217f8e51f33bfe19a8599"
+    },
+    {
+      "case_id": "AUTO-18-POS-symbol",
+      "case_sha256": "87b3d9bacfa519d75d3e8917a33dd01ee1935f1f88e2290ba9135a03c6b5617c",
+      "input_sha256": "c854eaf1eb7cd07d9fc40aec42e030e62660a2177c122d32b333922ada0f7dbb"
+    },
+    {
+      "case_id": "AUTO-18-POS-reviewed-typo",
+      "case_sha256": "fc9ee795eda86bc5bf2bf3d50c6880b547ab82ff41c1029ddf45a2a0a20518f8",
+      "input_sha256": "6577d8789ba5d281aee578d05fe4b6cb7d6f529581752c1aa41926c136371bfc"
+    },
+    {
+      "case_id": "AUTO-18-Q-0_001",
+      "case_sha256": "b0da8f7e8792e41fda0141399ace63f2e275fb1fd76b04ebafe40985a5bb0230",
+      "input_sha256": "6e47b6073c1333505de028ae812e7599e6ddb4dd1e9b95165d65da43407b8e1b"
+    },
+    {
+      "case_id": "AUTO-18-Q-10_0",
+      "case_sha256": "cd83bf0475dadca31a0cdacbbb7692b2f2370f1599c528a1952c878072b55af9",
+      "input_sha256": "f68b2e6470094295727a11edc446070c43811ce687bd5dc2adcc3c543f0176d4"
+    },
+    {
+      "case_id": "AUTO-18-Q-1000000_0",
+      "case_sha256": "3aca7e9fc98fa2ace9587c93e98d9fa9362c3ae1ccec15402340438b902cd7b6",
+      "input_sha256": "8aa1706e4fcd56dd645174e6103dbe3e5f5b92493957ca49aa7026e7c67bd711"
+    },
+    {
+      "case_id": "AUTO-18-ORDER",
+      "case_sha256": "ad74c319c249bae2ac553aa737487c050324c24b0cd0ad51117a100c62046765",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-18-NOISE",
+      "case_sha256": "bcb7b9dc6b6ea8f895c307afd3c87cf8fb31ce9b930260dc255396a445ed221f",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-18-DUP",
+      "case_sha256": "b25f7270b08a52abc4132ac44a35435d41ea47fc4e047985d559223d3ca9f524",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-18-BOUNDARY",
+      "case_sha256": "49c08381d7e9b07d94a97f5343114fb45af147797622bf6258b85429a07b3bce",
+      "input_sha256": "01a39a3d4f187643fc5e65661318689d79ff079f575109f39a6f0f85abcfd70a"
+    },
+    {
+      "case_id": "AUTO-18-SUBJECT",
+      "case_sha256": "7e6f8eb48b5dca04955006e5317b207304d48e147aaeef9e9a3a926c6d4cb11f",
+      "input_sha256": "09c77a5b9ed488a9202f8602e4b04417352279a50010fa6dec92f03571db8499"
+    },
+    {
+      "case_id": "AUTO-18-UNIT-X",
+      "case_sha256": "8e9acb6d8475d0cc029b1d8a1dcb5f562b22b6ac512c91ce564596fe3cc5a958",
+      "input_sha256": "978608ff75e2af4fac8d2301644c95fc1c05f20202ebdebdd4783e6fad71f438"
+    },
+    {
+      "case_id": "AUTO-18-UNIT-EQ",
+      "case_sha256": "7825a8b0c1fb8fd6f02392958a17ba3632aa1290fe5a96ae646d4e418245336c",
+      "input_sha256": "073b1df07d5147744236612a3ff9b3238305a6f851f85ec741b8d803fb4e5769"
+    },
+    {
+      "case_id": "AUTO-18-PROV-HASH",
+      "case_sha256": "166e7c72ad73b0880f4f7ad88a0dd1f1048f16398ea8b3b44d818c3d6fcffb58",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-18-PROV-QUALITY",
+      "case_sha256": "4934bbb29de61dddc22b76a56dbf035e61b1ff57f529de978eb25d1b0bba927a",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-18-PROV-ELIGIBLE",
+      "case_sha256": "b2a41df2afde9ab43f8597680ed577d60b4a4b837018fdb7dfb5fbd21e566e13",
+      "input_sha256": "dc9bd8e4b94d418d2ead9822f356bb15da20f1303ddb10613370c3bb8242a3bf"
+    },
+    {
+      "case_id": "AUTO-19-POS-canonical",
+      "case_sha256": "eb87483f9f1ff7c46ba7c3c71cde1f351aff32bdce575f329632aa4f7dcd54ea",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-19-POS-reviewed-alias",
+      "case_sha256": "192218abcf18e59d91c3aaa9ed4d98886549c49d79fa8181f34b427d0d85a03f",
+      "input_sha256": "9da7c260d9263fea55cf5f925ae3059d65601cf672435d996f9a58eed6c5dcf9"
+    },
+    {
+      "case_id": "AUTO-19-POS-casefold",
+      "case_sha256": "54819c331c958740f97d2962dcf9c7eeba8a6720e824ee80126491175e0cae93",
+      "input_sha256": "1c8ac70263fba8ff6cb865790428ef896cecd929f04d265edcb2783ef4bc9e11"
+    },
+    {
+      "case_id": "AUTO-19-POS-symbol",
+      "case_sha256": "1627c8c8d8a9c44a55c0fbf7e3936d39241cd0d59c94c739b93db01cc283e69c",
+      "input_sha256": "d92cceedf404078c8c73ad8bee6bc3562a7d428ab376313922fdfaac8431cab3"
+    },
+    {
+      "case_id": "AUTO-19-POS-reviewed-typo",
+      "case_sha256": "d8d27c798d6fe5a6162f4de35f9c73b99ffd5cccd02e44fa4b8c3deee111e9d0",
+      "input_sha256": "b7d61d1f5df8f999b845489d928e34f9ff1f08ddd4e00f48f91e7af5d5da94d4"
+    },
+    {
+      "case_id": "AUTO-19-Q-0_001",
+      "case_sha256": "3806d32452045eeacabef37ff4e3b3cff1d7e01c771d001aa703bd1f7e84a55f",
+      "input_sha256": "d24bc1df9add2071b3cea825159e0bdf1f798638438f330bfaf4c4b2384db50c"
+    },
+    {
+      "case_id": "AUTO-19-Q-10_0",
+      "case_sha256": "737f78b09f86a6c9beafff264279bdf9b83c7e4d0c1b599474ad9e4ffa5e84c0",
+      "input_sha256": "ca1cb447eef40b1f9345a4bfa6a64c724c88df2b59ad0aa1a4f5b0fd1fe4679c"
+    },
+    {
+      "case_id": "AUTO-19-Q-1000000_0",
+      "case_sha256": "b9a1331cdcbdd3426530daa432aaf8badbb3dd89a091215d6fc4faafdcf57e12",
+      "input_sha256": "3ccdbba3cfc2277d033a19e93d8cebe6e411e8d98b7a4e4d1822eb1fe9e69e1b"
+    },
+    {
+      "case_id": "AUTO-19-ORDER",
+      "case_sha256": "b18f885b3749d24e0ee7e09316990f2fb1944169309f8394ec3deea734b484b5",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-19-NOISE",
+      "case_sha256": "f72d9237790376be0ee16dfaf8451908739c05382dd8d17ad92a1cef3d6bf6ec",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-19-DUP",
+      "case_sha256": "fcf6acbb695b010a9cc341ea4e76b4e44910d404f72ae0a369ef55b553db55c0",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-19-BOUNDARY",
+      "case_sha256": "18d03a70119e3aa149e0dffa969e3575510ee188d97227632938edefcbfb0a15",
+      "input_sha256": "14d0bde58bf67d1d8d63ddbae682faa8763e16fe9245d066661518cbd7b6e145"
+    },
+    {
+      "case_id": "AUTO-19-SUBJECT",
+      "case_sha256": "b12d5d7fd5affc9f23cc448244bb6f7e5b73d9a245534a89956dd4ccfe735fae",
+      "input_sha256": "f3722afe6fa1409b766593425731710228221f639c78ac3d9d56b426b7c9f2d9"
+    },
+    {
+      "case_id": "AUTO-19-UNIT-X",
+      "case_sha256": "86abc2a6111a244c3be783514c679f85303bd7214aa263daa68cf0788bf89c5f",
+      "input_sha256": "1f9a369446c2310d280e94f55c5fd26c4d8065cc57d56662ee057be5adee281d"
+    },
+    {
+      "case_id": "AUTO-19-UNIT-EQ",
+      "case_sha256": "9631a1a8c9d46b79d179088f6f0411ed1521cc5cfd33be2bcd2c0f18cacc59ae",
+      "input_sha256": "87b884ca3363be1bc400889a9a0babd30b51b0cefaabdcd4ff1e582ffd47dea9"
+    },
+    {
+      "case_id": "AUTO-19-PROV-HASH",
+      "case_sha256": "64bbd59edb7d61b4206cd6d97e102ad9a806d43535483ebf95b752d70d845402",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-19-PROV-QUALITY",
+      "case_sha256": "35d6243d3b26f72b0ead24773ec192bebf07e8d2e82765df8b5b040eded872c1",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-19-PROV-ELIGIBLE",
+      "case_sha256": "b7a26a40dc1645f4f12f810e86a70405df928982f38aa348bebefd9122773daf",
+      "input_sha256": "a4c0381060052432a4d9fc9822e72425a87073374847ebf684705584e3066a51"
+    },
+    {
+      "case_id": "AUTO-20-POS-canonical",
+      "case_sha256": "f6fa8f3d6770fbfcb1615813bdd977750ba19ba4f3308d5baf2b94bbaea5e868",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-20-POS-reviewed-alias",
+      "case_sha256": "83306fa8644322d1918218e28a5dbe6ebc89453f79f0a3645726e76def1e6a72",
+      "input_sha256": "938c28055c59be62c4057650e5e8eb9170708754496a12dcb6d7a67ae701f0eb"
+    },
+    {
+      "case_id": "AUTO-20-POS-casefold",
+      "case_sha256": "979ce34670ff36cf88934c33a7a89d367706ed7ce298a9c74a7c392a1d61e485",
+      "input_sha256": "bf29222239e1d54d128da7ddf7f78ab599f068ae39e475594cd22517ae804da5"
+    },
+    {
+      "case_id": "AUTO-20-POS-symbol",
+      "case_sha256": "a050fdffad5bfb3e66d6e2ccc356cf24321f29b4f3fca45c9733291e607e530f",
+      "input_sha256": "b340286e3f89fbcea933c4e76e2da010e4179f929fdc3360f072af878a7283b5"
+    },
+    {
+      "case_id": "AUTO-20-POS-reviewed-typo",
+      "case_sha256": "a858ed3b57bb4a962f1995ce60a3cfd7f52901ab095a041501f17882d1c14833",
+      "input_sha256": "a5da5694e1d55852b0d6e0f94d23110fdf8610f268b24f8e9f6712976c3b3174"
+    },
+    {
+      "case_id": "AUTO-20-Q-0_001",
+      "case_sha256": "0fab2c5553e53f83b7fc28ac3e5deade16111eda5319381174b71bb1528b273e",
+      "input_sha256": "b66bb3ba73088dec0b7dfa2eb1b56506cc0ef1a717f9e9dca83070a557dff62a"
+    },
+    {
+      "case_id": "AUTO-20-Q-10_0",
+      "case_sha256": "6367a9b16aae5f14f332eef3d9969659a516776b2869a0bb40fe67c57bdcbdd1",
+      "input_sha256": "6617aecdee2bb1aa914894c5ebdafaf1142234217c4a72cd6eff8547da6cc632"
+    },
+    {
+      "case_id": "AUTO-20-Q-1000000_0",
+      "case_sha256": "15bdf0f5be7c428b5ef92d7dc66ef977bd7cf2fea86db0dd901902ab1ba6ff83",
+      "input_sha256": "2f8cd9d83cabe42ecc5fb2e9045bd197a426bc4017e962fdaa7469922b277091"
+    },
+    {
+      "case_id": "AUTO-20-ORDER",
+      "case_sha256": "90dba82edb38ad8fbb8c34fcddcef73d7af0d91f8bd9f776e06abd405d5e7c07",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-20-NOISE",
+      "case_sha256": "c6d2c2eddc352136950c7d446b0460ed116b7975ccef89d7e74e8c7c2ee696db",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-20-DUP",
+      "case_sha256": "77fbea5b4a0e8b1e77093610fa9a459c3dfac7ffadade7ca0a534ca5f425e4f1",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-20-BOUNDARY",
+      "case_sha256": "b0f558b4b191900a7c69adeaa19d51f2f64b5a7699194b5d5d0f50c82bb405a6",
+      "input_sha256": "69d88b1dce24e8f4ae70384883212dfd9b98baa388f8a6187e87abde8b153e23"
+    },
+    {
+      "case_id": "AUTO-20-SUBJECT",
+      "case_sha256": "309219c138693a9416d71e8e66c3378f22953752abf0fdfe60de478037f2d20e",
+      "input_sha256": "f5aa35be7a40b2e68699597d7332a9cc2ad8727473f68f09fc68555628f5ff1b"
+    },
+    {
+      "case_id": "AUTO-20-UNIT-X",
+      "case_sha256": "2c501d96d4a7504c78b10412018b6c2c92713c074219a6fd7cc0c9074ec45d44",
+      "input_sha256": "47a965e4151fb5211e8ffc5d3a514b1d7a2ebd2c4def597fd3112b8b19766f42"
+    },
+    {
+      "case_id": "AUTO-20-UNIT-EQ",
+      "case_sha256": "6bf4cdca20619287e6b215e3a21ef82938d9a7f911eb1b60e1d6ebb031aa7b63",
+      "input_sha256": "d5017356ac112f8dd7f4fd9b85745f12ffe5c55c6dc1e25621d0d139db18a95a"
+    },
+    {
+      "case_id": "AUTO-20-PROV-HASH",
+      "case_sha256": "659a7b8b595a1e90b34f3c8d7a5e6ac52c53a239c9e85a4d11e3b5573281b435",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-20-PROV-QUALITY",
+      "case_sha256": "233525bdcc6c86d7a66318fd61360e3c07acc5828adce4b133c5dd02e6b176ff",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-20-PROV-ELIGIBLE",
+      "case_sha256": "1a0e8835fdb8ea4bda2672f48090f35fc05982096be01e6a61cbcb753cd27c75",
+      "input_sha256": "cb225b1c4fd80f4ffdb364d738c0569813a2a3e63eda33cf6f89bbef39c6d4d0"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A1",
+      "case_sha256": "84b8f459d14bb49e2416a861b84e8bff977b966694537ed0af22779a30604c80",
+      "input_sha256": "e4d87ed7169e98a182215dc8841f4c5f524180d908076ffa348c0f4cc11cd3bd"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A2",
+      "case_sha256": "45db766a5661b72213a6cef2b400f621e34bd5ec48a1ec543dbbf5685047ee1c",
+      "input_sha256": "e4d87ed7169e98a182215dc8841f4c5f524180d908076ffa348c0f4cc11cd3bd"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A3",
+      "case_sha256": "24e06c36ff9b6bdf524ccfbf09fae5050046ccb8817e6f18c9256b6d3ff10eff",
+      "input_sha256": "e4d87ed7169e98a182215dc8841f4c5f524180d908076ffa348c0f4cc11cd3bd"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A1-A3",
+      "case_sha256": "fe9a9b1f15faf945b364b80776631c09bded2edfe0bae06852b8a004611a4c6e",
+      "input_sha256": "e4d87ed7169e98a182215dc8841f4c5f524180d908076ffa348c0f4cc11cd3bd"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A2-A1",
+      "case_sha256": "13dc2a1ce0d6274f5aba8a271a926077e088b36b597e116c57c7da040554b9fe",
+      "input_sha256": "166d0944bc2c17e5101168e187d48d2e2cc34541591753a57ef4891e52dcf2c2"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A2-A2",
+      "case_sha256": "23244516df67e8d40a822c175c925db37f4aa7b2fc1f5680e64f2aa468185766",
+      "input_sha256": "166d0944bc2c17e5101168e187d48d2e2cc34541591753a57ef4891e52dcf2c2"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A2-A3",
+      "case_sha256": "e04b25233499ed4b0365a70868cfe98f36b472662c1da85ac6780c779a92f2e9",
+      "input_sha256": "166d0944bc2c17e5101168e187d48d2e2cc34541591753a57ef4891e52dcf2c2"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A2-A1-A3",
+      "case_sha256": "f1d6b732edb49b674b1b004d955ccbe8d412dfef8dec1a596099dc70c02a5731",
+      "input_sha256": "166d0944bc2c17e5101168e187d48d2e2cc34541591753a57ef4891e52dcf2c2"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A3-A1",
+      "case_sha256": "271f6cb2f3fb2813e0091bf89d854144244b2f490f549335bea3d565aafc1436",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A3-A2",
+      "case_sha256": "bbe8c699badac00d258834fed6ca03975c648d8367efb4a86a8fca43d26d7991",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A3-A3",
+      "case_sha256": "5fb42a91124801103295962b20e5a2ad49b445db006134efebb94df1fad66416",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A3-A1-A3",
+      "case_sha256": "fa037f10214da7a0001942ffcb918404f8398d614b075db53b6c12ea560e161e",
+      "input_sha256": "0b8f74a9a0df7a723c8650947c78556cdf1bdfbda9ae816dec5a2b8176da7a40"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A3-A1",
+      "case_sha256": "718728ff61952c750085141eb398b17a03483445cf36ff97e2e1ae215196c735",
+      "input_sha256": "aaec12a9ba2168cacf8a3adc690b0efdc6b350d8eb5b3b57b645a68747354890"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A3-A2",
+      "case_sha256": "75bcd57dc182037c58567337de484388684d399564b841827a76ec192d89598b",
+      "input_sha256": "aaec12a9ba2168cacf8a3adc690b0efdc6b350d8eb5b3b57b645a68747354890"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A3-A3",
+      "case_sha256": "e233507d036b2ddf96fd1517e0ae9c5e2942806b15abec29bf482e993f9a1405",
+      "input_sha256": "aaec12a9ba2168cacf8a3adc690b0efdc6b350d8eb5b3b57b645a68747354890"
+    },
+    {
+      "case_id": "AUTO-MATRIX-A1-A3-A1-A3",
+      "case_sha256": "308eefa421a3ed71ca6c1ef9d86fe156c18cc14618a364cd3ee11dba4162c9e4",
+      "input_sha256": "aaec12a9ba2168cacf8a3adc690b0efdc6b350d8eb5b3b57b645a68747354890"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-00",
+      "case_sha256": "54a27ea6b0e6b8d284b5f1387ee4b81ec6eef83d3210a413119234b880852da7",
+      "input_sha256": "21f1c2277476117ebc48586f41e79d9fe8d69cce76fa51aadeee27e17406ccd1"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-01",
+      "case_sha256": "a44545fb666b7eb0e2653d7bc0f73e7b5bffab723be29f0149e8d9b1ad7dd9c0",
+      "input_sha256": "9142f42a613e86a68d246413cd3db9cd5b716a71837ad4793c8282644a8de7d0"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-02",
+      "case_sha256": "b0c216e21d1791737ac08b2294825bbb3ca6a88e6cc7aad3377c23b5009f1bf7",
+      "input_sha256": "c21d331c15b61d910ec733d1e0e0445c8a1b96b635cc5021fd5b09002cfa45e1"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-03",
+      "case_sha256": "038f55ec1ad4bbf3b70d6e1d867dab410450467a52c2b3d1fca445c41e7f546d",
+      "input_sha256": "4702656c78bc4ab6f01f0b26a181fa36b4786df4c89af90f2417f9eca1c11f63"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-04",
+      "case_sha256": "c89a38593f93c477aa4a208d745acce2caaa6c8c1446294b820da1a18f71690b",
+      "input_sha256": "7bff8981b6788bf37682819fccb21321c860413147759684c5fbea0577fad500"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-05",
+      "case_sha256": "7599b7c4cc85021924744d500ba2181d69b73074ef049913e2bbdb3ef6ceaf7c",
+      "input_sha256": "7a87e2b61dd01dc7b616f28603f65e79f3a6dfa25e7b5510dfbd78f1fcd9326c"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-06",
+      "case_sha256": "419d1c153055995d6788d2bc53d6bc5b2c41909fb9784b3296fab6bd82130a7d",
+      "input_sha256": "0e9970d681c58cd6908c0465fba87fff87c794b09b0649d2f6990a9ffb1436e4"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-07",
+      "case_sha256": "d1ebcc9881f38e8f2dbe37d9dcd378124891d9b0c10dcd8e6e58e035ff112418",
+      "input_sha256": "a204720b2f7018f3ac510367aa766346c78f6e340b732cd05b485ad904fbf67d"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-08",
+      "case_sha256": "975ceeb11db12b07e6d1455e9e024589ea9024bc09fd358f70cadc6fb64594e2",
+      "input_sha256": "cf978ca8ab1c9797431fd02d922f6d03e57164dfef1789bb40895963d87d8887"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-09",
+      "case_sha256": "74526439a6b106873c5edb05d1670375fd14eb6944768147bff86660cdbd5fe3",
+      "input_sha256": "9193b0ae9d65f4adf7ee1ac39c3347e018f534c3ec8ce81782ef855998c523b1"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-10",
+      "case_sha256": "b209218230164182aee9ccf450fa04b566f79800066bc7f34736e8c1c63f41c2",
+      "input_sha256": "9e070188f260b8946d48c50bb68c51c11cb9cba3c3053c67fd157cf2e7dafbeb"
+    },
+    {
+      "case_id": "AUTO-UNKNOWN-11",
+      "case_sha256": "aedcd2b935b9bf3e5280020bdc06875baa815520780bd8534456594456fe3e72",
+      "input_sha256": "154226e41b695608e884bdbf64e78cb0eb1105726b2e357ba473f71b53d278ee"
+    },
+    {
+      "case_id": "AUTO-MISSING-ALUMINIUM",
+      "case_sha256": "3ad81db664d5c768dfbff1ac347774a58ba69c3e7a9f61a61f171cee197c8dc1",
+      "input_sha256": "ad941dfc5587438e4c2e85a75ec3cbf027d6c562767a240f86fd32c79575eb6d"
+    },
+    {
+      "case_id": "AUTO-MISSING-SPINEL",
+      "case_sha256": "02b1388023c2a82f07d38717172516d6e0ee77d8b7639f2671c0c4e6a7224cef",
+      "input_sha256": "1c89228a324961299dfaa3b50a864fde8c786c97f08d6082a81747025a8f3768"
+    },
+    {
+      "case_id": "AUTO-MISSING-GRID",
+      "case_sha256": "3a48b82b3ffc0eb65359bb115d0bcde9f80c00d65de4891ea6e0f0c78cdbf13a",
+      "input_sha256": "e1f1a9b02c3b3bb690c12992fe6b97f3d0a51baa49957a31264f5435756da8f1"
+    },
+    {
+      "case_id": "AUTO-MISSING-BAUXITE",
+      "case_sha256": "41d927e7ce19ac1b4db807418d211b183f3c1bcc9421fa7646d34bd237db5fd7",
+      "input_sha256": "dbdc9c5278b33094170bdced0a6e4ae0ddbd850dad49683886c9e1339a39fc2a"
+    },
+    {
+      "case_id": "AUTO-MISSING-GRAPHITE",
+      "case_sha256": "43a41296287224d0a6f306a5ee86a0572c03c127cfef52813a4ec099feae1418",
+      "input_sha256": "8c8e6f0b173a5bab578d0ed4e8d3d4d957f341d5158d547b362940735623c3ad"
+    },
+    {
+      "case_id": "AUTO-GRID_2024-GEOGRAPHY-X",
+      "case_sha256": "176831d768a327b492375984b18a9b22301825203f1df2287f6e90b8faaac6e1",
+      "input_sha256": "a5a106a83e4eff989774380ffadac411482a38651dc8982f375e5e5e6e7b8791"
+    },
+    {
+      "case_id": "AUTO-GRID_2024-YEAR-X",
+      "case_sha256": "679ac1c020b24d5b2df0c4de888d32d87bf35896c824471cf7bffdc1561bd0bc",
+      "input_sha256": "d7e5df77f6460d901f6f46ca9fcf9cae21a6b6e2f6b96449ce53e376795221ce"
+    },
+    {
+      "case_id": "AUTO-COAL_MARKET-GEOGRAPHY-X",
+      "case_sha256": "160b56d28cdd9d547517d62bb3a58ab026bcc953cecedc65b68be620b6c59acb",
+      "input_sha256": "68e64204c63be6d5001121e33187e215d97d0a7e4e5060680a396e449653872c"
+    },
+    {
+      "case_id": "AUTO-COAL_MARKET-YEAR-X",
+      "case_sha256": "e7c4eb4cbb2fba6540aba8643c0fda36c2a01ded4161206b472fea5edb784a21",
+      "input_sha256": "d4f35418d18c724bf1ba1cc446b798ca659fc3b015e2588cb6add98aa276f4c2"
+    },
+    {
+      "case_id": "AUTO-COAL_COMBUSTION-GEOGRAPHY-X",
+      "case_sha256": "b72df54654f236d875eaa48c93edc00fbb918ed65813404178e604d8b62b1896",
+      "input_sha256": "5b79ba53e464a52f1f90b8ba2a8c3c07eb5b637b4238efb19a97b210d883f81d"
+    },
+    {
+      "case_id": "AUTO-COAL_COMBUSTION-YEAR-X",
+      "case_sha256": "268e5e064a835d211c22c5d98c6cc7edd8dd7473ceaf0bc211ad402760d780d4",
+      "input_sha256": "d29bfa20894dda5307be2617b4e489d530a0bfe36933bb7c9ac85746cf668836"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-1-BOUNDARY",
+      "case_sha256": "673d23835490bac85f78a6fc10b3d4c47d5ba7dd62c28ef147343d65d5e7dcd2",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-1-SUBJECT",
+      "case_sha256": "ccafaf9dbb86bc4593f1bf8e42dfbf07e9f9f6d10c166136e34e98c0883ac3b1",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-1-UNIT",
+      "case_sha256": "1e30bc9fc2cb8d9acec31b37c2d49f9b862133b71b7d15b0ad48f9b16cbaedf3",
+      "input_sha256": "f3465fcd720ca6a0350a24f2a37b60abfc99f1b721e31c7c8bf4a07eef4f2b40"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-2-BOUNDARY",
+      "case_sha256": "4e9925bd638fb5adeec14a1ffe1efd030708d53f2d65a1860402125f490b8272",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-2-SUBJECT",
+      "case_sha256": "e6be6fd058a144908e977fdbdf3fec39c378cc663d0cdcf509cc603b6f8a7db3",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-2-UNIT",
+      "case_sha256": "69c8925db927e6422cdc8a52ff49cd3d0491a2c24cdb97b5f44f649925551aa9",
+      "input_sha256": "669b1cc0d7a9f992d2e163cad7816bce6d985e852bd23b3e885dba69903e9fc5"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-3-BOUNDARY",
+      "case_sha256": "9a24e1806dad14f838595fb43172abf13b4c4f0d829d883f2cd1c10a9cc51725",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-3-SUBJECT",
+      "case_sha256": "dbe14f8f91ecc9e70f29ea6c41866f4fdf0649b008f0f920a972a9ebce43ec12",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-3-UNIT",
+      "case_sha256": "0cae597b165831f7d3967747306ac99e81fa3969a2f01cf1b210ca9667ce9a81",
+      "input_sha256": "b952522fe91ebe0fadbe23dd25e4f03e64e56dcf134027bfce245358ac408985"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-4-BOUNDARY",
+      "case_sha256": "486e24ee82f0653b64720d7e74b4b06e45c42c6e78a22b37b14ebb71e2bbcdd1",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-4-SUBJECT",
+      "case_sha256": "fcba09ab604ff17e1fc91a74a5a33c245cdf0c646028926892a03e637512f70f",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-4-UNIT",
+      "case_sha256": "8ae8f8770ee2863e94296ef8377afd6e7fe18746ddaf2dd3fc856607ad87b716",
+      "input_sha256": "c09aebe996a40225e2b1513e0b3ece779009fc475aa1d5e4fc5a910f94c250f6"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-5-BOUNDARY",
+      "case_sha256": "864871496c22020ca98b8bdfaf97fc41799cba5d25ed28e3199021bddb56d57c",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-5-SUBJECT",
+      "case_sha256": "479527088ddacfe67939dd54df936c195454c24e632e7065b912b442d7709623",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    },
+    {
+      "case_id": "AUTO-HIGH-PRIORITY-5-UNIT",
+      "case_sha256": "53a5c11a0caf00a7097d238ab05657a9a2e06ba2f72485534f6ba2a7dee1dd7d",
+      "input_sha256": "7a3656ba1958db17e149158d439462107c7ee915b0317df2ec1b88fa3e58c70d"
+    }
+  ],
+  "generator_sha256": "5882e4de5b7831bc757eb2e0c3ab3cf25026773035f6bf7ead647f00417d4b6f",
+  "manifest_sha256": "a9790d4bdfc09b388eb4cd1a49c23f35c4251266fee7169420a2ad10ca52daa7",
+  "schema_version": "cfr-autonomous-quality-gate-freeze/v1",
+  "seed": 20260902,
+  "source_sha256": {
+    "tools/autonomous_evaluation/contracts.py": "266185df93176e5529197f76f66cf8090d36cb1ca52e2a7d1a5dcc77993af6a7",
+    "tools/autonomous_evaluation/generator.py": "58e312147a75ff0f481c6c6b75c582b9ab7581b98333256d5a3f5c8dfa8da1e0",
+    "tools/autonomous_evaluation/oracle.py": "cbebc4605f40b7dd7a6b2fa2b1c907b74fde9205647ca16a8d30104c66b321a1",
+    "tools/autonomous_evaluation/v3_contract.py": "d372b570bac10b4f3564cb30afa3baa8c179cdf9c96af9bbbe82de838099a9e2"
+  },
+  "total_case_count": 418
+}

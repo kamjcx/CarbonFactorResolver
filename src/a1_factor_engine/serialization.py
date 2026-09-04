@@ -8,13 +8,14 @@ depending on FastAPI/Pydantic serialization details.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 
 def to_jsonable(value: Any) -> Any:
@@ -52,6 +53,22 @@ def serialize_recommendation(recommendation: Any) -> dict[str, Any]:
     payload = to_jsonable(recommendation)
     if not isinstance(payload, dict):
         raise TypeError("recommendation serializer expected an object")
+    digest = getattr(recommendation, "content_sha256", None)
+    if isinstance(digest, str):
+        payload["content_sha256"] = digest
+    for field_name in (
+        "candidates", "reviewable_candidates", "diagnostic_candidates"
+    ):
+        objects = getattr(recommendation, field_name, ())
+        rows = payload.get(field_name, [])
+        if isinstance(rows, list):
+            for obj, row in zip(objects, rows, strict=True):
+                if not isinstance(row, dict):
+                    continue
+                row["content_sha256"] = obj.content_sha256
+                source = row.get("source")
+                if isinstance(source, dict):
+                    source["content_sha256"] = obj.source.content_sha256
     return payload
 
 

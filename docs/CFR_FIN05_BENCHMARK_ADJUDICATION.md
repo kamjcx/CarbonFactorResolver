@@ -78,3 +78,8 @@ Until those items exist in canonical, reviewable sources, the available evidence
 insufficient for direct recommendation. Option 3 is the final safe benchmark disposition.
 Future source-scope evidence may create a new versioned adjudication, but must not rewrite
 this frozen answer or its recorded history.
+
+The machine-readable V2 overlay now records Option 3 as an effective `more_input` contract while
+retaining the V1 `retrieve` label and raw metrics unchanged. See
+[`portfolio_challenge_v2_adjudications.json`](../data/benchmarks/portfolio_challenge_v2_adjudications.json)
+and [the V2 adjudication specification](CFR_PORTFOLIO_CHALLENGE_V2_ADJUDICATION.md).

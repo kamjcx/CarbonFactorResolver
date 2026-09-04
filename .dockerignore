@@ -1,15 +1,22 @@
 .git
 .venv
+.qa*
 .pytest_cache
 .ruff_cache
+.mypy_cache
+.hypothesis
 __pycache__
 *.pyc
+*.egg-info
 .env
 .env.*
 !.env.example
 *.db
+*.db-*
 *.sqlite*
 *.duckdb
+*.mdb
+*.accdb
 *.bak
 *.backup
 *.dump
@@ -19,6 +26,7 @@ __pycache__
 *.pfx
 *.crt
 *.cer
+*.log
 *.doc
 *.docx
 *.xls
@@ -44,3 +52,6 @@ progress.md
 docs
 tests
 tools
+.github
+evidence
+data/sealed

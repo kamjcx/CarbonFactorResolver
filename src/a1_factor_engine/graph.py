@@ -42,6 +42,10 @@ from .models import (
 )
 
 
+class GraphInvariantError(RuntimeError):
+    """A graph stage was invoked without its required predecessor state."""
+
+
 def candidate_hard_rejection_reasons(candidate: Candidate) -> tuple[str, ...]:
     """Return candidate-local reasons that can never be overridden by approval."""
 
@@ -50,10 +54,19 @@ def candidate_hard_rejection_reasons(candidate: Candidate) -> tuple[str, ...]:
         gap.gap_type == GapType.PROCESS_VARIANT for gap in candidate.gaps
     ):
         reasons.append("unresolved_process_variant_requires_process_model")
+    if any(
+        gap.gap_type == GapType.GRADE_COMPOSITION
+        and (
+            "purity grade" in gap.reason
+            or "grades use different schema" in gap.reason
+        )
+        for gap in candidate.gaps
+    ):
+        reasons.append("unresolved_grade_or_specification_conflict")
     return tuple(dict.fromkeys(reasons))
 
 
-def candidate_rejection_reasons(candidate: Candidate, state: "GraphState") -> tuple[str, ...]:
+def candidate_rejection_reasons(candidate: Candidate, state: GraphState) -> tuple[str, ...]:
     """Return hard blocks plus soft review gates for ordinary recommendation."""
 
     reasons = list(candidate_hard_rejection_reasons(candidate))
@@ -62,7 +75,7 @@ def candidate_rejection_reasons(candidate: Candidate, state: "GraphState") -> tu
     return tuple(dict.fromkeys(reasons))
 
 
-def candidate_is_sufficient(candidate: Candidate, state: "GraphState") -> bool:
+def candidate_is_sufficient(candidate: Candidate, state: GraphState) -> bool:
     """Shared hard eligibility gate used by routers and Top-K status."""
     return not candidate_rejection_reasons(candidate, state)
 
@@ -152,6 +165,15 @@ class GraphState:
     def event(self, stage: Stage, message: str, details: dict | None = None) -> None:
         self.events.append(AuditEvent(stage=stage.value, message=message))
         self.trace.append(stage.value, message, details)
+
+    def require_normalized(self, consumer: Stage) -> NormalizedActivity:
+        """Return normalized state or fail closed at a stage boundary."""
+
+        if self.normalized is None:
+            raise GraphInvariantError(
+                f"graph stage {consumer.value} requires normalized activity state"
+            )
+        return self.normalized
 
 
 StateT = TypeVar("StateT")

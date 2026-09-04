@@ -11,9 +11,24 @@ candidate, a precise `MORE_INPUT` question, or a safe refusal. Numeric values al
 from traceable source records; deterministic gates enforce unit, lifecycle-boundary,
 subject, and provenance compatibility before human review and immutable locking.
 
+The default HTTP application is a production-safe, fail-closed data plane: it does not load demo
+fixtures or claim readiness without an explicitly injected engine/catalog. Benchmark execution, debug
+resolution, full traces, and full diagnostics are absent. Deployments that need those operations
+must bind the explicit admin/dev application to a separate protected port and inject their own
+actor/tenant/project authorization policy. Live structured-source adapters are HTTPS-only,
+same-origin by default, and bounded against SSRF, redirect, credential-forwarding, timeout, and
+oversized-response attacks. See [the v4 threat model](docs/CFR_CONNECTOR_CONTROL_PLANE_SECURITY_V4.md).
+Generic CFR does not ship a customer-specific catalog-priority policy. A deployment that injects
+one must bind it to the exact catalog content; production-approval authority additionally requires
+a deployment-verified signature. See [Engineering Delivery Hardening V6](docs/CFR_ENGINEERING_DELIVERY_HARDENING_V6.md).
+
 > **Status:** portfolio-ready, reproducible research prototype. Bundled evaluations use
 > public-synthetic fixtures. Results are not a claim of universal real-world accuracy or
 > production carbon-accounting readiness.
+
+The repository's pinned builds, scans, SBOM, and checksums are delivery evidence, not a production
+security certification. Multi-instance idempotency/persistence, trust-root management, IAM,
+monitoring, recovery, and formal factor-data approval remain deployment responsibilities.
 
 ![CarbonFactorResolver dashboard resolving a synthetic primary aluminium query](docs/assets/dashboard-resolved.png)
 
@@ -38,14 +53,16 @@ and [SVG](docs/assets/cfr-resolution-architecture.svg).
 
 ## Five-minute quickstart
 
-The default runtime uses small project-authored synthetic fixtures. It does not download or
-ship ecoinvent, customer records, or any commercial factor database.
+The Compose quickstart explicitly selects demo mode and uses small project-authored synthetic
+fixtures. The image's default production command does not load them. Neither mode downloads or ships
+ecoinvent, customer records, or any commercial factor database.
 
 ```bash
 git clone https://github.com/kamjcx/CarbonFactorResolver.git
 cd CarbonFactorResolver
 docker compose up --build -d
 curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/readyz
 ```
 
 Open `http://127.0.0.1:8000`, or submit a JSON request:
@@ -65,10 +82,16 @@ Python/CLI development setup:
 
 ```bash
 pip install -e ".[test,api]"
-cfr resolve --material "aluminium" --quantity 1 --unit t
+cfr resolve --demo --material "aluminium" --quantity 1 --unit t
 cfr benchmark run data/benchmarks/factorbench_v3.jsonl
-cfr serve --host 127.0.0.1 --port 8000
+cfr serve --demo --host 127.0.0.1 --port 8000
 ```
+
+`/healthz` is liveness only. `/readyz` returns `503 SERVICE_NOT_READY` when an explicitly
+configured engine or another required dependency is unavailable; optional external connectors
+degrade readiness without taking the service down. CLI exit codes are `0` (direct/reviewable
+result), `2` (invalid request), `10` (`MORE_INPUT`), `11` (unresolved), and `70` (internal failure).
+See the [versioned API and operability contract](docs/CFR_VERSIONED_API_OPERABILITY_V5.md).
 
 To connect your own licensed or internal structured catalogue, follow the
 [Bring Your Own Catalog tutorial](docs/BRING_YOUR_OWN_CATALOG.md). It includes a 20-record
@@ -110,7 +133,8 @@ python -m tools.autonomous_evaluation.performance --sizes 10000,50000 --concurre
 Generated expectations come from explicit contracts rather than from Resolver output. First
 runs, failures, Bad Case attribution and artifact hashes are retained; a failed gate is a
 diagnostic result, not tuned away. See the
-[autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md).
+[autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md) and the
+[V3 quality-gate contract](docs/CFR_AUTONOMOUS_QUALITY_GATE_V3.md).
 
 ## Architecture and product boundary
 
@@ -149,13 +173,18 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | Evidence set | Result | What it proves |
 |---|---:|---|
 | v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
-| v0.14.2 core package | 360 passed, 87.15% branch coverage | current implementation regression gate |
+| PR3 stacked candidate | 411 passed, 86.42% branch coverage | current Catalog-to-lock integrity regression gate |
+| PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
+| PR5 stacked candidate | 464 passed, 87.01% branch coverage | versioned API, fail-closed readiness, idempotency and scriptable CLI contract gate |
+| PR6 stacked candidate | 483 passed, 87.00% branch coverage | generic policy boundary, full-package typing, graph invariants and supply-chain evidence gate |
+| Autonomous Contract V3 stacked candidate | 501 passed, 87.03% branch coverage | SHA-bound effective expectations, raw/effective metric separation and zero unresolved Autonomous Bad Cases |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
+| Portfolio Challenge V1 raw / V2 effective | raw 58/60 decisions and 14/54 legacy wrong/unlisted; effective 60/60, 12/12 `MORE_INPUT`, 8/8 option contracts, 0 formal escapes | immutable V1 evidence plus SHA-bound selectable-vs-reference adjudication |
 | Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
-| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases + workflow attacks + 10k/50k scale | systematic contract exploration; six frozen geography/year label disagreements remain visible and adjudicated |
+| Autonomous Evaluation V1 / Contract V3 | 414 generated resolution contracts + 4 API fault cases; raw 230/259 Top-1 and 103 Bad Cases remain visible; V3 effective 230/230 Top-1, 145/145 abstention, 23/23 `MORE_INPUT`, 0 unresolved and 0 safety escapes | systematic contract exploration plus per-case SHA-bound Oracle/status adjudication; not an independent holdout |
 
 RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent
@@ -170,6 +199,8 @@ repairs, public BYOC example, and release presentation evidence. See [Evaluation
 - Exact A1/A2/A3/A1-A3 and factor-subject matrices fail closed.
 - Unsupported or cross-dimension units return stable reason codes.
 - Source locator, content hash, declared product, boundary, and database anchors stay in Trace.
+- Catalog content, candidate, recommendation revision, approval, reviewer and locked evidence are
+  content-addressed; lock uses compare-and-set and freezes a separate evidence snapshot.
 - Rejected candidates cannot later be approved in the same immutable resolution run.
 - `REFERENCE_ONLY` results require an explicit, reasoned human override.
 
@@ -182,6 +213,7 @@ repairs, public BYOC example, and release presentation evidence. See [Evaluation
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
+- [Catalog-to-lock integrity contract](docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md)
 - [Release notes](docs/RELEASE_NOTES_V0.14.2.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 

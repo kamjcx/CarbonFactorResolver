@@ -13,6 +13,7 @@ from a1_factor_engine import (
     ApprovalMode,
     CandidateOrigin,
     CatalogDatasetPolicy,
+    CatalogPolicyBundle,
     DatabaseVersionAnchor,
     EnergyConversionRecord,
     EnergyQuotaRecord,
@@ -58,6 +59,7 @@ from a1_factor_engine.adapters import (
     InMemoryProxyRepository,
     InMemoryReferenceFlowRepository,
 )
+from a1_factor_engine.integrity import catalog_content_sha256
 from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import NormalizedActivity, resolution_request_fingerprint
 from a1_factor_engine.qualification import qualify_record
@@ -560,9 +562,11 @@ async def test_same_entity_numeric_grade_difference_becomes_grade_gap_not_silent
         local_retrieval=InMemoryFactorRepository([source])
     ).resolve(ResolutionRequest(material_name="90烧结镁砂", quantity=1, geography="CN", year=2024))
 
-    assert result.status == ResolutionStatus.REFERENCE_REVIEW_REQUIRED
+    assert result.status == ResolutionStatus.UNRESOLVED
     assert result.trace.explain()["request_gaps"] == ()
-    assert result.reviewable_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.reviewable_candidates == ()
+    assert result.diagnostic_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert "GRADE_SPECIFICATION_CONFLICT" in result.reason_codes
     grade_gaps = tuple(
         gap
         for candidate in result.trace.explain()["candidate_gaps"]
@@ -729,24 +733,24 @@ def record(source_id: str, name: str, value: float, unit: str = "kgCO2e/kg", **k
         excerpt=kwargs.pop("excerpt", ""),
         factor_kind=kwargs.pop("factor_kind", FactorKind.LIFECYCLE_FACTOR),
         indicator=kwargs.pop("indicator", "GWP-total"),
-        declared_product=kwargs.pop("declared_product", None),
+        declared_product=kwargs.pop("declared_product", name),
         boundary_modules=kwargs.pop("boundary_modules", ()),
         metadata=kwargs.pop("metadata", kwargs),
     )
 
 
 def request(**changes) -> ResolutionRequest:
-    values = dict(
-        material_name="steel coil",
-        quantity=1,
-        quantity_unit="t",
-        geography="CN",
-        year=2024,
-        product_form="coil",
-        composition="carbon steel",
-        production_process="electric arc furnace",
-        boundary="cradle-to-gate",
-    )
+    values = {
+        "material_name": "steel coil",
+        "quantity": 1,
+        "quantity_unit": "t",
+        "geography": "CN",
+        "year": 2024,
+        "product_form": "coil",
+        "composition": "carbon steel",
+        "production_process": "electric arc furnace",
+        "boundary": "cradle-to-gate",
+    }
     values.update(changes)
     if "target_factor_unit" not in changes and values["quantity_unit"] in {"kg", "t"}:
         values["target_factor_unit"] = "kgCO2e/kg"
@@ -1077,7 +1081,9 @@ async def test_trace_explains_local_hits_proxy_route_exclusions_and_ranking():
 
     assert result.status == ResolutionStatus.PROCESS_MODEL_REQUIRED
     assert trace is result.trace
-    assert trace is not None and trace.database_anchor == anchor
+    assert trace is not None and trace.database_anchor is not None
+    assert trace.database_anchor.identity == anchor.identity
+    assert trace.database_anchor.content_sha256 is not None
     assert trace.latest("local_retrieval").details["records"][0]["source_id"] == "local-conflict"
     assert trace.latest("local_evaluate").details["decision"] == "resolve_local_gaps"
     assert trace.latest("process_variant_resolution").details["modes"][0]["mode"] == "UNADJUSTED_PROCESS_PROXY"
@@ -1105,6 +1111,7 @@ async def test_same_request_comparison_explains_database_update():
     before = await engine.resolve(request())
     repository.records = [record("steel-v2", "steel coil", 0.8)]
     repository.anchor = new_anchor
+    repository.__post_init__()
     after = await engine.resolve(request())
     comparison = await engine.compare_traces(before.request_id, after.request_id)
 
@@ -1161,7 +1168,7 @@ async def test_http_catalog_adapter_anchors_formal_database_response():
 
 
 @pytest.mark.asyncio
-async def test_exact_link_stops_before_registered_synonym_link():
+async def test_exact_and_registered_synonym_are_merged_before_ranking():
     exact = record("exact", "steel coil", 1.0, source_type=FactorSourceType.LOCAL_DATABASE)
     synonym = record(
         "synonym", "hot rolled steel", 1.1,
@@ -1173,7 +1180,7 @@ async def test_exact_link_stops_before_registered_synonym_link():
     ).resolve(request())
 
     attempts = result.trace.explain()["link_attempts"]
-    assert [candidate.source.source_id for candidate in result.candidates] == ["exact"]
+    assert [candidate.source.source_id for candidate in result.candidates] == ["exact", "synonym"]
     assert attempts[0]["strategy"] == LinkStrategy.EXACT.value
     assert attempts[0]["outcome"] == LinkOutcome.MATCHED.value
     assert attempts[1]["strategy"] == LinkStrategy.SYNONYM.value
@@ -2068,7 +2075,7 @@ async def test_single_grade_is_returned_unchanged_as_grade_proxy():
         local_retrieval=InMemoryFactorRepository([grade_90]),
     ).resolve(request(material_name="magnesia", composition="95% MgO", production_process="sintered"))
 
-    candidate = result.reviewable_candidates[0]
+    candidate = result.diagnostic_candidates[0]
     assert candidate.resolution_type == ResolutionType.GRADE_PROXY
     assert candidate.factor_value == 1.0
     assert any("+5 percentage points" in limitation for limitation in candidate.limitations)
@@ -2603,8 +2610,8 @@ async def test_grade_anchor_must_have_same_series_id():
         grade_series=InMemoryGradeSeriesRepository([wrong]),
     ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
 
-    assert result.reviewable_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
-    assert result.reviewable_candidates[0].factor_value == pytest.approx(1.0)
+    assert result.diagnostic_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.diagnostic_candidates[0].factor_value == pytest.approx(1.0)
 
 
 @pytest.mark.asyncio
@@ -2627,7 +2634,7 @@ async def test_emission_limit_cannot_be_grade_anchor():
         grade_series=InMemoryGradeSeriesRepository([limit]),
     ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
 
-    assert result.reviewable_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.diagnostic_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
     assert any(item["source_id"] == limit.source_id for item in result.trace.explain()["excluded_candidates"])
 
 
@@ -2752,7 +2759,7 @@ async def test_min_score_caps_low_score_candidate_at_reference_only():
     )
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([sparse])
-    ).resolve(request(min_score=0.99))
+    ).resolve_debug(request(min_score=0.99))
 
     assert result.reviewable_candidates[0].score < 0.99
     assert result.reviewable_candidates[0].result_tier == ResultTier.REFERENCE_ONLY
@@ -2908,10 +2915,36 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
             "source_document_sha256": "2" * 64,
         }],
     }
+    content_digest = catalog_content_sha256(payload["records"])
+    policy = CatalogDatasetPolicy(
+        policy_id="deployment.refractory-a1-product-carbon-footprint/v1",
+        record_categories=("lifecycle_factor",),
+        standards=("GB/T XXXX-202X 征求意见稿",),
+        primary_labels=("产品碳足迹因子",),
+        indicator="GWP-total",
+        boundary="cradle-to-gate",
+        declared_product_from_name=True,
+        evidence_citation="reviewed synthetic deployment policy",
+        production_approval_id="deployment-approval:refractory-a1/v1",
+        source_priority_rank=0,
+        catalog_content_sha256=content_digest,
+    )
+    bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:refractory/v1",
+        version="1",
+        approved_catalog_content_sha256=content_digest,
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(policy,),
+        signature="test-signature",
+    )
     result = await A1FactorResolutionEngine(
         local_retrieval=HttpCatalogFactorRepository(
             expected_sha256=digest,
             fetch_json=lambda _: payload,
+            policy_bundle=bundle,
+            policy_signature_verifier=lambda _payload, _signature: True,
+            policy_effective_on="2026-09-04",
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",
@@ -2929,7 +2962,7 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
     assert source.year is None
     assert source.geography is None
     assert json.loads(source.metadata["catalog_dataset_policy_ids"]) == [
-        "catalog.refractory-a1-product-carbon-footprint/v1"
+        "deployment.refractory-a1-product-carbon-footprint/v1"
     ]
     assert set(json.loads(source.metadata["catalog_inherited_fields"])) == {
         "indicator", "boundary", "declared_product",
@@ -2938,21 +2971,22 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
         "draft_or_consultation"
     ]
     assert json.loads(source.metadata["catalog_dataset_approval_ids"]) == [
-        "customer.refractory-draft-first/v1"
+        "deployment-approval:refractory-a1/v1"
     ]
     assert source.metadata["source_priority_rank"] == "0"
+    assert source.metadata["catalog_policy_bundle_signature_status"] == "verified"
 
 
 @pytest.mark.asyncio
 async def test_customer_source_priority_applies_after_candidate_eligibility():
-    common = dict(
-        product_form="coil",
-        composition="carbon steel",
-        production_process="electric arc furnace",
-        geography="CN",
-        year=2024,
-        boundary="cradle-to-gate",
-    )
+    common = {
+        "product_form": "coil",
+        "composition": "carbon steel",
+        "production_process": "electric arc furnace",
+        "geography": "CN",
+        "year": 2024,
+        "boundary": "cradle-to-gate",
+    }
     records = (
         record("ecoinvent-312", "steel coil", 1.0, **common,
                metadata={"source_priority_rank": "20"}),
@@ -3115,12 +3149,24 @@ async def test_explicit_dataset_approval_anchor_can_lift_draft_tier_cap():
         declared_product_from_name=True,
         evidence_citation="reviewed internal dataset approval record",
         production_approval_id="dataset-approval:refractory-a1/v1",
+        catalog_content_sha256=catalog_content_sha256(payload["records"]),
+    )
+    approved_bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:approved-refractory/v1",
+        version="1",
+        approved_catalog_content_sha256=catalog_content_sha256(payload["records"]),
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(approved_policy,),
+        signature="test-signature",
     )
     result = await A1FactorResolutionEngine(
         local_retrieval=HttpCatalogFactorRepository(
             expected_sha256=digest,
             fetch_json=lambda _: payload,
-            dataset_policies=(approved_policy,),
+            policy_bundle=approved_bundle,
+            policy_signature_verifier=lambda _payload, _signature: True,
+            policy_effective_on="2026-09-04",
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",

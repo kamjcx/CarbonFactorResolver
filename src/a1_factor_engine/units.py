@@ -7,11 +7,11 @@ remain compatibility boundaries; registry ratios and plans are Decimal-based.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 from types import MappingProxyType
-from typing import Mapping
 
 UNIT_SYNTAX_UNSUPPORTED = "UNIT_SYNTAX_UNSUPPORTED"
 CATALOG_FACTOR_UNIT_INVALID = "CATALOG_FACTOR_UNIT_INVALID"
@@ -53,6 +53,7 @@ class ActivityDimension(str, Enum):
     VOLUME = "VOLUME"
     TRANSPORT_WORK = "TRANSPORT_WORK"
     COUNT = "COUNT"
+    AREA = "AREA"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +164,8 @@ _ACTIVITY_ALIASES: Mapping[str, ActivityUnitSpec] = MappingProxyType({
     "l": _spec("L", ActivityDimension.VOLUME, Decimal("0.001")),
     "nm3": _spec("Nm3", ActivityDimension.VOLUME, _ONE, evidence=True),
     "nm³": _spec("Nm3", ActivityDimension.VOLUME, _ONE, evidence=True),
+    "m2": _spec("m2", ActivityDimension.AREA, _ONE),
+    "m²": _spec("m2", ActivityDimension.AREA, _ONE),
     "tkm": _spec("tkm", ActivityDimension.TRANSPORT_WORK, _ONE),
     "kgkm": _spec("kgkm", ActivityDimension.TRANSPORT_WORK, Decimal("0.001")),
     "item": _spec("item", ActivityDimension.COUNT, _ONE),
@@ -170,6 +173,7 @@ _ACTIVITY_ALIASES: Mapping[str, ActivityUnitSpec] = MappingProxyType({
     "piece": _spec("item", ActivityDimension.COUNT, _ONE),
     "pcs": _spec("item", ActivityDimension.COUNT, _ONE),
     "bag": _spec("item", ActivityDimension.COUNT, _ONE),
+    "roll": _spec("item", ActivityDimension.COUNT, _ONE),
 })
 
 _IMPACT_ALIASES: Mapping[str, ImpactUnitSpec] = MappingProxyType({
@@ -202,7 +206,10 @@ def _decimal(value: Decimal | str | int | float) -> Decimal:
 
 
 def _activity_key(value: str) -> str:
-    return "".join(value.strip().casefold().split())
+    key = "".join(value.strip().casefold().split())
+    while len(key) >= 2 and key[0] == "(" and key[-1] == ")":
+        key = key[1:-1]
+    return key.replace("*", "").replace("·", "").replace(".", "")
 
 
 def _impact_key(value: str) -> str:
@@ -356,7 +363,8 @@ def plan_factor_conversion(
             None, "unit.factor_scale/v1", evidence_required=True,
             reason_code=UNIT_CONVERSION_EVIDENCE_REQUIRED,
         )
-    assert activity_plan.multiplier is not None
+    if activity_plan.multiplier is None:
+        raise ValueError("activity conversion plan lacks a multiplier")
     multiplier = (
         source.impact_unit.ratio_to_kgco2e
         / target.impact_unit.ratio_to_kgco2e

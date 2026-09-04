@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+- Add Autonomous Contract V3 with a 418-case SHA freeze and 103 per-case adjudications that retain
+  all raw V1 failures while recomputing separately labelled effective metrics. The resulting gate
+  has zero unresolved Bad Cases and zero safety escapes without changing Resolver runtime behavior,
+  formal factor values, candidate IDs, or historical V1/V2 evidence.
+
+- Remove the customer/refractory policy default from the generic catalog core; deployment policy
+  now uses an explicit catalog-content-bound bundle, and production approval requires a verified
+  deployment signature. Strict policy date intervals are evaluated against an explicit,
+  replayable `policy_effective_on`; missing, future and expired policy applications fail closed.
+- Remove the five historical core-module `mypy` exemptions and add explicit fail-closed graph-stage
+  invariants without changing frozen resolution behavior.
+- Restrict the positional CLI convenience form to mass-factor queries; retain the full structured
+  JSON contract for energy, transport, process and evidence-bearing requests.
+- Pin CI actions and container inputs, consume the locked runtime dependency graph, add dependency,
+  source, secret and image scans, generate a CycloneDX SBOM, and bind distributable artifacts with
+  checksums and a release manifest.
+- Strengthen public-delivery and archive isolation checks. The inherited autonomous quality gate
+  remains unchanged and is evaluated only after the diagnostic and supply-chain evidence is built.
+- Enable Ruff's unused-suppression gate and remove the obsolete whole-file S608 exemption.
+- Close the final delivery-audit gaps: every post-normalization graph node now rejects missing
+  predecessor state, policy-index caches bind signature audit state, compound restricted paths and
+  camel-case secret keys fail the public/archive scanners, and the runtime image removes packaging
+  tools affected by the pinned Trivy findings. Dockerfile frontend and Node 24 actions are pinned.
+
+- Freeze the `/api/v1` operability contract with stable JSON error envelopes, version and
+  correlation headers, redacted unhandled-500 behavior, and JSON-only media enforcement.
+- Separate liveness (`/healthz`) from aggregate dependency readiness (`/readyz`); the production
+  factory no longer loads synthetic fixtures or claims readiness without explicit configuration.
+- Make mapping-based readiness probes fail closed unless they report an explicit, consistent
+  healthy state.
+- Make CLI resolution scriptable with JSON stdin/file input, machine-only stdout, sanitized stderr,
+  explicit demo selection, a formal-only Resolver path, and stable domain/usage/internal exit codes.
+- Bind request-ID replay to canonical request fingerprints with per-key concurrency serialization;
+  mismatched reuse returns a stable 409 instead of replaying an unrelated result.
+
+- Added the frozen `cfr.catalog/v2` canonical content manifest and strict
+  declared-versus-observed record digest validation.
+- Bound dataset policy, source records, candidates, recommendations, approvals,
+  locked results and evidence traces to versioned content digests.
+- Added atomic approval/lock compare-and-set semantics, append-only trace hash
+  chains and immutable locked evidence snapshots.
+- Added fail-closed migration rules for unbound policies and legacy approvals.
+
+## Unreleased
+
+- Harden formal resolution: explicit geography/year conflicts fail closed unless a versioned
+  deployment substitution policy authorizes that exact dimension; missing declared product or
+  lifecycle boundary is `REFERENCE_ONLY` and cannot be approved or locked.
+- Merge Exact, reviewed Alias and same-entity Related channels before decisive ambiguity
+  analysis; revalidate reference-flow identity/packaging; preserve generic activity units and
+  recompute non-mass totals at lock.
+- Move `min_score` ownership to immutable `DeploymentPolicy`; formal JSON rejects request-side
+  threshold overrides while the opt-in debug API/CLI retain an explicit debug path.
+- Add `m²`, `roll`, `kgCO2e/(t*km)` and numeric-zero catalog coverage. Missing API extras now
+  fail evaluation as an operational precondition instead of fabricating a 101st Bad Case.
+- Make Autonomous Evaluation and Portfolio Validation fail closed when quality gates fail,
+  while preserving generated evidence and distinguishing execution completion from quality
+  approval.
+- Add SHA-bound machine adjudications, dynamic Portfolio findings, reverse gate tests, and a
+  100-case root-cause audit for the unchanged `5155a682` baseline; no Resolver behavior or
+  frozen answer is changed.
+- Add the SHA-bound Portfolio Challenge V2 adjudication overlay. Raw V1 metrics remain visible;
+  effective metrics separately score formal candidates and exact `REFERENCE_ONLY`/provisional
+  option contracts for FIN-05, CNF-01 and MI-01 through MI-06.
+- Require broad English and Chinese steel-fibre raw-material queries to return
+  `MORE_INPUT_NEEDED`; generic steel remains non-selectable reference evidence.
+- Preserve the resulting 103 Autonomous raw failures and add a complete 13-case Safety V2
+  oracle adjudication, leaving 90 unresolved effective failures instead of hiding the V1 delta.
+
 ## 0.14.2 - 2026-09-03
 
 - Add a developer-only autonomous contract evaluator with 414 deterministic public-synthetic

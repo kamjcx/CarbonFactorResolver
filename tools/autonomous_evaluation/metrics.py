@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 KNOWN_REASON_CODES = frozenset({
     "ADMISSION_REJECTED",
@@ -41,7 +42,7 @@ class MetricValue:
     rate: float | None
 
     @classmethod
-    def of(cls, numerator: int, denominator: int) -> "MetricValue":
+    def of(cls, numerator: int, denominator: int) -> MetricValue:
         if numerator < 0 or denominator < 0 or numerator > denominator:
             raise ValueError("metric counts must satisfy 0 <= numerator <= denominator")
         return cls(numerator, denominator, numerator / denominator if denominator else None)

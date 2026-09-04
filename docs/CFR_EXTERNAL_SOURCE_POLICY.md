@@ -4,7 +4,9 @@ External discovery runs only when local evidence is insufficient and before clas
 
 - `FixtureExternalConnector` is deterministic synthetic evidence for CI and demos.
 - `PublicStructuredEPDConnector` reads a pinned structured snapshot and preserves record and snapshot hashes.
-- `OpenEPDConnector` is credential-gated and reports `unavailable` without blocking other connectors. Network I/O is injected by a deployment adapter and is disabled in CI.
+- `OpenEPDConnector` is credential-gated and reports `unavailable` without blocking other connectors. Network I/O is injected by a deployment adapter and is disabled in CI. `OutboundRequestPolicy` requires HTTPS and the configured origin by default; extra hosts require a deployment allowlist; DNS answers and every reported redirect hop are revalidated; Bearer credentials are sent only to the configured origin. The transport receives separate connect/read limits while CFR enforces an end-to-end deadline, streaming byte ceiling, JSON-depth/record limits, and document-count limits.
+
+An injected live transport must declare the `bound_transport` contract, connect to an IP from the supplied `ValidatedRoute` while retaining the original hostname for TLS SNI/Host, and report the observed peer IP. A mismatch is rejected, closing the DNS-validation/connection TOCTOU gap. It must not follow redirects. It returns each redirect target in `StructuredFetchResponse.redirect_to`; CFR resolves and validates a fresh route for the next hop and issues the next request itself. Any response claiming an already-followed redirect chain is rejected. The default policy rejects cross-origin redirects. Errors exposed to application traces use stable reason codes and must not include response bodies, credentials, URL queries, or internal addresses.
 
 Search snippets, unstructured summaries, missing hashes, invalid units, non-GWP indicators, mismatched products, and incomplete boundaries are rejected. External candidates use the same qualification, gap analysis, ranking, human approval, and immutable locking path as local candidates. The repository contains no ecoinvent or other licensed database records.
 

@@ -14,11 +14,12 @@ import importlib.metadata
 import json
 import re
 import subprocess
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.engine import A1FactorResolutionEngine

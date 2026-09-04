@@ -7,18 +7,30 @@ accepted by :class:`StructuredEPDEvidenceExtractor`.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import inspect
 import json
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
-from urllib.parse import quote
+from typing import Any
+from urllib.parse import quote, urljoin
 
+from .connector_security import (
+    CONNECTOR_FETCH_FAILED,
+    ConnectorLimits,
+    ConnectorSecurityError,
+    ConnectorTransportContext,
+    OutboundRequestPolicy,
+    StructuredFetchResponse,
+    consume_structured_response,
+    is_bound_transport,
+    run_with_total_timeout,
+)
 from .models import (
     FactorKind,
     FactorSourceType,
@@ -289,7 +301,7 @@ class SnapshotExternalConnector:
             ref=ref,
             content=content,
             content_sha256=digest,
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
             snapshot_sha256=snapshot_sha256,
         )
 
@@ -333,7 +345,7 @@ class PublicStructuredEPDConnector(SnapshotExternalConnector):
                 ref=ref,
                 content=content,
                 content_sha256=_sha256(content),
-                retrieved_at=datetime.now(timezone.utc),
+                retrieved_at=datetime.now(UTC),
                 snapshot_sha256=ref.snapshot_sha256,
             )
         if _sha256(document.content) != document.content_sha256:
@@ -359,31 +371,102 @@ class OpenEPDConnector:
         base_url: str | None = None,
         discovery_fetcher: Callable[[str, Mapping[str, str]], Any | Awaitable[Any]] | None = None,
         document_fetcher: Callable[[str, Mapping[str, str]], Any | Awaitable[Any]] | None = None,
+        allowed_hosts: tuple[str, ...] = (),
+        resolver: Callable[[str, int], Iterator[str]] | None = None,
+        limits: ConnectorLimits | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else os.getenv("OPENEPD_API_KEY", "")
         self.base_url = (base_url if base_url is not None else os.getenv("OPENEPD_BASE_URL", "")).rstrip("/")
         self.discovery_fetcher = discovery_fetcher
         self.document_fetcher = document_fetcher
+        policy_kwargs: dict[str, Any] = {
+            "base_url": self.base_url,
+            "allowed_hosts": allowed_hosts,
+            "limits": limits or ConnectorLimits(),
+        }
+        if resolver is not None:
+            policy_kwargs["resolver"] = resolver
+        self.policy = OutboundRequestPolicy(**policy_kwargs)
 
     def health(self) -> ConnectorHealth:
         if not self.api_key.strip():
             return ConnectorHealth(False, "unavailable", "OPENEPD_API_KEY is not configured")
         if not self.base_url.strip():
             return ConnectorHealth(False, "unavailable", "OPENEPD_BASE_URL is not configured")
+        try:
+            self.policy.validate_url(self.base_url, resolve_dns=False)
+        except ConnectorSecurityError:
+            return ConnectorHealth(False, "unavailable", "OPENEPD_BASE_URL is not permitted")
         if self.discovery_fetcher is None or self.document_fetcher is None:
             return ConnectorHealth(False, "unavailable", "OpenEPD I/O fetchers are not configured")
+        if not all(is_bound_transport(item) for item in (self.discovery_fetcher, self.document_fetcher)):
+            return ConnectorHealth(
+                False,
+                "unavailable",
+                "OpenEPD transports do not bind validated connection routes",
+            )
         return ConnectorHealth(True, "available")
 
-    @property
-    def _headers(self) -> Mapping[str, str]:
-        return {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
+    async def _request(self, fetcher: Callable[..., Any], url: str, *, preserve_bytes: bool = False) -> Any:
+        async def follow() -> Any:
+            current = url
+            for hop in range(self.policy.limits.max_redirects + 1):
+                # DNS resolution can block on some platforms. Keep it inside
+                # the end-to-end timeout without blocking the event loop.
+                route = await asyncio.to_thread(self.policy.resolve_route, current)
+                headers = self.policy.request_headers(route, f"Bearer {self.api_key}")
+                context = ConnectorTransportContext(route, self.policy.limits)
+                try:
+                    if inspect.iscoroutinefunction(fetcher):
+                        fetched = await fetcher(current, headers, context)
+                    else:
+                        fetched = await asyncio.to_thread(fetcher, current, headers, context)
+                        fetched = await _resolve(fetched)
+                except (ConnectorSecurityError, TimeoutError):
+                    raise
+                except Exception:
+                    raise ConnectorSecurityError(
+                        CONNECTOR_FETCH_FAILED, "connector request failed"
+                    ) from None
+                response = (
+                    fetched
+                    if isinstance(fetched, StructuredFetchResponse)
+                    else StructuredFetchResponse(body=fetched, final_url=current)
+                )
+                self.policy.validate_response_route(route, response)
+                if response.redirect_to:
+                    if hop >= self.policy.limits.max_redirects:
+                        raise ConnectorSecurityError(
+                            "CONNECTOR_REDIRECT_REJECTED", "too many connector redirects"
+                        )
+                    current = urljoin(current, response.redirect_to)
+                    continue
+                return await consume_structured_response(
+                    response, self.policy.limits, preserve_bytes=preserve_bytes
+                )
+            raise ConnectorSecurityError(
+                "CONNECTOR_REDIRECT_REJECTED", "too many connector redirects"
+            )
+
+        try:
+            return await run_with_total_timeout(follow(), self.policy.limits)
+        except ConnectorSecurityError:
+            raise
+        except Exception:
+            raise ConnectorSecurityError(
+                CONNECTOR_FETCH_FAILED, "connector request failed"
+            ) from None
 
     async def discover(self, intent: RetrievalIntent) -> tuple[ExternalDiscoveryRef, ...]:
         if not self.health().available:
             return ()
         url = f"{self.base_url}/epds?query={quote(intent.canonical_name)}"
-        response = await _resolve(self.discovery_fetcher(url, self._headers))  # type: ignore[misc]
+        response = await self._request(self.discovery_fetcher, url)  # type: ignore[arg-type]
         rows = response.get("results", ()) if isinstance(response, Mapping) else response
+        if not isinstance(rows, (list, tuple)):
+            raise ConnectorSecurityError("CONNECTOR_RESPONSE_TOO_COMPLEX", "connector results are invalid")
+        if len(rows) > self.policy.limits.max_documents:
+            raise ConnectorSecurityError("CONNECTOR_RESPONSE_TOO_COMPLEX", "connector response has too many documents")
         refs: list[ExternalDiscoveryRef] = []
         for row in rows or ():
             if not isinstance(row, Mapping):
@@ -391,6 +474,10 @@ class OpenEPDConnector:
             source_id = str(row.get("id", "")).strip()
             document_url = str(row.get("url", "")).strip()
             if source_id and document_url:
+                # The actual fetch performs bounded DNS resolution.  Discovery
+                # only validates the URL syntax/origin to avoid a second,
+                # unbounded resolver call outside the request timeout.
+                self.policy.validate_url(document_url, resolve_dns=False)
                 refs.append(
                     ExternalDiscoveryRef(
                         source_id=source_id,
@@ -406,12 +493,15 @@ class OpenEPDConnector:
         ref = _as_ref(ref)
         if not self.health().available:
             raise ExternalSourceUnavailable(self.health().reason)
-        fetched = await _resolve(self.document_fetcher(ref.locator, self._headers))  # type: ignore[misc]
+        fetcher = self.document_fetcher
+        if fetcher is None:  # Defensive narrowing after the health gate.
+            raise ExternalSourceUnavailable("OpenEPD document transport is not configured")
+        fetched = await self._request(fetcher, ref.locator, preserve_bytes=True)
         content = fetched if isinstance(fetched, bytes) else _canonical_json(fetched)
         digest = _sha256(content)
         if ref.expected_content_sha256 and digest != ref.expected_content_sha256:
             raise InvalidExternalEvidence("OpenEPD document SHA-256 mismatch")
-        return ExternalDocument(ref, content, digest, datetime.now(timezone.utc))
+        return ExternalDocument(ref, content, digest, datetime.now(UTC))
 
 
 class StructuredEPDEvidenceExtractor:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -33,7 +33,7 @@ class DeliveryValue:
 def test_explicit_serializer_handles_domain_container_types():
     value = DeliveryValue(
         Example.VALUE,
-        datetime(2026, 1, 2, 3, 4, tzinfo=timezone.utc),
+        datetime(2026, 1, 2, 3, 4, tzinfo=UTC),
         MappingProxyType({"tuple": (Example.VALUE,)}),
     )
 
@@ -95,7 +95,7 @@ def test_cli_resolve_maps_material_quantity_unit_and_process():
     output = io.StringIO()
     engine = FakeEngine()
 
-    assert main(["resolve", "steel coil", "2", "t", "EAF"], engine=engine, stdout=output) == 0
+    assert main(["resolve", "steel coil", "2", "t", "EAF"], engine=engine, stdout=output) == 11
 
     assert engine.requests[0]["material_name"] == "steel coil"
     assert engine.requests[0]["quantity"] == 2
@@ -114,38 +114,46 @@ def test_cli_benchmark_run_uses_injected_runner():
     assert json.loads(output.getvalue())["run_id"] == "run-1"
 
 
-def test_fastapi_endpoints_with_injected_services():
+def test_fastapi_endpoints_with_injected_services(tmp_path):
     from fastapi.testclient import TestClient
 
-    from a1_factor_engine.api import create_app
+    from a1_factor_engine.api import AuthorizationContext, create_admin_app
 
     engine = FakeEngine()
     runner = FakeRunner()
-    app = create_app(
+    (tmp_path / "base.jsonl").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "candidate.jsonl").write_text("{}\n", encoding="utf-8")
+    async def allow(_headers, _permission):
+        return AuthorizationContext("tester", "tenant", "project", (
+            "resolve:execute", "resolution:read", "benchmark:execute", "benchmark:read",
+            "diagnostics:read",
+        ))
+    app = create_admin_app(
         engine=engine,
         benchmark_runner=runner,
         connector_health={"catalog": lambda: {"status": "ok"}},
+        benchmark_roots=(tmp_path,),
+        authorizer=allow,
     )
 
     with TestClient(app) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
         resolved = client.post("/api/v1/resolve", json={"material_name": "steel", "quantity": 1})
         assert resolved.status_code == 200
-        first = client.post("/api/v1/benchmarks/runs", json={"path": "base.jsonl"})
-        second = client.post("/api/v1/benchmarks/runs", json={"path": "candidate.jsonl"})
+        first = client.post("/api/v1/benchmarks/runs", json={"path": str(tmp_path / "base.jsonl")})
+        second = client.post("/api/v1/benchmarks/runs", json={"path": str(tmp_path / "candidate.jsonl")})
         assert first.status_code == second.status_code == 201
         assert client.get("/api/v1/benchmarks/runs/run-1").status_code == 200
         compared = client.get("/api/v1/benchmarks/compare?base=run-1&candidate=run-2")
         assert compared.status_code == 200
         assert compared.json()["accuracy"] == 0
-        assert client.get("/api/v1/connectors/health").json()["status"] == "ok"
-        assert client.get("/").status_code == 200
+        assert client.get("/api/v1/admin/connectors/health").json()["status"] == "ok"
 
 
 def test_fastapi_returns_not_found_for_unknown_resolution():
     from fastapi.testclient import TestClient
 
-    from a1_factor_engine.api import create_app
+    from a1_factor_engine.api import AuthorizationContext, create_admin_app
 
     class MissingEngine(FakeEngine):
         async def state(self, _request_id):
@@ -154,20 +162,26 @@ def test_fastapi_returns_not_found_for_unknown_resolution():
         async def trace(self, _request_id):
             return None
 
-    with TestClient(create_app(engine=MissingEngine())) as client:
+    async def allow(_headers, _permission):
+        return AuthorizationContext(
+            "tester", "tenant", "project",
+            ("resolution:read", "trace:read", "diagnostics:read"),
+        )
+    with TestClient(create_admin_app(engine=MissingEngine(), authorizer=allow)) as client:
         assert client.get("/api/v1/resolutions/missing").status_code == 404
         assert client.get("/api/v1/traces/missing").status_code == 404
         assert client.get("/api/v1/diagnostics/missing").status_code == 404
 
 
-def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redacted():
+def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redacted(tmp_path):
     from fastapi.testclient import TestClient
 
     from a1_factor_engine.api import (
         BENCHMARK_COMPARISON_FAILED,
         BENCHMARK_RUN_FAILED,
         INVALID_RESOLUTION_REQUEST,
-        create_app,
+        AuthorizationContext,
+        create_admin_app,
     )
 
     secret = "portfolio-secret-must-not-leak"
@@ -183,7 +197,17 @@ def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redact
         def compare(self, _base, _candidate):
             raise ValueError(f"token={secret} internal://compare.py:8")
 
-    app = create_app(engine=InvalidEngine(), benchmark_runner=InvalidRunner())
+    async def allow(_headers, _permission):
+        return AuthorizationContext(
+            "tester", "tenant", "project",
+            ("resolve:execute", "benchmark:execute", "benchmark:read"),
+        )
+    dataset = tmp_path / "cases.jsonl"
+    dataset.write_text("{}\n", encoding="utf-8")
+    app = create_admin_app(
+        engine=InvalidEngine(), benchmark_runner=InvalidRunner(),
+        benchmark_roots=(tmp_path,), authorizer=allow,
+    )
     openapi = app.openapi()
     documented = openapi["paths"]["/api/v1/resolve"]["post"]["responses"]["400"]
     assert documented["content"]["application/json"]["example"]["detail"][
@@ -192,7 +216,7 @@ def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redact
 
     with TestClient(app) as client:
         resolved = client.post("/api/v1/resolve", json={"material_name": "steel"})
-        benchmark = client.post("/api/v1/benchmarks/runs", json={"path": "cases.jsonl"})
+        benchmark = client.post("/api/v1/benchmarks/runs", json={"path": str(dataset)})
 
     assert resolved.json()["detail"]["reason_code"] == INVALID_RESOLUTION_REQUEST
     assert benchmark.json()["detail"]["reason_code"] == BENCHMARK_RUN_FAILED
@@ -200,8 +224,11 @@ def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redact
 
     runner = InvalidRunner()
     runner.runs = []
-    app = create_app(engine=FakeEngine(), benchmark_runner=runner)
-    app.state.benchmark_runs.update({"base": {}, "candidate": {}})
+    app = create_admin_app(engine=FakeEngine(), benchmark_runner=runner, authorizer=allow)
+    app.state.benchmark_runs.update({
+        ("tenant", "project", "base"): ({}, 2),
+        ("tenant", "project", "candidate"): ({}, 2),
+    })
     with TestClient(app) as client:
         compared = client.get("/api/v1/benchmarks/compare?base=base&candidate=candidate")
     assert compared.json()["detail"]["reason_code"] == BENCHMARK_COMPARISON_FAILED

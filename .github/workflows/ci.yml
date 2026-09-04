@@ -7,15 +7,21 @@ on:
 permissions:
   contents: read
 
+env:
+  UV_FROZEN: "1"
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.7"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Verify lockfile
@@ -62,11 +68,15 @@ jobs:
         run: >-
           uv run --extra test python -m tools.sealed_unit_holdout_v4
           --output outputs/sealed_unit_holdout_v4/result.json
-      - name: Run Portfolio Challenge
+      - name: Enforce Portfolio Challenge quality gate
+        id: portfolio_quality
+        continue-on-error: true
         run: >-
           uv run --extra test --extra api python tools/portfolio_validation.py
           --output outputs/portfolio_validation
-      - name: Run autonomous public-synthetic evaluation
+      - name: Enforce autonomous public-synthetic quality gate
+        id: autonomous_quality
+        continue-on-error: true
         run: >-
           uv run --extra test --extra api python -m tools.autonomous_evaluation
           --output outputs/autonomous_evaluation/ci-run.json
@@ -77,34 +87,144 @@ jobs:
           --output outputs/autonomous_evaluation/performance-smoke.json
       - name: Upload autonomous evaluation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: autonomous-evaluation-${{ github.sha }}
           path: outputs/autonomous_evaluation/
           if-no-files-found: error
       - name: Upload Portfolio Challenge evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: portfolio-validation-${{ github.sha }}
           path: outputs/portfolio_validation/
           if-no-files-found: error
+      - name: Prepare supply-chain evidence directory
+        run: |
+          mkdir -p outputs/supply-chain
+          printf 'SOURCE_DATE_EPOCH=%s\n' "$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+      - name: Scan public delivery data
+        id: public_delivery
+        continue-on-error: true
+        run: >-
+          uv run --frozen python tools/public_delivery_scan.py
+          --output outputs/supply-chain/public-delivery-scan.json
       - name: Build package
         run: uv build
       - name: Verify release archive contents
         run: uv run --extra test python tools/verify_release_artifacts.py dist/*.whl dist/*.tar.gz
+      - name: Export locked runtime requirements
+        run: >-
+          uv export --frozen --no-dev --extra api --no-emit-project
+          --format requirements-txt --output-file outputs/supply-chain/runtime-requirements.txt
+      - name: Audit locked Python dependencies
+        id: dependency_scan
+        continue-on-error: true
+        run: >-
+          uv run --frozen --extra supply-chain pip-audit
+          --require-hashes --format json --output outputs/supply-chain/pip-audit.json
+          --requirement outputs/supply-chain/runtime-requirements.txt
+      - name: Scan Python source
+        id: code_scan
+        continue-on-error: true
+        run: >-
+          uv run --frozen --extra supply-chain bandit -r src
+          --severity-level high --confidence-level high
+          --format json --output outputs/supply-chain/bandit.json
+      - name: Generate dependency SBOM
+        run: >-
+          uv run --frozen --extra supply-chain cyclonedx-py requirements
+          outputs/supply-chain/runtime-requirements.txt
+          --output-format JSON --output-file outputs/supply-chain/sbom.cdx.json
+      - name: Scan Git history for secrets
+        id: secret_scan
+        continue-on-error: true
+        run: >-
+          docker run --rm -v "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --redact --report-format json
+          --report-path /repo/outputs/supply-chain/gitleaks.json --exit-code 1
+      - name: Build locked runtime image
+        run: docker build --tag "cfr:${GITHUB_SHA}" .
+      - name: Record runtime image ID
+        run: |
+          image_id="$(docker image inspect "cfr:${GITHUB_SHA}" --format='{{.Id}}')"
+          printf '%s\n' "$image_id" > outputs/supply-chain/docker-image-id.txt
+          printf 'IMAGE_ID=%s\n' "$image_id" >> "$GITHUB_ENV"
+      - name: Start and verify runtime health
+        run: |
+          docker run -d --name cfr-ci -p 127.0.0.1:8000:8000 -e CFR_LIVE_CONNECTORS=0 \
+            "cfr:${GITHUB_SHA}" cfr serve --demo --host 0.0.0.0 --port 8000
+          for i in $(seq 1 20); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' cfr-ci 2>/dev/null || true)
+            [ "$status" = healthy ] && exit 0
+            sleep 2
+          done
+          docker logs cfr-ci
+          exit 1
+      - name: Scan runtime image
+        id: image_scan
+        continue-on-error: true
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          -v "$PWD/outputs/supply-chain:/reports"
+          aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+          image --format json --output /reports/trivy-image.json
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE_ID"
+      - name: Generate release checksums
+        run: |
+          cd dist
+          sha256sum $(find . -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) \
+            -printf '%f\n' | LC_ALL=C sort) > SHA256SUMS
+      - name: Generate release manifest
+        run: |
+          mapfile -t artifacts < <(find dist -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | LC_ALL=C sort)
+          uv run --frozen python tools/release_manifest.py \
+            --output dist/release-manifest.json \
+            --image-digest "$IMAGE_ID" \
+            --runner-image "${ImageOS}-${ImageVersion}" \
+            --python-version "$(python --version 2>&1)" \
+            --uv-version "$(uv --version)" \
+            "${artifacts[@]}" dist/SHA256SUMS \
+            outputs/supply-chain/public-delivery-scan.json \
+            outputs/supply-chain/pip-audit.json outputs/supply-chain/bandit.json \
+            outputs/supply-chain/sbom.cdx.json outputs/supply-chain/gitleaks.json \
+            outputs/supply-chain/trivy-image.json outputs/supply-chain/docker-image-id.txt
+      - name: Upload release and supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-supply-chain-${{ github.sha }}
+          path: |
+            dist/
+            outputs/supply-chain/
+          if-no-files-found: error
+      - name: Fail CI when evaluation quality gates fail
+        if: always()
+        run: |
+          [ "${{ steps.portfolio_quality.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.autonomous_quality.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.public_delivery.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.dependency_scan.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.code_scan.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.secret_scan.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.image_scan.outcome }}" = "success" ] || exit 1
 
   compatibility:
     name: compatibility (${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.7"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Verify lockfile
@@ -114,28 +234,28 @@ jobs:
           uv run --python ${{ matrix.python-version }} --extra test --extra api
           python -m pytest -q -p no:cacheprovider
 
+  # Branch-protection compatibility sentinel. The upstream test job performs
+  # the real locked image build, runtime health check, and Trivy scan. Keep this
+  # named job until the protected-branch required context is deliberately
+  # migrated; it must never report success independently of that upstream gate.
   container:
-    runs-on: ubuntu-latest
+    name: container
+    needs: test
+    if: ${{ needs.test.result == 'success' }}
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - name: Build image
-        run: docker compose build
-      - name: Record image digest
-        run: docker image inspect carbonfactorresolver-resolver --format='{{.Id}}' > docker-image-digest.txt
-      - name: Start and verify health
+      - name: Record required-check compatibility sentinel
+        env:
+          CFR_UPSTREAM_RESULT: ${{ needs.test.result }}
+          CFR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          docker compose up -d
-          for i in $(seq 1 20); do
-            status=$(docker inspect --format='{{.State.Health.Status}}' carbonfactorresolver-resolver-1 2>/dev/null || true)
-            [ "$status" = healthy ] && exit 0
-            sleep 2
-          done
-          docker compose logs
-          exit 1
-      - name: Upload container digest evidence
-        if: always()
-        uses: actions/upload-artifact@v4
+          test "$CFR_UPSTREAM_RESULT" = "success"
+          printf '%s\n' \
+            '{"schema_version":"cfr-required-check-sentinel/v1","required_context":"container","upstream_job":"test","upstream_result":"success","head_sha":"'"$CFR_HEAD_SHA"'"}' \
+            > container-required-check.json
+      - name: Upload required-check compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: container-digest-${{ github.sha }}
-          path: docker-image-digest.txt
+          name: container-required-check-${{ github.sha }}
+          path: container-required-check.json
           if-no-files-found: error

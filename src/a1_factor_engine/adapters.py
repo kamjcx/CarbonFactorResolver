@@ -7,16 +7,29 @@ implementation backed by the future database/API does not change graph logic.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
-from dataclasses import asdict, dataclass, field, replace
-from typing import Any, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Any
 from urllib.request import urlopen
 
+from .catalog_policy import (
+    CatalogDatasetPolicy,
+    CatalogPolicyBundle,
+    PolicySignatureVerifier,
+)
+from .integrity import (
+    CATALOG_SCHEMA_VERSION,
+    CatalogIntegrityError,
+    catalog_content_sha256,
+    stable_sha256,
+    verify_digest,
+)
 from .matching import normalize_text
 from .material_registry import DEFAULT_MATERIAL_REGISTRY, MaterialSemanticRegistryPort
 from .models import (
     ApprovalRecord,
+    ApprovalStatus,
     DatabaseVersionAnchor,
     FactorKind,
     FactorSourceType,
@@ -105,26 +118,47 @@ class InMemoryFactorRepository:
     anchor: DatabaseVersionAnchor | None = None
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
 
-    def __post_init__(self) -> None:
-        if self.anchor is None:
-            payload = "|".join(
-                f"{record.source_id}:{record.factor_value}:{record.factor_unit}"
+    def _content_digest(self) -> str:
+        return stable_sha256({
+            "schema_version": CATALOG_SCHEMA_VERSION,
+            "records": tuple(
+                record.content_sha256
                 for record in sorted(self.records, key=lambda item: item.source_id)
-            )
+            ),
+        })
+
+    def __post_init__(self) -> None:
+        content_digest = self._content_digest()
+        if self.anchor is None:
             self.anchor = DatabaseVersionAnchor(
                 catalog_name="in-memory-factor-catalog",
                 catalog_version="test-v1",
-                database_sha256=hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+                database_sha256=content_digest,
                 locator="memory://factor-catalog",
+                schema_version=CATALOG_SCHEMA_VERSION,
+                publisher_id="in-memory",
+                catalog_content_sha256=content_digest,
             )
+        elif self.anchor.schema_version == CATALOG_SCHEMA_VERSION:
+            if self.anchor.content_sha256 != content_digest:
+                raise CatalogIntegrityError(
+                    "in-memory catalog declared SHA-256 does not match actual record content"
+                )
+        else:
+            self.anchor = replace(self.anchor, catalog_content_sha256=content_digest)
 
     async def search(self, intent: RetrievalIntent) -> RetrievalResult:
+        if self.anchor is None:
+            raise CatalogIntegrityError("in-memory catalog anchor is not configured")
+        if self.anchor.content_sha256 != self._content_digest():
+            raise CatalogIntegrityError(
+                "in-memory catalog declared SHA-256 does not match actual record content"
+            )
         allowed = self.source_types
         eligible = tuple(
             record for record in self.records
             if allowed is None or record.source_type in allowed
         )
-        assert self.anchor is not None
         index = SemanticFactorIndex(eligible, self.anchor, self.material_registry)
         result = index.query(intent)
         return RetrievalResult(
@@ -167,59 +201,6 @@ class NullFactorRepository:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class CatalogDatasetPolicy:
-    """Reviewed defaults inherited by matching catalogue records only."""
-
-    policy_id: str
-    record_categories: tuple[str, ...] = ()
-    standards: tuple[str, ...] = ()
-    primary_labels: tuple[str, ...] = ()
-    indicator: str | None = None
-    boundary: str | None = None
-    boundary_modules: tuple[str, ...] = ()
-    geography: str | None = None
-    year: int | None = None
-    declared_product_from_name: bool = False
-    evidence_citation: str = ""
-    production_approval_id: str | None = None
-    source_priority_rank: int = 100
-
-    def __post_init__(self) -> None:
-        if not self.policy_id.strip():
-            raise ValueError("catalogue dataset policy requires a policy_id")
-
-    def applies(self, item: Mapping[str, Any]) -> bool:
-        def matches(field: str, allowed: tuple[str, ...]) -> bool:
-            if not allowed:
-                return True
-            observed = str(item.get(field) or "").strip().casefold()
-            return observed in {value.strip().casefold() for value in allowed}
-
-        return (
-            matches("category", self.record_categories)
-            and matches("standard", self.standards)
-            and matches("primary_label", self.primary_labels)
-        )
-
-
-REFRACTORY_A1_STANDARD_POLICY = CatalogDatasetPolicy(
-    policy_id="catalog.refractory-a1-product-carbon-footprint/v1",
-    record_categories=("lifecycle_factor",),
-    standards=("GB/T XXXX-202X 征求意见稿",),
-    primary_labels=("产品碳足迹因子",),
-    indicator="GWP-total",
-    boundary="cradle-to-gate",
-    declared_product_from_name=True,
-    evidence_citation=(
-        "《温室气体 产品碳足迹量化方法与要求 耐火材料》征求意见稿，"
-        "5.2声明单位、5.3.1系统边界、7.1全球变暖潜势"
-    ),
-    production_approval_id="customer.refractory-draft-first/v1",
-    source_priority_rank=0,
-)
-
-
 @dataclass(slots=True)
 class HttpCatalogFactorRepository:
     """Read-only adapter for the formal `/api/v2/factors/catalog` endpoint."""
@@ -228,10 +209,12 @@ class HttpCatalogFactorRepository:
     expected_sha256: str | None = None
     timeout_seconds: float = 10.0
     fetch_json: Callable[[str], Mapping[str, Any]] | None = None
+    signature_verifier: Callable[[Mapping[str, Any], bytes], bool] | None = None
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
-    dataset_policies: tuple[CatalogDatasetPolicy, ...] = (
-        REFRACTORY_A1_STANDARD_POLICY,
-    )
+    policy_bundle: CatalogPolicyBundle | None = None
+    policy_signature_verifier: PolicySignatureVerifier | None = None
+    policy_effective_on: str | None = None
+    dataset_policies: tuple[CatalogDatasetPolicy, ...] = ()
     _cached_index_key: str | None = field(default=None, init=False)
     _cached_index: SemanticFactorIndex | None = field(default=None, init=False)
     _cached_conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = field(
@@ -239,38 +222,104 @@ class HttpCatalogFactorRepository:
     )
 
     async def search(self, intent: RetrievalIntent) -> RetrievalResult:
+        if self.dataset_policies:
+            raise CatalogIntegrityError(
+                "legacy dataset_policies are disabled; inject a content-bound policy_bundle"
+            )
         payload = await asyncio.to_thread(self._fetch)
+        records = payload.get("records")
+        if not isinstance(records, list):
+            raise CatalogIntegrityError("factor catalog response lacks records")
+        if not all(isinstance(item, Mapping) for item in records):
+            raise CatalogIntegrityError("factor catalog records must be JSON objects")
+        raw_records = tuple(item for item in records if isinstance(item, Mapping))
+        actual_content_digest = catalog_content_sha256(raw_records)
+        applied_bundle = self.policy_bundle
+        bundle_signature_status = "not_configured"
+        bundle_effective_on = ""
+        dataset_policies: tuple[CatalogDatasetPolicy, ...] = ()
+        if applied_bundle is not None:
+            bundle_effective_on = applied_bundle.require_effective_on(
+                self.policy_effective_on
+            )
+            if applied_bundle.approved_catalog_content_sha256 != actual_content_digest:
+                raise CatalogIntegrityError(
+                    "catalogue policy bundle does not match the observed catalog content"
+                )
+            bundle_signature_status = applied_bundle.signature_status(
+                self.policy_signature_verifier
+            )
+            if (
+                applied_bundle.authorizes_production_approval
+                and bundle_signature_status != "verified"
+            ):
+                raise CatalogIntegrityError(
+                    "production approval policy requires a verified bundle signature"
+                )
+            dataset_policies = applied_bundle.policies
+        manifest = payload.get("manifest")
+        schema_version = "legacy-catalog/v1"
+        publisher_id = "unverified-legacy"
+        publisher_identity_verified = False
+        if manifest is not None:
+            if not isinstance(manifest, Mapping):
+                raise CatalogIntegrityError("catalog manifest must be a JSON object")
+            schema_version = str(manifest.get("schema_version") or "").strip()
+            if schema_version != CATALOG_SCHEMA_VERSION:
+                raise CatalogIntegrityError("unsupported catalog manifest schema_version")
+            declared_content_digest = verify_digest(
+                manifest.get("catalog_content_sha256"),
+                field_name="catalog_content_sha256",
+            )
+            if declared_content_digest != actual_content_digest:
+                raise CatalogIntegrityError(
+                    "catalog declared SHA-256 does not match actual record content"
+                )
+            publisher_id = str(manifest.get("publisher_id") or "").strip()
+            if not publisher_id:
+                raise CatalogIntegrityError("catalog manifest requires publisher_id")
+            signature = manifest.get("signature")
+            if signature is not None:
+                if self.signature_verifier is None:
+                    raise CatalogIntegrityError(
+                        "signed catalog manifest has no configured signature verifier"
+                    )
+                publisher_identity_verified = bool(
+                    self.signature_verifier(manifest, actual_content_digest.encode("ascii"))
+                )
+                if not publisher_identity_verified:
+                    raise CatalogIntegrityError("catalog publisher signature verification failed")
         database = payload.get("database")
         if not isinstance(database, Mapping):
-            raise ValueError("factor catalog response lacks database metadata")
-        digest = str(database.get("sha256") or "").strip().lower()
-        if self.expected_sha256 and digest != self.expected_sha256.strip().lower():
-            raise ValueError("formal factor database SHA-256 does not match the configured anchor")
+            raise CatalogIntegrityError("factor catalog response lacks database metadata")
+        artifact_digest = str(database.get("sha256") or "").strip().lower()
+        if self.expected_sha256 and artifact_digest != self.expected_sha256.strip().lower():
+            raise CatalogIntegrityError(
+                "formal factor database SHA-256 does not match the configured anchor"
+            )
         anchor = DatabaseVersionAnchor(
             catalog_name=str(database.get("name") or "formal-factor-catalog"),
             catalog_version=str(payload.get("catalog_version") or "unknown"),
-            database_sha256=digest or None,
+            database_sha256=artifact_digest or None,
+            catalog_content_sha256=actual_content_digest,
             locator=self.endpoint,
+            schema_version=schema_version,
+            publisher_id=publisher_id,
+            publisher_identity_verified=publisher_identity_verified,
         )
-        records = payload.get("records")
-        if not isinstance(records, list):
-            raise ValueError("factor catalog response lacks records")
-        policy_key = hashlib.sha256(json.dumps(
-            [asdict(policy) for policy in self.dataset_policies],
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")).hexdigest()
-        raw_records_digest = hashlib.sha256(json.dumps(
-            records,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            default=str,
-        ).encode("utf-8")).hexdigest()
+        policy_key = (
+            stable_sha256({
+                "content_sha256": applied_bundle.content_sha256,
+                "effective_on": bundle_effective_on,
+                "signature_sha256": stable_sha256(applied_bundle.signature or ""),
+                "signature_status": bundle_signature_status,
+            })
+            if applied_bundle is not None
+            else "none"
+        )
         cache_key = (
             f"{anchor.identity}:{self.material_registry.sha256}:"
-            f"{policy_key}:{raw_records_digest}"
+            f"{policy_key}:{actual_content_digest}"
         )
         if self._cached_index is None or self._cached_index_key != cache_key:
             converted_items: list[SourceRecord] = []
@@ -287,7 +336,8 @@ class HttpCatalogFactorRepository:
                 reasons: list[str] = []
                 dropped_fields: list[str] = []
                 try:
-                    value = float(item.get("primary_value") or "")
+                    raw_value = item.get("primary_value")
+                    value = float("" if raw_value is None else raw_value)
                     if not (value >= 0 and value < float("inf")):
                         reasons.append("primary_value_missing_or_invalid")
                 except (TypeError, ValueError):
@@ -300,7 +350,15 @@ class HttpCatalogFactorRepository:
                 source = None
                 if not reasons:
                     try:
-                        source = self._to_source_record(item, anchor, self.dataset_policies)
+                        source = self._to_source_record(
+                            item,
+                            anchor,
+                            dataset_policies,
+                            actual_content_digest,
+                            applied_bundle,
+                            bundle_signature_status,
+                            bundle_effective_on,
+                        )
                     except (TypeError, ValueError) as exc:
                         reasons.append("record_validation_failed")
                         dropped_fields.append(type(exc).__name__)
@@ -341,7 +399,12 @@ class HttpCatalogFactorRepository:
     def _fetch(self) -> Mapping[str, Any]:
         if self.fetch_json is not None:
             return self.fetch_json(self.endpoint)
-        with urlopen(self.endpoint, timeout=self.timeout_seconds) as response:  # nosec B310 - configured local API
+        if not self.endpoint.startswith(("http://", "https://")):
+            raise ValueError("factor catalog endpoint must use HTTP or HTTPS")
+        # Endpoint is deployment-configured and restricted to HTTP(S) above.
+        with urlopen(  # noqa: S310  # nosec B310
+            self.endpoint, timeout=self.timeout_seconds
+        ) as response:
             value = json.loads(response.read().decode("utf-8"))
         if not isinstance(value, Mapping):
             raise ValueError("factor catalog response must be a JSON object")
@@ -372,9 +435,14 @@ class HttpCatalogFactorRepository:
         item: Mapping[str, Any],
         anchor: DatabaseVersionAnchor,
         dataset_policies: Sequence[CatalogDatasetPolicy] = (),
+        catalog_content_digest: str | None = None,
+        policy_bundle: CatalogPolicyBundle | None = None,
+        policy_bundle_signature_status: str = "not_configured",
+        policy_bundle_effective_on: str = "",
     ) -> SourceRecord | None:
         try:
-            value = float(item.get("primary_value") or "")
+            raw_value = item.get("primary_value")
+            value = float("" if raw_value is None else raw_value)
         except (TypeError, ValueError):
             return None
         unit = str(item.get("primary_unit") or "").strip()
@@ -385,7 +453,9 @@ class HttpCatalogFactorRepository:
         if not source_id or not material_name:
             return None
         applied_policies = tuple(
-            policy for policy in dataset_policies if policy.applies(item)
+            policy for policy in dataset_policies
+            if catalog_content_digest is not None
+            and policy.applies(item, catalog_content_digest)
         )
 
         def inherited(field: str) -> object | None:
@@ -493,11 +563,17 @@ class HttpCatalogFactorRepository:
         metadata = {
             "catalog_version": anchor.catalog_version,
             "database_sha256": anchor.database_sha256 or "",
+            "catalog_content_sha256": anchor.content_sha256 or "",
+            "catalog_schema_version": anchor.schema_version,
+            "catalog_publisher_id": anchor.publisher_id,
+            "catalog_publisher_identity_verified": str(
+                anchor.publisher_identity_verified
+            ).lower(),
             "record_category": str(item.get("category") or ""),
             "document_status": str(item.get("document_status") or ""),
             "source_priority": str(item.get("source_priority") or ""),
             "source_priority_rank": str(source_priority_rank),
-            "source_priority_policy": "customer.draft-ecoinvent310-ecoinvent312/v1",
+            "source_priority_policy": "catalog-explicit-or-version-fallback/v1",
             "source_priority_issue": source_priority_issue,
             "aliases": json.dumps(aliases, ensure_ascii=False) if isinstance(aliases, list) else "",
             "catalog_locator": catalog_locator,
@@ -524,6 +600,20 @@ class HttpCatalogFactorRepository:
             "catalog_dataset_policy_ids": json.dumps(
                 tuple(policy.policy_id for policy in applied_policies), ensure_ascii=False
             ),
+            "catalog_policy_bundle_id": policy_bundle.policy_id if policy_bundle else "",
+            "catalog_policy_bundle_version": policy_bundle.version if policy_bundle else "",
+            "catalog_policy_bundle_content_sha256": (
+                policy_bundle.content_sha256 if policy_bundle else ""
+            ),
+            "catalog_policy_bundle_effective_from": (
+                policy_bundle.effective_from if policy_bundle else ""
+            ),
+            "catalog_policy_bundle_effective_until": (
+                policy_bundle.effective_until or "" if policy_bundle else ""
+            ),
+            "catalog_policy_bundle_approved_by": policy_bundle.approved_by if policy_bundle else "",
+            "catalog_policy_bundle_signature_status": policy_bundle_signature_status,
+            "catalog_policy_bundle_effective_on": policy_bundle_effective_on,
             "catalog_dataset_approval_ids": json.dumps(
                 approved_dataset_ids, ensure_ascii=False
             ),
@@ -766,38 +856,120 @@ class InMemoryResolutionStore:
         async with self._run_lock:
             if await self.has_resolution_run(recommendation.request_id):
                 raise ValueError(f"duplicate request_id: {recommendation.request_id}")
-            self.recommendations[recommendation.request_id] = recommendation
-            self.traces[trace.request_id] = trace
+            trace.verify_hash_chain()
+            stored_trace = trace.clone()
+            self.recommendations[recommendation.request_id] = replace(
+                recommendation, trace=stored_trace
+            )
+            self.traces[trace.request_id] = stored_trace
 
     async def get_recommendation(self, request_id: str) -> Recommendation | None:
         return self.recommendations.get(request_id)
 
     async def save_trace(self, trace: ResolutionTrace) -> None:
-        # Trace is intentionally mutable and replaceable; it is not a snapshot.
         if trace.request_id not in self.recommendations:
             raise ValueError("trace updates require an existing atomic resolution run")
-        self.traces[trace.request_id] = trace
+        trace.verify_hash_chain()
+        current = self.traces[trace.request_id]
+        if trace.revision < current.revision:
+            raise ValueError("trace revision cannot move backwards")
+        current_hashes = tuple(item.entry_hash for item in current.entries)
+        incoming_prefix = tuple(
+            item.entry_hash for item in trace.entries[:current.revision]
+        )
+        if incoming_prefix != current_hashes:
+            raise ValueError("trace history is append-only and cannot be rewritten")
+        stored_trace = trace.clone()
+        self.traces[trace.request_id] = stored_trace
+        self.recommendations[trace.request_id] = replace(
+            self.recommendations[trace.request_id], trace=stored_trace
+        )
 
     async def get_trace(self, request_id: str) -> ResolutionTrace | None:
         return self.traces.get(request_id)
 
-    async def save_approval(self, approval: ApprovalRecord) -> None:
+    async def save_approval(
+        self,
+        approval: ApprovalRecord,
+        trace: ResolutionTrace,
+        *,
+        expected_recommendation_sha256: str,
+        expected_trace_revision: int,
+    ) -> None:
         key = (approval.request_id, approval.candidate_id)
         async with self._approval_lock:
             if approval.request_id in self.locked:
                 raise ValueError("locked resolution cannot be changed")
+            recommendation = self.recommendations.get(approval.request_id)
+            current_trace = self.traces.get(approval.request_id)
+            if recommendation is None or current_trace is None:
+                raise ValueError("approval requires an existing resolution run")
+            if recommendation.content_sha256 != expected_recommendation_sha256:
+                raise ValueError("recommendation changed before approval commit")
+            if current_trace.revision != expected_trace_revision:
+                raise ValueError("trace revision changed before approval commit")
+            trace.verify_hash_chain()
+            if trace.revision != expected_trace_revision + 1:
+                raise ValueError("approval commit must append exactly one trace event")
+            if tuple(item.entry_hash for item in trace.entries[:-1]) != tuple(
+                item.entry_hash for item in current_trace.entries
+            ):
+                raise ValueError("approval trace does not extend the stored trace")
             if key in self.approvals:
                 raise ValueError("candidate already has a terminal human decision")
+            if approval.status == ApprovalStatus.APPROVED and any(
+                item.request_id == approval.request_id
+                and item.status == ApprovalStatus.APPROVED
+                for item in self.approvals.values()
+            ):
+                raise ValueError("request already has an approved candidate")
+            if not approval.is_integrity_bound:
+                raise ValueError("legacy approval without integrity digests cannot be persisted")
             self.approvals[key] = approval
+            stored_trace = trace.clone()
+            self.traces[trace.request_id] = stored_trace
+            self.recommendations[trace.request_id] = replace(
+                recommendation, trace=stored_trace
+            )
 
     async def get_approval(self, request_id: str, candidate_id: str) -> ApprovalRecord | None:
         return self.approvals.get((request_id, candidate_id))
 
-    async def save_locked(self, locked: LockedResolution) -> None:
-        existing = self.locked.get(locked.request_id)
-        if existing is not None and existing != locked:
-            raise ValueError("resolution is already locked and immutable")
-        self.locked.setdefault(locked.request_id, locked)
+    async def save_locked(
+        self,
+        locked: LockedResolution,
+        trace: ResolutionTrace,
+        *,
+        expected_recommendation_sha256: str,
+        expected_trace_revision: int,
+    ) -> None:
+        async with self._approval_lock:
+            if locked.request_id in self.locked:
+                raise ValueError("resolution is already locked and immutable")
+            recommendation = self.recommendations.get(locked.request_id)
+            current_trace = self.traces.get(locked.request_id)
+            if recommendation is None or current_trace is None:
+                raise ValueError("lock requires an existing resolution run")
+            if recommendation.content_sha256 != expected_recommendation_sha256:
+                raise ValueError("recommendation changed before lock commit")
+            if current_trace.revision != expected_trace_revision:
+                raise ValueError("trace revision changed before lock commit")
+            trace.verify_hash_chain()
+            if trace.revision != expected_trace_revision + 1:
+                raise ValueError("lock commit must append exactly one trace event")
+            if tuple(item.entry_hash for item in trace.entries[:-1]) != tuple(
+                item.entry_hash for item in current_trace.entries
+            ):
+                raise ValueError("lock trace does not extend the stored trace")
+            approval = self.approvals.get((locked.request_id, locked.candidate.candidate_id))
+            if approval is None or approval.content_sha256 != locked.approval_content_sha256:
+                raise ValueError("approval changed before lock commit")
+            self.locked[locked.request_id] = locked
+            stored_trace = trace.clone()
+            self.traces[trace.request_id] = stored_trace
+            self.recommendations[trace.request_id] = replace(
+                recommendation, trace=stored_trace
+            )
 
     async def get_locked(self, request_id: str) -> LockedResolution | None:
         return self.locked.get(request_id)
