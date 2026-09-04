@@ -1,2 +1,7 @@
 # Immutable evaluator evidence is hashed as raw bytes. Do not rewrite line endings.
 evidence/autonomous_evaluation/v1/post-fix-regression/* -text
+
+# Keep immutable machine-readable evidence reviewable without dominating GitHub diffs.
+evidence/**/*.json linguist-generated=true
+data/benchmarks/*.jsonl linguist-generated=true
+data/fixtures/**/*.json linguist-generated=true

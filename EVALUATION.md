@@ -3,6 +3,27 @@
 CFR uses versioned, public-synthetic regression suites. These results measure the shipped
 fixtures and contracts; they are not a claim of accuracy across all real-world factor queries.
 
+For the retention and publication rules that distinguish immutable evidence, Release assets,
+and local generated output, see the [evidence index](evidence/README.md).
+
+## Current release summary
+
+| Evidence set | Result | What it proves |
+|---|---:|---|
+| v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
+| v0.14.2 core package | 360 passed, 87.15% branch coverage | current implementation regression gate |
+| FactorBench V3 | 57 cases, contract metrics passed | versioned Resolver behavior |
+| Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
+| Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
+| Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
+| RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
+| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases; workflow attacks; 10k/50k scale | systematic contract exploration with six preserved label disagreements |
+
+`v0.14.2` contains the subsequently merged contract-backed repairs, public BYOC example, and
+release presentation evidence. See [v0.14.2 Release Readiness](docs/RELEASE_READINESS_V0.14.2.md),
+[release notes](docs/RELEASE_NOTES_V0.14.2.md), and the
+[GitHub release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.2).
+
 ## Published suites
 
 - **FactorBench V1** is immutable historical evidence. Its `wrong-unit-53` historical label

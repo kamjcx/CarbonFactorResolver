@@ -41,6 +41,13 @@ exports/
 outputs/
 tmp/
 
+# Local evaluation reruns and scratch diagnostics are not release evidence.
+evidence/_local/
+evidence/**/_local/
+evidence/**/scratch/
+evidence/**/*.local.json
+evidence/**/*.rerun.json
+
 # Locally supplied/licensed standards used only as import evidence
 docs/*--平台.pdf
 docs/5.19--89个品种材料碳排放核算数据*.xlsx

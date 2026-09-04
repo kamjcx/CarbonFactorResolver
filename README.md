@@ -6,40 +6,49 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-ed713a)](LICENSE)
 
 **Evidence-governed carbon-factor retrieval and qualification for materials, energy,
-transport, and processes.** CFR turns a structured factor request into an explainable
-candidate, a precise `MORE_INPUT` question, or a safe refusal. Numeric values always come
-from traceable source records; deterministic gates enforce unit, lifecycle-boundary,
-subject, and provenance compatibility before human review and immutable locking.
+transport, and processes.** CarbonFactorResolver (CFR) receives a structured factor request
+and returns one of three reviewable outcomes: a qualified candidate, a precise
+`MORE_INPUT_NEEDED` question, or a safe refusal.
 
-> **Status:** portfolio-ready, reproducible research prototype. Bundled evaluations use
-> public-synthetic fixtures. Results are not a claim of universal real-world accuracy or
-> production carbon-accounting readiness.
+> **Portfolio status:** reproducible research prototype, not a production carbon-accounting
+> system. CFR is a deterministic retrieval-and-qualification engine—not an autonomous LLM
+> agent—and bundled factor records are project-authored synthetic examples.
 
 ![CarbonFactorResolver dashboard resolving a synthetic primary aluminium query](docs/assets/dashboard-resolved.png)
 
-## Why this exists
+## The problem, the responsibility, the safety value
 
-Semantic similarity alone can return a plausible but invalid factor: a finished product for
-a raw material, A1-A3 total for an A2 request, ordinary graphite for a graphite electrode,
-or a mass factor for an energy activity. CFR separates recall from admission:
+Semantic similarity can find a plausible but invalid factor: a finished product for a raw
+material, an A1-A3 total for an A2 request, ordinary graphite for a graphite electrode, or a
+mass factor for an energy activity. CFR separates broad recall from formal admission.
 
-1. resolve the material or activity entity and its modifiers;
-2. retrieve local and hash-pinned structured external records;
-3. reject incompatible units, boundaries, subjects, processes, and evidence;
-4. rank only qualified candidates and explain every inclusion and exclusion;
-5. require a human decision before an immutable factor is locked.
+| CFR receives | CFR is responsible for | CFR returns |
+|---|---|---|
+| structured `FactorQuery` / `ResolutionRequest` JSON | entity resolution, structured-source retrieval, deterministic unit/boundary/subject/provenance checks, ranking and explanation | qualified recommendations, `MORE_INPUT_NEEDED`, or a reason-coded refusal for human review and locking |
 
-![CarbonFactorResolver internal decision flow from structured request through retrieval, deterministic gates, human review, and immutable lock](docs/assets/cfr-resolution-architecture.png)
+It does **not** parse documents, extract BOM or activity data, calculate a complete product
+footprint, generate reports, or automatically approve formal factors. Numeric values must
+come from traceable source records; the model cannot invent a factor value.
 
-The diagram makes the critical separation explicit: retrieval may be broad, but only
-deterministically qualified candidates reach ranking and review. Exclusions remain visible
-with reason codes in Trace. Editable sources: [HTML](docs/assets/cfr-resolution-architecture.html)
-and [SVG](docs/assets/cfr-resolution-architecture.svg).
+## Verified public-synthetic evidence
 
-## Five-minute quickstart
+| Gate | Published result |
+|---|---:|
+| Core package | 360 tests passed on Python 3.11; 87.15% branch coverage |
+| Python compatibility | complete suite passed on 3.11, 3.12, and 3.13 |
+| FactorBench V3 | 57 versioned contracts passed |
+| Closed portfolio diagnostic | 39 direct recommendations + 1 correct `MORE_INPUT_NEEDED` with `REFERENCE_ONLY` |
+| RC6 sealed first run | 48/48 complete contracts; 0 boundary, subject, unit, forbidden-candidate, or HTTP-500 escapes |
 
-The default runtime uses small project-authored synthetic fixtures. It does not download or
-ship ecoinvent, customer records, or any commercial factor database.
+These figures measure frozen, public-synthetic fixtures and contracts. They are not a claim
+of universal real-world accuracy, production readiness, or validity for carbon accounting.
+Historical first-run failures, adjudications, denominators, hashes, and scale results remain
+available in [Evaluation](EVALUATION.md) and the [evidence index](evidence/README.md).
+
+## 30-second quickstart
+
+The default runtime ships only small project-authored synthetic fixtures. It does not
+download or include ecoinvent, customer records, or any commercial factor database.
 
 ```bash
 git clone https://github.com/kamjcx/CarbonFactorResolver.git
@@ -48,7 +57,7 @@ docker compose up --build -d
 curl http://127.0.0.1:8000/healthz
 ```
 
-Open `http://127.0.0.1:8000`, or submit a JSON request:
+Open `http://127.0.0.1:8000`, or resolve a structured JSON request:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/resolve \
@@ -61,58 +70,19 @@ curl -X POST http://127.0.0.1:8000/api/v1/resolve \
   }'
 ```
 
-Python/CLI development setup:
+Python development setup:
 
 ```bash
 pip install -e ".[test,api]"
 cfr resolve --material "aluminium" --quantity 1 --unit t
 cfr benchmark run data/benchmarks/factorbench_v3.jsonl
-cfr serve --host 127.0.0.1 --port 8000
 ```
 
-To connect your own licensed or internal structured catalogue, follow the
-[Bring Your Own Catalog tutorial](docs/BRING_YOUR_OWN_CATALOG.md). It includes a 20-record
-project-authored `PUBLIC_SYNTHETIC` fixture and three copyable exact-match,
-`MORE_INPUT_NEEDED`, and safe-refusal queries. Imported records remain candidates until a
-human reviews and locks a factor; the tutorial does not authorize accounting use.
+To connect an authorized structured catalogue, follow the
+[Bring Your Own Catalog tutorial](docs/BRING_YOUR_OWN_CATALOG.md). Imported records remain
+candidates until a human reviews and locks a factor.
 
-## Three demo decisions
-
-| Request | Expected behavior | Safety property |
-|---|---|---|
-| `primary aluminium ingot` + primary-production process | returns the traceable primary-aluminium candidate | exact entity/process qualification |
-| `metallic aluminium feedstock` without a route | returns `MORE_INPUT_NEEDED` | does not choose primary vs. secondary production |
-| unknown material or cross-dimension unit | returns a safe refusal with reason codes | never invents a numeric factor |
-
-The Dashboard exposes the pipeline, terminal state, candidate evidence, score, result tier,
-and decision reasons rather than presenting an unexplained search result.
-
-![Candidate evidence and deterministic qualification trace](docs/assets/dashboard-evidence.png)
-
-See the [90-second demo script](docs/DEMO_SCRIPT_90S.md) for a concise interview walkthrough.
-
-## Autonomous contract evaluation
-
-The developer-only evaluator generates 414 non-duplicate public-synthetic resolution cases
-from an independent, versioned Oracle, plus four API fault cases (418 total results). It
-exercises exact boundary and subject matrices, unit
-dimensions, evidence degradation, source priority, ambiguity, high-risk neighbouring
-entities, deterministic replay, catalog perturbation, and approval/lock attacks against the
-real Resolver. A separate scale harness measures 10k/50k synthetic catalogs at concurrency
-10/25/50. Neither harness changes or approves a factor, and neither contains licensed or
-customer data.
-
-```bash
-python -m tools.autonomous_evaluation --output outputs/autonomous-evaluation.json
-python -m tools.autonomous_evaluation.performance --sizes 10000,50000 --concurrency 10,25,50
-```
-
-Generated expectations come from explicit contracts rather than from Resolver output. First
-runs, failures, Bad Case attribution and artifact hashes are retained; a failed gate is a
-diagnostic result, not tuned away. See the
-[autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md).
-
-## Architecture and product boundary
+## How a decision is made
 
 ```text
 Document Intelligence / carbon-report
@@ -126,64 +96,48 @@ Document Intelligence / carbon-report
 carbon-report calculation and report generation
 ```
 
-**In scope**
+![CarbonFactorResolver internal decision flow from structured request through retrieval, deterministic gates, human review, and immutable lock](docs/assets/cfr-resolution-architecture.png)
 
-- structured `FactorQuery` / `ResolutionRequest` input;
-- multilingual entity resolution and controlled aliases;
-- local and structured external factor-source retrieval;
-- deterministic qualification, ranking, explanation, and Trace;
-- human review support and immutable factor locking.
+Retrieval may be broad, but only deterministically qualified candidates reach ranking and
+review. Exclusions remain visible with stable reason codes in Trace. See
+[Architecture](ARCHITECTURE.md) for component and trust-boundary details.
 
-**Out of scope**
+## Three demo decisions
 
-- PDF, DOCX, Excel, image parsing, or OCR;
-- BOM, procurement-ledger, or enterprise activity-data extraction;
-- full product-carbon-footprint calculation and report generation;
-- automatic writes to, or approval in, a formal factor catalogue.
+| Request | Expected behavior | Safety property |
+|---|---|---|
+| `primary aluminium ingot` + primary-production process | returns the traceable primary-aluminium candidate | exact entity/process qualification |
+| `metallic aluminium feedstock` without a route | returns `MORE_INPUT_NEEDED` | does not choose primary vs. secondary production |
+| unknown material or cross-dimension unit | returns a reason-coded refusal | does not invent a numeric factor |
 
-The document-capable tool under `tools/true_data_acceptance.py` is a developer-only offline
-QA harness. It is not imported by the runtime or exposed through the CFR API.
+![Candidate evidence and deterministic qualification trace](docs/assets/dashboard-evidence.png)
 
-## Reproducible evaluation
+See the [90-second demo script](docs/DEMO_SCRIPT_90S.md) for an interview walkthrough.
 
-| Evidence set | Result | What it proves |
-|---|---:|---|
-| v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
-| v0.14.2 core package | 360 passed, 87.15% branch coverage | current implementation regression gate |
-| FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
-| Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
-| Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
-| Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
-| RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
-| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases + workflow attacks + 10k/50k scale | systematic contract exploration; six frozen geography/year label disagreements remain visible and adjudicated |
+## Product boundary
 
-RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
-conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent
-sealed unit v4 acceptance. `v0.14.2` contains the subsequently merged contract-backed runtime
-repairs, public BYOC example, and release presentation evidence. See [Evaluation](EVALUATION.md),
-[v0.14.2 Release Readiness](docs/RELEASE_READINESS_V0.14.2.md), and the
-[v0.14.2 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.2).
+**In scope:** structured requests; multilingual entity resolution and controlled aliases;
+local and structured external-source retrieval; deterministic qualification, ranking,
+explanation and Trace; human review support and immutable locking.
 
-## Design guarantees
+**Out of scope:** PDF/DOCX/Excel/image parsing and OCR; BOM, procurement-ledger, or enterprise
+activity-data extraction; full product-carbon-footprint calculation; report generation; and
+automatic catalogue writes or approvals.
 
-- No language model or fallback code may originate an emission-factor value.
-- Exact A1/A2/A3/A1-A3 and factor-subject matrices fail closed.
-- Unsupported or cross-dimension units return stable reason codes.
-- Source locator, content hash, declared product, boundary, and database anchors stay in Trace.
-- Rejected candidates cannot later be approved in the same immutable resolution run.
-- `REFERENCE_ONLY` results require an explicit, reasoned human override.
+`tools/true_data_acceptance.py` and the autonomous evaluator are developer-only offline QA
+harnesses. They are not imported by the runtime or exposed as CFR product capabilities.
 
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
-- [Evaluation methodology and results](EVALUATION.md)
+- [Evaluation methodology, detailed results, and historical failures](EVALUATION.md)
+- [Evidence and generated-artifact policy](evidence/README.md)
 - [Limitations](LIMITATIONS.md)
 - [Data licensing](DATA_LICENSE.md)
 - [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
 - [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
-- [Release notes](docs/RELEASE_NOTES_V0.14.2.md)
-- [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
+- [v0.14.2 release readiness](docs/RELEASE_READINESS_V0.14.2.md)
+- [v0.14.2 release notes](docs/RELEASE_NOTES_V0.14.2.md)
 
 ## Data and license
 
