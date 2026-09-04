@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.14.3 - 2026-09-05
+
 - Add Autonomous Contract V3 with a 418-case SHA freeze and 103 per-case adjudications that retain
   all raw V1 failures while recomputing separately labelled effective metrics. The resulting gate
   has zero unresolved Bad Cases and zero safety escapes without changing Resolver runtime behavior,
@@ -44,8 +46,6 @@
 - Added atomic approval/lock compare-and-set semantics, append-only trace hash
   chains and immutable locked evidence snapshots.
 - Added fail-closed migration rules for unbound policies and legacy approvals.
-
-## Unreleased
 
 - Harden formal resolution: explicit geography/year conflicts fail closed unless a versioned
   deployment substitution policy authorizes that exact dimension; missing declared product or
