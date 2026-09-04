@@ -6,6 +6,7 @@ import pytest
 
 from a1_factor_engine import (
     A1FactorResolutionEngine,
+    CatalogPolicyBundle,
     FactorKind,
     FactorSourceType,
     FactorSubjectType,
@@ -347,14 +348,26 @@ async def test_http_catalog_cache_rebuilds_when_decision_policy_changes() -> Non
     )
     repository = HttpCatalogFactorRepository(
         fetch_json=lambda _url: payload,
-        dataset_policies=(policy_cn,),
+        policy_bundle=CatalogPolicyBundle(
+            policy_id="deployment-policy:cache/v1",
+            version="1",
+            approved_catalog_content_sha256=catalog_content_sha256(payload["records"]),
+            effective_from="2026-09-04",
+            approved_by="test-reviewer",
+            policies=(policy_cn,),
+        ),
     )
     intent = DEFAULT_MATERIAL_REGISTRY.resolve("policy cache electricity").retrieval_intent
     assert intent is not None
 
     first = await repository.search(intent)
-    repository.dataset_policies = (
-        replace(policy_cn, geography="US", year=2025),
+    repository.policy_bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:cache/v2",
+        version="2",
+        approved_catalog_content_sha256=catalog_content_sha256(payload["records"]),
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(replace(policy_cn, geography="US", year=2025),),
     )
     second = await repository.search(intent)
 

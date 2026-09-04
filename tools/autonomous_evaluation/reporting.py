@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from .metrics import bad_cases
 

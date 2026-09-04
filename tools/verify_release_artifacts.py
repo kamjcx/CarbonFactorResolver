@@ -3,15 +3,27 @@
 from __future__ import annotations
 
 import argparse
+import re
+import stat
 import tarfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 FORBIDDEN_SUFFIXES = {
     ".db", ".sqlite", ".sqlite3", ".duckdb", ".doc", ".docx", ".xls", ".xlsx",
-    ".pdf", ".pem", ".key", ".p12", ".pfx", ".bak", ".backup", ".dump",
+    ".pdf", ".pem", ".key", ".p12", ".pfx", ".crt", ".cer", ".bak", ".backup",
+    ".dump", ".mdb", ".accdb", ".log", ".zip", ".7z", ".tar", ".gz",
 }
-FORBIDDEN_PARTS = {"outputs", "datasets", "exports", ".env", "task_plan.md", "findings.md", "progress.md"}
+FORBIDDEN_PARTS = {
+    "outputs", "datasets", "exports", ".env", "tests", "restricted", "customer", "customers",
+    "private", "licensed", "task_plan.md", "findings.md", "progress.md",
+}
+WINDOWS_ABSOLUTE = re.compile(r"^[a-zA-Z]:[/\\]")
+SECRET_ASSIGNMENT = re.compile(
+    rb'''(?ix)["']?(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|private[_-]?key)'''
+    rb'''["']?\s*[:=]\s*["'][^"']{4,}["']'''
+)
+MAX_INSPECTED_MEMBER_BYTES = 1_000_000
 
 
 def members(path: Path) -> tuple[str, ...]:
@@ -24,16 +36,67 @@ def members(path: Path) -> tuple[str, ...]:
     raise ValueError(f"unsupported release archive: {path.name}")
 
 
+def content_violations(path: Path) -> tuple[str, ...]:
+    violations: list[str] = []
+    if path.suffix == ".whl":
+        with zipfile.ZipFile(path) as archive:
+            for info in archive.infolist():
+                if info.is_dir() or info.file_size > MAX_INSPECTED_MEMBER_BYTES:
+                    continue
+                payload = archive.read(info)
+                if SECRET_ASSIGNMENT.search(payload):
+                    violations.append(info.filename)
+                if stat.S_ISLNK(info.external_attr >> 16):
+                    target = payload.decode("utf-8", errors="ignore")
+                    if _unsafe_member_path(target):
+                        violations.append(info.filename)
+        return tuple(dict.fromkeys(violations))
+    if path.name.endswith(".tar.gz"):
+        with tarfile.open(path, "r:gz") as archive:
+            for info in archive.getmembers():
+                if info.issym() or info.islnk():
+                    if _unsafe_member_path(info.linkname):
+                        violations.append(info.name)
+                    continue
+                if not info.isfile() or info.size > MAX_INSPECTED_MEMBER_BYTES:
+                    continue
+                extracted = archive.extractfile(info)
+                if extracted is not None and SECRET_ASSIGNMENT.search(extracted.read()):
+                    violations.append(info.name)
+        return tuple(dict.fromkeys(violations))
+    raise ValueError(f"unsupported release archive: {path.name}")
+
+
+def _unsafe_member_path(value: str) -> bool:
+    normalized = value.replace("\\", "/")
+    parsed = PurePosixPath(normalized)
+    return (
+        normalized.startswith("/")
+        or WINDOWS_ABSOLUTE.match(normalized) is not None
+        or ".." in parsed.parts
+    )
+
+
 def verify_archive(path: Path) -> tuple[str, ...]:
     violations: list[str] = []
     for name in members(path):
         normalized = name.replace("\\", "/")
-        parts = set(Path(normalized).parts)
-        suffix = Path(normalized).suffix.casefold()
-        if suffix in FORBIDDEN_SUFFIXES or parts.intersection(FORBIDDEN_PARTS):
+        parsed = PurePosixPath(normalized)
+        parts = {part.casefold() for part in parsed.parts}
+        filename = parsed.name.casefold()
+        suffix = parsed.suffix.casefold()
+        unsafe_path = _unsafe_member_path(normalized)
+        environment_file = filename == ".env" or filename.startswith(".env.")
+        database_sidecar = ".db-" in filename or ".sqlite-" in filename
+        if (
+            unsafe_path
+            or environment_file
+            or database_sidecar
+            or suffix in FORBIDDEN_SUFFIXES
+            or parts.intersection(FORBIDDEN_PARTS)
+        ):
             violations.append(normalized)
-        if path.name.endswith(".tar.gz") and "/tests/" in f"/{normalized}/":
-            violations.append(normalized)
+    violations.extend(content_violations(path))
     return tuple(dict.fromkeys(violations))
 
 

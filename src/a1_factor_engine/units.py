@@ -7,11 +7,11 @@ remain compatibility boundaries; registry ratios and plans are Decimal-based.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 from types import MappingProxyType
-from typing import Mapping
 
 UNIT_SYNTAX_UNSUPPORTED = "UNIT_SYNTAX_UNSUPPORTED"
 CATALOG_FACTOR_UNIT_INVALID = "CATALOG_FACTOR_UNIT_INVALID"
@@ -363,7 +363,8 @@ def plan_factor_conversion(
             None, "unit.factor_scale/v1", evidence_required=True,
             reason_code=UNIT_CONVERSION_EVIDENCE_REQUIRED,
         )
-    assert activity_plan.multiplier is not None
+    if activity_plan.multiplier is None:
+        raise ValueError("activity conversion plan lacks a multiplier")
     multiplier = (
         source.impact_unit.ratio_to_kgco2e
         / target.impact_unit.ratio_to_kgco2e

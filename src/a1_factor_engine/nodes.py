@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import replace
-from typing import Sequence
 
 from .accounting import (
     resolve_accounting_assignment,
@@ -613,7 +613,7 @@ class NormalizeNode(Node[GraphState]):
                         "composite or unregistered material"
                     ),
                     required=True,
-                    options=tuple((*identity.constituent_entity_ids, "unknown")),
+                    options=(*identity.constituent_entity_ids, "unknown"),
                 ))
             elif field == "product_variant":
                 request_gap_items.append(RequestGap(
@@ -740,12 +740,11 @@ class LocalRetrievalNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.LOCAL_RETRIEVAL
-        if state.normalized is None:
-            return state
-        if state.normalized.retrieval_intent is None:
+        normalized = state.require_normalized(Stage.LOCAL_RETRIEVAL)
+        if normalized.retrieval_intent is None:
             raise ValueError("normalized activity lacks RetrievalIntent")
         try:
-            result = await self.repository.search(state.normalized.retrieval_intent)
+            result = await self.repository.search(normalized.retrieval_intent)
         except CatalogIntegrityError as exc:
             if "SHA-256" in str(exc) or "signature" in str(exc):
                 raise
@@ -915,7 +914,7 @@ class LocalEvaluateNode(Node[GraphState]):
                         required=True,
                         options=tuple(subject.value for subject in operational_subjects),
                     )
-                    state.request_gaps = tuple((*state.request_gaps, subject_gap))
+                    state.request_gaps = (*state.request_gaps, subject_gap)
                     state.request_resolution_plan = RequestResolutionPlan(
                         request_id=state.request.request_id,
                         gaps=state.request_gaps,
@@ -960,7 +959,7 @@ class LocalEvaluateNode(Node[GraphState]):
                         required=True,
                         options=variants + ("unknown",),
                     )
-                    state.request_gaps = tuple((*state.request_gaps, route_gap))
+                    state.request_gaps = (*state.request_gaps, route_gap)
                     state.request_resolution_plan = RequestResolutionPlan(
                         request_id=state.request.request_id,
                         gaps=state.request_gaps,
@@ -1037,9 +1036,8 @@ class UnitScaleResolutionNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.UNIT_SCALE_RESOLUTION
-        if state.normalized is None:
-            return state
-        output = tuple(resolve_unit_scale(state.normalized, candidate) for candidate in state.resolution_candidates)
+        normalized = state.require_normalized(Stage.UNIT_SCALE_RESOLUTION)
+        output = tuple(resolve_unit_scale(normalized, candidate) for candidate in state.resolution_candidates)
         state.resolution_candidates = output
         state.event(Stage.UNIT_SCALE_RESOLUTION, "deterministic activity and factor unit scales resolved", {
             "candidates": tuple({
@@ -1059,15 +1057,14 @@ class ReferenceFlowResolutionNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.REFERENCE_FLOW_RESOLUTION
-        if state.normalized is None:
-            return state
+        normalized = state.require_normalized(Stage.REFERENCE_FLOW_RESOLUTION)
         needs_resolution = any(
             any(gap.gap_type == GapType.REFERENCE_FLOW for gap in candidate.gaps)
             for candidate in state.resolution_candidates
         )
         if not needs_resolution:
             return state
-        state.reference_flow_records = tuple(await self.repository.search(state.normalized))
+        state.reference_flow_records = tuple(await self.repository.search(normalized))
         state.parameter_evidence.extend(record.evidence for record in state.reference_flow_records)
         output: list[Candidate] = []
         for candidate in state.resolution_candidates:
@@ -1075,11 +1072,11 @@ class ReferenceFlowResolutionNode(Node[GraphState]):
             if not needs:
                 output.append(candidate)
                 continue
-            resolved = resolve_reference_flow(state.normalized, candidate, state.reference_flow_records)
+            resolved = resolve_reference_flow(normalized, candidate, state.reference_flow_records)
             if not resolved:
-                state.required_fields = _reference_flow_required_fields(state.normalized.original_quantity_unit)
+                state.required_fields = _reference_flow_required_fields(normalized.original_quantity_unit)
                 state.warnings.append(
-                    f"reference-flow conversion lacks evidence for {state.normalized.original_quantity_unit}"
+                    f"reference-flow conversion lacks evidence for {normalized.original_quantity_unit}"
                 )
                 continue
             output.extend(
@@ -1103,8 +1100,7 @@ class ProcessVariantResolutionNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.PROCESS_VARIANT_RESOLUTION
-        if state.normalized is None:
-            return state
+        normalized = state.require_normalized(Stage.PROCESS_VARIANT_RESOLUTION)
         output: list[Candidate] = []
         modes: list[dict[str, str]] = []
         current_evidence: list[ParameterEvidence] = []
@@ -1113,11 +1109,11 @@ class ProcessVariantResolutionNode(Node[GraphState]):
             if not needs:
                 output.append(candidate)
                 continue
-            evidence = tuple(await self.repository.search(state.normalized, candidate.source))
+            evidence = tuple(await self.repository.search(normalized, candidate.source))
             state.parameter_evidence.extend(evidence)
             current_evidence.extend(evidence)
             for assignment in resolve_process_accounting_assignments(
-                state.normalized.canonical_name, evidence
+                normalized.canonical_name, evidence
             ):
                 if assignment not in state.accounting_assignments:
                     state.accounting_assignments.append(assignment)
@@ -1160,20 +1156,19 @@ class GradeCompositionResolutionNode(Node[GraphState]):
 
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.GRADE_COMPOSITION_RESOLUTION
-        if state.normalized is None:
-            return state
+        normalized = state.require_normalized(Stage.GRADE_COMPOSITION_RESOLUTION)
         output: list[Candidate] = []
         for candidate in state.resolution_candidates:
             needs = any(gap.gap_type == GapType.GRADE_COMPOSITION for gap in candidate.gaps)
             if not needs:
                 output.append(candidate)
                 continue
-            recalled = (candidate.source, *tuple(await self.repository.search(state.normalized, candidate.source)))
+            recalled = (candidate.source, *tuple(await self.repository.search(normalized, candidate.source)))
             qualified: list[SourceRecord] = []
             for raw_anchor in recalled:
                 anchor = self.registry.enrich_source(raw_anchor)
                 qualification = qualify_record(
-                    state.normalized,
+                    normalized,
                     anchor,
                     QualificationPolicy.GRADE_ANCHOR,
                     reference=candidate.source,
@@ -1191,7 +1186,7 @@ class GradeCompositionResolutionNode(Node[GraphState]):
                             *qualification.additional_exclusions,
                         ))) or ("grade anchor qualification failed",),
                     ))
-            resolved = resolve_grade(state.normalized, candidate, tuple(qualified))
+            resolved = resolve_grade(normalized, candidate, tuple(qualified))
             if resolved.resolution_type in {
                 ResolutionType.GRADE_EXACT_ANCHOR,
                 ResolutionType.GRADE_INTERPOLATED,
@@ -1278,8 +1273,8 @@ class ProxyEvaluateNode(Node[GraphState]):
                 admission_sink=admissions,
                 registry=self.registry,
             )
-            state.qualifications = tuple((*state.qualifications, *qualifications))
-            state.candidate_admissions = tuple((*state.candidate_admissions, *admissions))
+            state.qualifications = (*state.qualifications, *qualifications)
+            state.candidate_admissions = (*state.candidate_admissions, *admissions)
             state.recall_observations = tuple(observations)
             state.proxy_candidates = tuple(
                 finalize_candidate(replace(

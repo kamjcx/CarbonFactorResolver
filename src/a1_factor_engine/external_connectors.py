@@ -13,11 +13,11 @@ import inspect
 import json
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any
 from urllib.parse import quote, urljoin
 
 from .connector_security import (
@@ -301,7 +301,7 @@ class SnapshotExternalConnector:
             ref=ref,
             content=content,
             content_sha256=digest,
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
             snapshot_sha256=snapshot_sha256,
         )
 
@@ -345,7 +345,7 @@ class PublicStructuredEPDConnector(SnapshotExternalConnector):
                 ref=ref,
                 content=content,
                 content_sha256=_sha256(content),
-                retrieved_at=datetime.now(timezone.utc),
+                retrieved_at=datetime.now(UTC),
                 snapshot_sha256=ref.snapshot_sha256,
             )
         if _sha256(document.content) != document.content_sha256:
@@ -501,7 +501,7 @@ class OpenEPDConnector:
         digest = _sha256(content)
         if ref.expected_content_sha256 and digest != ref.expected_content_sha256:
             raise InvalidExternalEvidence("OpenEPD document SHA-256 mismatch")
-        return ExternalDocument(ref, content, digest, datetime.now(timezone.utc))
+        return ExternalDocument(ref, content, digest, datetime.now(UTC))
 
 
 class StructuredEPDEvidenceExtractor:

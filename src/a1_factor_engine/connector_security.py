@@ -7,9 +7,9 @@ import ipaddress
 import json
 import re
 import socket
-from collections.abc import AsyncIterable, Iterable, Mapping, Sequence
+from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 
 CONNECTOR_URL_REJECTED = "CONNECTOR_URL_REJECTED"
@@ -86,7 +86,8 @@ class StructuredFetchResponse:
 def bound_transport(value: Callable[..., Any]) -> Callable[..., Any]:
     """Mark a deployment transport that binds connections to ``context.route``."""
 
-    setattr(value, "cfr_binds_validated_route", True)
+    # Callable transports do not share a concrete protocol implementation.
+    setattr(value, "cfr_binds_validated_route", True)  # noqa: B010
     return value
 
 

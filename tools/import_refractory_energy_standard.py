@@ -70,7 +70,8 @@ def numeric(value: object) -> float | None:
 
 def _slug(value: str) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
-    return normalized or hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
+    # SHA-1 is retained only for a non-security, backwards-compatible display slug.
+    return normalized or hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]  # noqa: S324
 
 
 def canonical_product_key(product_name: str) -> str:

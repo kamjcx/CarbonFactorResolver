@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .contracts import sha256_json
 
@@ -23,7 +24,7 @@ def forbidden_escape_ids(row: Mapping[str, Any]) -> tuple[str, ...]:
     if not isinstance(expectation, Mapping) or not isinstance(observation, Mapping):
         return ()
     forbidden = set(_strings(expectation.get("forbidden_ids")))
-    selectable = set((*_strings(observation.get("primary_ids")), *_strings(observation.get("reviewable_ids"))))
+    selectable = {*_strings(observation.get("primary_ids")), *_strings(observation.get("reviewable_ids"))}
     return tuple(sorted(forbidden & selectable))
 
 

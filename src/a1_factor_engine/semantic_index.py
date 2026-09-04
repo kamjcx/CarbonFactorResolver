@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from typing import Sequence
 
 from rapidfuzz.fuzz import ratio
 
@@ -33,6 +33,7 @@ def _record_aliases(record: SourceRecord) -> set[str]:
     raw = record.metadata.get("aliases", "")
     if not raw:
         return set()
+    values: Sequence[object]
     if isinstance(raw, (list, tuple)):
         values = raw
     else:

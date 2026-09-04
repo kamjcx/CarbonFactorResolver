@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from enum import IntEnum
-from typing import Any, Mapping
+from typing import Any
 from uuid import uuid4
 
 API_MAJOR_VERSION = 1

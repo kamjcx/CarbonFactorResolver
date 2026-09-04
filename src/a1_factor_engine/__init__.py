@@ -4,7 +4,7 @@ from .accounting import (
     resolve_accounting_assignment,
     resolve_process_accounting_assignments,
 )
-from .adapters import REFRACTORY_A1_STANDARD_POLICY, CatalogDatasetPolicy
+from .catalog_policy import CatalogDatasetPolicy, CatalogPolicyBundle
 from .energy_database import (
     CompositeProcessParameterRepository,
     EnergyConversionRecord,
@@ -136,7 +136,7 @@ __all__ = [
     "A1FactorResolutionEngine",
     "DeploymentPolicy",
     "CatalogDatasetPolicy",
-    "REFRACTORY_A1_STANDARD_POLICY",
+    "CatalogPolicyBundle",
     "CompositeProcessParameterRepository",
     "EnergyConversionRecord",
     "EnergyDatabaseAnchor",

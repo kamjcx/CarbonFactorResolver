@@ -9,8 +9,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from urllib.request import urlopen
 
 from a1_factor_engine import A1FactorResolutionEngine, ResolutionRequest
@@ -39,7 +40,8 @@ QUERIES = (
 
 
 def _fetch(endpoint: str) -> Mapping[str, Any]:
-    with urlopen(endpoint, timeout=30) as response:  # nosec B310 - explicit local catalogue
+    # Developer diagnostic endpoint; production connector validation lives in runtime code.
+    with urlopen(endpoint, timeout=30) as response:  # noqa: S310
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, Mapping):
         raise ValueError("catalogue response must be an object")

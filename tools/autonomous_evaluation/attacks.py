@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import FrozenInstanceError
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from a1_factor_engine.adapters import (
     HttpCatalogFactorRepository,

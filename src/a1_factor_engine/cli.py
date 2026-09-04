@@ -7,8 +7,9 @@ import asyncio
 import inspect
 import json
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, NoReturn, Sequence, TextIO
+from typing import Any, NoReturn, TextIO
 
 from .engine import A1FactorResolutionEngine
 from .operability import CliExitCode, cli_exit_code, error_detail
@@ -43,8 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = ContractArgumentParser(prog="cfr", description="Carbon factor resolution tools")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    resolve = commands.add_parser("resolve", help="resolve one material activity")
-    resolve.add_argument("material_pos", nargs="?", help="material name")
+    resolve = commands.add_parser(
+        "resolve",
+        help="resolve structured JSON, or use the positional material-mass shortcut",
+    )
+    resolve.add_argument("material_pos", nargs="?", help="material name (mass shortcut only)")
     resolve.add_argument("quantity_pos", nargs="?", type=float, help="activity quantity")
     resolve.add_argument("unit_pos", nargs="?", help="activity unit")
     resolve.add_argument("process_pos", nargs="?", help="production process")
@@ -58,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--product-form")
     resolve.add_argument("--composition")
     resolve.add_argument("--boundary", default="cradle-to-gate")
-    resolve.add_argument("--target-factor-unit", default="kgCO2e/kg")
+    resolve.add_argument("--target-factor-unit")
     resolve.add_argument("--top-k", type=int, default=3)
     resolve.add_argument(
         "--min-score", type=float, default=None,
@@ -149,6 +153,26 @@ def main(
         if args.command == "resolve":
             if args.min_score is not None:
                 raise CliUsageError("--min-score is not available on formal resolve")
+            positional_used = any(value is not None for value in (
+                args.material_pos, args.quantity_pos, args.unit_pos, args.process_pos
+            ))
+            option_used = any(value is not None for value in (
+                args.material_opt,
+                args.quantity_opt,
+                args.unit_opt,
+                args.process_opt,
+                args.geography,
+                args.year,
+                args.product_form,
+                args.composition,
+                args.target_factor_unit,
+            ))
+            if args.input_json and (positional_used or option_used):
+                raise CliUsageError("--input-json cannot be combined with resolution field options")
+            if positional_used and any(value is not None for value in (
+                args.material_opt, args.quantity_opt, args.unit_opt, args.process_opt
+            )):
+                raise CliUsageError("positional resolve cannot be mixed with field options")
             if args.input_json:
                 raw = input_stream.read() if args.input_json == "-" else Path(args.input_json).read_text(
                     encoding="utf-8"
@@ -157,12 +181,19 @@ def main(
                 if not isinstance(payload, dict):
                     raise CliUsageError("resolution input must be a JSON object")
             else:
+                from .units import ActivityDimension, parse_activity_unit
+
                 material = args.material_opt or args.material_pos
                 quantity = args.quantity_opt if args.quantity_opt is not None else args.quantity_pos
                 unit = args.unit_opt or args.unit_pos
                 process = args.process_opt or args.process_pos
                 if material is None or quantity is None or unit is None:
                     raise CliUsageError("resolve requires material, quantity and unit")
+                activity_unit = parse_activity_unit(unit)
+                if activity_unit.dimension != ActivityDimension.MASS:
+                    raise CliUsageError(
+                        "positional resolve supports material mass only; use --input-json"
+                    )
                 payload = {
                     "material_name": material,
                     "quantity": quantity,
@@ -173,7 +204,7 @@ def main(
                     "product_form": args.product_form,
                     "composition": args.composition,
                     "boundary": args.boundary,
-                    "target_factor_unit": args.target_factor_unit,
+                    "target_factor_unit": args.target_factor_unit or "kgCO2e/kg",
                     "top_k": args.top_k,
                 }
                 if args.request_id:

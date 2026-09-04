@@ -18,10 +18,17 @@ must bind the explicit admin/dev application to a separate protected port and in
 actor/tenant/project authorization policy. Live structured-source adapters are HTTPS-only,
 same-origin by default, and bounded against SSRF, redirect, credential-forwarding, timeout, and
 oversized-response attacks. See [the v4 threat model](docs/CFR_CONNECTOR_CONTROL_PLANE_SECURITY_V4.md).
+Generic CFR does not ship a customer-specific catalog-priority policy. A deployment that injects
+one must bind it to the exact catalog content; production-approval authority additionally requires
+a deployment-verified signature. See [Engineering Delivery Hardening V6](docs/CFR_ENGINEERING_DELIVERY_HARDENING_V6.md).
 
 > **Status:** portfolio-ready, reproducible research prototype. Bundled evaluations use
 > public-synthetic fixtures. Results are not a claim of universal real-world accuracy or
 > production carbon-accounting readiness.
+
+The repository's pinned builds, scans, SBOM, and checksums are delivery evidence, not a production
+security certification. Multi-instance idempotency/persistence, trust-root management, IAM,
+monitoring, recovery, and formal factor-data approval remain deployment responsibilities.
 
 ![CarbonFactorResolver dashboard resolving a synthetic primary aluminium query](docs/assets/dashboard-resolved.png)
 
@@ -168,6 +175,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | PR3 stacked candidate | 411 passed, 86.42% branch coverage | current Catalog-to-lock integrity regression gate |
 | PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
 | PR5 stacked candidate | 464 passed, 87.01% branch coverage | versioned API, fail-closed readiness, idempotency and scriptable CLI contract gate |
+| PR6 stacked candidate | 479 passed, 86.96% branch coverage | generic policy boundary, full-package typing, graph invariants and supply-chain evidence gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |

@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Any
 from uuid import uuid4
 
 from .integrity import (
@@ -29,7 +30,7 @@ from .units import UnitConversionEvidence
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class FactorSourceType(str, Enum):
@@ -310,7 +311,7 @@ class RequestGapType(str, Enum):
 
 
 class QualificationStatus(str, Enum):
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 - domain status, not a credential
     MISMATCH = "mismatch"
     UNKNOWN = "unknown"
     NOT_EVALUATED = "not_evaluated"
@@ -396,8 +397,8 @@ class ResolutionGap:
     gap_id: str
     candidate_id: str
     gap_type: GapType
-    target_value: Optional[str]
-    candidate_value: Optional[str]
+    target_value: str | None
+    candidate_value: str | None
     severity: float
     reason: str
     resolvable_by: tuple[RouterType, ...]
@@ -1011,7 +1012,7 @@ class DatabaseVersionAnchor:
 
     catalog_name: str
     catalog_version: str
-    database_sha256: Optional[str]
+    database_sha256: str | None
     locator: str
     observed_at: datetime = field(default_factory=_now)
     schema_version: str = "legacy-catalog/v1"
@@ -1091,14 +1092,14 @@ class SemanticIndexAnchor:
 class RetrievalResult:
     """Records returned together with the exact catalogue version queried."""
 
-    records: tuple["SourceRecord", ...]
+    records: tuple[SourceRecord, ...]
     database_anchor: DatabaseVersionAnchor
     attempts: tuple[LinkAttempt, ...] = ()
     observations: tuple[RecallObservation, ...] = ()
     semantic_index_anchor: SemanticIndexAnchor | None = None
-    retrieval_diagnostics: tuple["RetrievalDiagnostic", ...] = ()
-    conversion_diagnostics: tuple["RecordConversionDiagnostic", ...] = ()
-    funnel: "PipelineFunnel | None" = None
+    retrieval_diagnostics: tuple[RetrievalDiagnostic, ...] = ()
+    conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = ()
+    funnel: PipelineFunnel | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1181,7 +1182,7 @@ class CandidateExclusion:
     source_id: str
     origin: CandidateOrigin
     reasons: tuple[str, ...]
-    candidate_id: Optional[str] = None
+    candidate_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1221,7 +1222,7 @@ class ResolutionTrace:
     request_fingerprint: str
     raw_request_fingerprint: str | None = None
     normalized_business_fingerprint: str | None = None
-    database_anchor: Optional[DatabaseVersionAnchor] = None
+    database_anchor: DatabaseVersionAnchor | None = None
     revision: int = 0
     entries: list[TraceEntry] = field(default_factory=list)
 
@@ -1274,7 +1275,7 @@ class ResolutionTrace:
     def set_database_anchor(self, anchor: DatabaseVersionAnchor) -> None:
         self.database_anchor = anchor
 
-    def clone(self) -> "ResolutionTrace":
+    def clone(self) -> ResolutionTrace:
         """Copy the live trace so a store can commit an append atomically."""
 
         return ResolutionTrace(
@@ -1288,7 +1289,7 @@ class ResolutionTrace:
             entries=list(self.entries),
         )
 
-    def latest(self, stage: str) -> Optional[TraceEntry]:
+    def latest(self, stage: str) -> TraceEntry | None:
         return next((entry for entry in reversed(self.entries) if entry.stage == stage), None)
 
     def explain(self) -> dict[str, Any]:
@@ -1401,11 +1402,11 @@ class LockedResolutionEvidenceSnapshot:
     @classmethod
     def from_trace(
         cls,
-        trace: "ResolutionTrace",
+        trace: ResolutionTrace,
         *,
         registry_anchor_sha256: str,
         policy_anchor_sha256: str,
-    ) -> "LockedResolutionEvidenceSnapshot":
+    ) -> LockedResolutionEvidenceSnapshot:
         trace.verify_hash_chain()
         if trace.database_anchor is None:
             raise PersistenceIntegrityError("trace has no catalog anchor")
@@ -1442,7 +1443,7 @@ class LockedResolutionEvidenceSnapshot:
         )
 
 
-def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
+def resolution_request_fingerprint(request: ResolutionRequest) -> str:
     """Hash business inputs while deliberately excluding the per-run request ID."""
 
     payload = {
@@ -1473,7 +1474,7 @@ def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def normalized_business_fingerprint(activity: "NormalizedActivity") -> str:
+def normalized_business_fingerprint(activity: NormalizedActivity) -> str:
     """Hash normalized business identity, independent of run and display settings."""
 
     def normalized(value: object) -> object:
@@ -1557,12 +1558,12 @@ class SourceRecord:
     material_name: str
     factor_value: float
     factor_unit: str
-    geography: Optional[str] = None
-    year: Optional[int] = None
-    product_form: Optional[str] = None
-    composition: Optional[str] = None
-    production_process: Optional[str] = None
-    boundary: Optional[str] = None
+    geography: str | None = None
+    year: int | None = None
+    product_form: str | None = None
+    composition: str | None = None
+    production_process: str | None = None
+    boundary: str | None = None
     citation: str = ""
     excerpt: str = ""
     retrieved_at: datetime = field(default_factory=_now)
@@ -1674,14 +1675,14 @@ class ResolutionRequest:
     material_name: str
     quantity: float
     quantity_unit: str = "kg"
-    geography: Optional[str] = None
-    year: Optional[int] = None
-    product_form: Optional[str] = None
-    composition: Optional[str] = None
-    production_process: Optional[str] = None
+    geography: str | None = None
+    year: int | None = None
+    product_form: str | None = None
+    composition: str | None = None
+    production_process: str | None = None
     subject_type: FactorSubjectType = FactorSubjectType.UNKNOWN
     boundary: str = "cradle-to-gate"
-    target_factor_unit: Optional[str] = None
+    target_factor_unit: str | None = None
     unit_conversion_evidence: UnitConversionEvidence | None = None
     top_k: int = 3
     request_id: str = field(default_factory=lambda: str(uuid4()))
@@ -1709,7 +1710,7 @@ class ResolutionRequest:
     @classmethod
     def from_mapping(
         cls, value: Mapping[str, Any], *, allow_debug_controls: bool = False
-    ) -> "ResolutionRequest":
+    ) -> ResolutionRequest:
         payload = dict(value)
         if "min_score" in payload and not allow_debug_controls:
             raise ValueError("min_score is a deployment policy and is not accepted by formal requests")
@@ -1725,9 +1726,9 @@ class ResolutionRequest:
 class MaterialInterpretation:
     canonical_name: str
     aliases: tuple[str, ...] = ()
-    product_form: Optional[str] = None
-    composition: Optional[str] = None
-    production_process: Optional[str] = None
+    product_form: str | None = None
+    composition: str | None = None
+    production_process: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1735,12 +1736,12 @@ class NormalizedActivity:
     request_id: str
     canonical_name: str
     aliases: tuple[str, ...]
-    quantity_kg: Optional[float]
-    geography: Optional[str]
-    year: Optional[int]
-    product_form: Optional[str]
-    composition: Optional[str]
-    production_process: Optional[str]
+    quantity_kg: float | None
+    geography: str | None
+    year: int | None
+    product_form: str | None
+    composition: str | None
+    production_process: str | None
     subject_type: FactorSubjectType
     boundary: str
     target_factor_unit: str
@@ -1758,9 +1759,9 @@ class NormalizedActivity:
     material_mention: MaterialMention | None = None
     identity_resolution: IdentityResolution | None = None
     retrieval_intent: RetrievalIntent | None = None
-    quantity_base: Optional[float] = None
-    quantity_base_unit: Optional[str] = None
-    activity_dimension: Optional[str] = None
+    quantity_base: float | None = None
+    quantity_base_unit: str | None = None
+    activity_dimension: str | None = None
     unit_reason_codes: tuple[str, ...] = ()
     unit_conversion_evidence: UnitConversionEvidence | None = None
     target_factor_unit_derived: bool = False
@@ -1800,8 +1801,8 @@ class Candidate:
     reasons: tuple[str, ...]
     limitations: tuple[str, ...]
     dimensions: Mapping[str, float]
-    proxy_material: Optional[str] = None
-    proxy_class: Optional[str] = None
+    proxy_material: str | None = None
+    proxy_class: str | None = None
     evidence_coverage: float = 0.0
     evidence_gaps: tuple[str, ...] = ()
     resolution_type: ResolutionType = ResolutionType.DIRECT_EXACT
@@ -1813,11 +1814,11 @@ class Candidate:
     base_source_ids: tuple[str, ...] = ()
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
-    resolved_activity_value: Optional[float] = None
-    resolved_activity_unit: Optional[str] = None
-    activity_dimension: Optional[str] = None
-    resolved_quantity_kg: Optional[float] = None
-    total_emissions_kgco2e: Optional[float] = None
+    resolved_activity_value: float | None = None
+    resolved_activity_unit: str | None = None
+    activity_dimension: str | None = None
+    resolved_quantity_kg: float | None = None
+    total_emissions_kgco2e: float | None = None
 
     def __post_init__(self) -> None:
         if self.provenance.source_id != self.source.source_id:
@@ -1904,9 +1905,9 @@ class DerivedFactorCandidate:
     transformation_steps: tuple[TransformationStep, ...]
     factor_value: float
     factor_unit: str
-    boundary: Optional[str]
-    geography: Optional[str]
-    year: Optional[int]
+    boundary: str | None
+    geography: str | None
+    year: int | None
     reasons: tuple[str, ...]
     limitations: tuple[str, ...]
     evidence_coverage: float
@@ -1914,11 +1915,11 @@ class DerivedFactorCandidate:
     provenance_lineage: tuple[str, ...]
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
-    resolved_activity_value: Optional[float] = None
-    resolved_activity_unit: Optional[str] = None
-    activity_dimension: Optional[str] = None
-    resolved_quantity_kg: Optional[float] = None
-    total_emissions_kgco2e: Optional[float] = None
+    resolved_activity_value: float | None = None
+    resolved_activity_unit: str | None = None
+    activity_dimension: str | None = None
+    resolved_quantity_kg: float | None = None
+    total_emissions_kgco2e: float | None = None
 
     def __post_init__(self) -> None:
         if not self.candidate_id.strip() or not self.base_source_ids:
@@ -1934,11 +1935,11 @@ class Recommendation:
     request_id: str
     status: ResolutionStatus
     candidates: tuple[Candidate, ...]
-    follow_up: Optional[FollowUp] = None
+    follow_up: FollowUp | None = None
     message: str = ""
-    trace: Optional[ResolutionTrace] = None
-    confidence: Optional[RecommendationConfidence] = None
-    resolution_strength: Optional[RecommendationConfidence] = None
+    trace: ResolutionTrace | None = None
+    confidence: RecommendationConfidence | None = None
+    resolution_strength: RecommendationConfidence | None = None
     reviewable_candidates: tuple[Candidate, ...] = ()
     reviewable_candidate_reasons: Mapping[str, tuple[str, ...]] = field(
         default_factory=dict

@@ -10,6 +10,7 @@ from a1_factor_engine import (
     ApprovalRecord,
     ApprovalStatus,
     CatalogIntegrityError,
+    CatalogPolicyBundle,
     DatabaseVersionAnchor,
     FactorKind,
     FactorSourceType,
@@ -188,19 +189,44 @@ async def test_dataset_policy_only_applies_to_its_exact_catalog_digest() -> None
     exact = replace(base_policy, catalog_content_sha256=exact_digest)
     intent = RetrievalIntent("steel coil", "mat:steel")
 
-    unbound_result = await HttpCatalogFactorRepository(
-        fetch_json=lambda _url: catalog,
-        dataset_policies=(base_policy, wrong),
-    ).search(intent)
+    with pytest.raises(CatalogIntegrityError, match="legacy dataset_policies are disabled"):
+        await HttpCatalogFactorRepository(
+            fetch_json=lambda _url: catalog,
+            dataset_policies=(base_policy, wrong),
+        ).search(intent)
+    with pytest.raises(CatalogIntegrityError, match="does not match the observed"):
+        await HttpCatalogFactorRepository(
+            fetch_json=lambda _url: catalog,
+            policy_bundle=CatalogPolicyBundle(
+                policy_id="deployment-policy:test-wrong/v1",
+                version="1",
+                approved_catalog_content_sha256="f" * 64,
+                effective_from="2026-09-04",
+                approved_by="test-reviewer",
+                policies=(wrong,),
+            ),
+        ).search(intent)
+    bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:test/v1",
+        version="1",
+        approved_catalog_content_sha256=exact_digest,
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(exact,),
+        signature="test-signature",
+    )
     exact_result = await HttpCatalogFactorRepository(
         fetch_json=lambda _url: catalog,
-        dataset_policies=(exact,),
+        policy_bundle=bundle,
+        policy_signature_verifier=lambda _payload, _signature: True,
     ).search(intent)
 
-    assert unbound_result.records[0].metadata["catalog_dataset_policy_ids"] == "[]"
     assert exact_result.records[0].metadata["catalog_dataset_policy_ids"] == '["policy:test/v1"]'
     assert exact_result.records[0].metadata["catalog_dataset_approval_ids"] == (
         '["approval:test/v1"]'
+    )
+    assert exact_result.records[0].metadata["catalog_policy_bundle_content_sha256"] == (
+        bundle.content_sha256
     )
 
 

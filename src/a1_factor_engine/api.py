@@ -10,9 +10,10 @@ import os
 import stat
 import tempfile
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Mapping, Sequence
+from typing import Any
 from uuid import uuid4
 
 from .engine import A1FactorResolutionEngine

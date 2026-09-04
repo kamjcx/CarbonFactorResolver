@@ -31,26 +31,26 @@ from a1_factor_engine.units import parse_activity_unit, parse_factor_unit
 
 
 def source(source_id: str, name: str, **changes) -> SourceRecord:
-    values = dict(
-        source_id=source_id,
-        source_type=FactorSourceType.LOCAL_DATABASE,
-        provider="public synthetic",
-        locator=f"evidence://{source_id}",
-        material_name=name,
-        factor_value=1.0,
-        factor_unit="kgCO2e/kg",
-        geography="CN",
-        year=2024,
-        product_form=None,
-        composition=None,
-        production_process=None,
-        boundary="cradle-to-gate",
-        factor_kind=FactorKind.LIFECYCLE_FACTOR,
-        subject_type=FactorSubjectType.RAW_MATERIAL,
-        indicator="GWP-total",
-        declared_product=name,
-        boundary_modules=("A1", "A2", "A3"),
-    )
+    values = {
+        "source_id": source_id,
+        "source_type": FactorSourceType.LOCAL_DATABASE,
+        "provider": "public synthetic",
+        "locator": f"evidence://{source_id}",
+        "material_name": name,
+        "factor_value": 1.0,
+        "factor_unit": "kgCO2e/kg",
+        "geography": "CN",
+        "year": 2024,
+        "product_form": None,
+        "composition": None,
+        "production_process": None,
+        "boundary": "cradle-to-gate",
+        "factor_kind": FactorKind.LIFECYCLE_FACTOR,
+        "subject_type": FactorSubjectType.RAW_MATERIAL,
+        "indicator": "GWP-total",
+        "declared_product": name,
+        "boundary_modules": ("A1", "A2", "A3"),
+    }
     values.update(changes)
     return SourceRecord(**values)
 

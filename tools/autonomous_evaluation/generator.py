@@ -5,7 +5,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import random
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from .contracts import CatalogVariant, EvaluationBundle, GeneratedCase
 from .oracle import derive_expectation

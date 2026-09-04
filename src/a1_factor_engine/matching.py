@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from .models import Candidate, RecommendationConfidence
 

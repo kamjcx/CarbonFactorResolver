@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.engine import A1FactorResolutionEngine

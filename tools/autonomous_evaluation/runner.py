@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.api import create_app
@@ -101,10 +102,10 @@ def _observe(recommendation: Recommendation) -> dict[str, Any]:
 def _case_passed(expectation: Mapping[str, Any], observation: Mapping[str, Any]) -> bool:
     primary = tuple(str(item) for item in observation.get("primary_ids", ()))
     reviewable = tuple(str(item) for item in observation.get("reviewable_ids", ()))
-    selectable = set((*primary, *reviewable))
-    forbidden = set(str(item) for item in expectation.get("forbidden_ids", ()))
-    references = set(str(item) for item in expectation.get("reference_only_ids", ()))
-    acceptable = set(str(item) for item in expectation.get("acceptable_ids", ()))
+    selectable = {*primary, *reviewable}
+    forbidden = {str(item) for item in expectation.get("forbidden_ids", ())}
+    references = {str(item) for item in expectation.get("reference_only_ids", ())}
+    acceptable = {str(item) for item in expectation.get("acceptable_ids", ())}
     if observation.get("status") != expectation.get("status"):
         return False
     if forbidden & selectable:

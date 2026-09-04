@@ -13,6 +13,7 @@ from a1_factor_engine import (
     ApprovalMode,
     CandidateOrigin,
     CatalogDatasetPolicy,
+    CatalogPolicyBundle,
     DatabaseVersionAnchor,
     EnergyConversionRecord,
     EnergyQuotaRecord,
@@ -51,7 +52,6 @@ from a1_factor_engine import (
     stoichiometric_carbon_emission_kgco2e_per_kg,
 )
 from a1_factor_engine.adapters import (
-    REFRACTORY_A1_STANDARD_POLICY,
     HttpCatalogFactorRepository,
     InMemoryFactorRepository,
     InMemoryGradeSeriesRepository,
@@ -740,17 +740,17 @@ def record(source_id: str, name: str, value: float, unit: str = "kgCO2e/kg", **k
 
 
 def request(**changes) -> ResolutionRequest:
-    values = dict(
-        material_name="steel coil",
-        quantity=1,
-        quantity_unit="t",
-        geography="CN",
-        year=2024,
-        product_form="coil",
-        composition="carbon steel",
-        production_process="electric arc furnace",
-        boundary="cradle-to-gate",
-    )
+    values = {
+        "material_name": "steel coil",
+        "quantity": 1,
+        "quantity_unit": "t",
+        "geography": "CN",
+        "year": 2024,
+        "product_form": "coil",
+        "composition": "carbon steel",
+        "production_process": "electric arc furnace",
+        "boundary": "cradle-to-gate",
+    }
     values.update(changes)
     if "target_factor_unit" not in changes and values["quantity_unit"] in {"kg", "t"}:
         values["target_factor_unit"] = "kgCO2e/kg"
@@ -2915,14 +2915,35 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
             "source_document_sha256": "2" * 64,
         }],
     }
+    content_digest = catalog_content_sha256(payload["records"])
+    policy = CatalogDatasetPolicy(
+        policy_id="deployment.refractory-a1-product-carbon-footprint/v1",
+        record_categories=("lifecycle_factor",),
+        standards=("GB/T XXXX-202X 征求意见稿",),
+        primary_labels=("产品碳足迹因子",),
+        indicator="GWP-total",
+        boundary="cradle-to-gate",
+        declared_product_from_name=True,
+        evidence_citation="reviewed synthetic deployment policy",
+        production_approval_id="deployment-approval:refractory-a1/v1",
+        source_priority_rank=0,
+        catalog_content_sha256=content_digest,
+    )
+    bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:refractory/v1",
+        version="1",
+        approved_catalog_content_sha256=content_digest,
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(policy,),
+        signature="test-signature",
+    )
     result = await A1FactorResolutionEngine(
         local_retrieval=HttpCatalogFactorRepository(
             expected_sha256=digest,
             fetch_json=lambda _: payload,
-            dataset_policies=(replace(
-                REFRACTORY_A1_STANDARD_POLICY,
-                catalog_content_sha256=catalog_content_sha256(payload["records"]),
-            ),),
+            policy_bundle=bundle,
+            policy_signature_verifier=lambda _payload, _signature: True,
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",
@@ -2940,7 +2961,7 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
     assert source.year is None
     assert source.geography is None
     assert json.loads(source.metadata["catalog_dataset_policy_ids"]) == [
-        "catalog.refractory-a1-product-carbon-footprint/v1"
+        "deployment.refractory-a1-product-carbon-footprint/v1"
     ]
     assert set(json.loads(source.metadata["catalog_inherited_fields"])) == {
         "indicator", "boundary", "declared_product",
@@ -2949,21 +2970,22 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
         "draft_or_consultation"
     ]
     assert json.loads(source.metadata["catalog_dataset_approval_ids"]) == [
-        "customer.refractory-draft-first/v1"
+        "deployment-approval:refractory-a1/v1"
     ]
     assert source.metadata["source_priority_rank"] == "0"
+    assert source.metadata["catalog_policy_bundle_signature_status"] == "verified"
 
 
 @pytest.mark.asyncio
 async def test_customer_source_priority_applies_after_candidate_eligibility():
-    common = dict(
-        product_form="coil",
-        composition="carbon steel",
-        production_process="electric arc furnace",
-        geography="CN",
-        year=2024,
-        boundary="cradle-to-gate",
-    )
+    common = {
+        "product_form": "coil",
+        "composition": "carbon steel",
+        "production_process": "electric arc furnace",
+        "geography": "CN",
+        "year": 2024,
+        "boundary": "cradle-to-gate",
+    }
     records = (
         record("ecoinvent-312", "steel coil", 1.0, **common,
                metadata={"source_priority_rank": "20"}),
@@ -3128,11 +3150,21 @@ async def test_explicit_dataset_approval_anchor_can_lift_draft_tier_cap():
         production_approval_id="dataset-approval:refractory-a1/v1",
         catalog_content_sha256=catalog_content_sha256(payload["records"]),
     )
+    approved_bundle = CatalogPolicyBundle(
+        policy_id="deployment-policy:approved-refractory/v1",
+        version="1",
+        approved_catalog_content_sha256=catalog_content_sha256(payload["records"]),
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(approved_policy,),
+        signature="test-signature",
+    )
     result = await A1FactorResolutionEngine(
         local_retrieval=HttpCatalogFactorRepository(
             expected_sha256=digest,
             fetch_json=lambda _: payload,
-            dataset_policies=(approved_policy,),
+            policy_bundle=approved_bundle,
+            policy_signature_verifier=lambda _payload, _signature: True,
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",

@@ -7,12 +7,17 @@ implementation backed by the future database/API does not change graph logic.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
-from dataclasses import asdict, dataclass, field, replace
-from typing import Any, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Any
 from urllib.request import urlopen
 
+from .catalog_policy import (
+    CatalogDatasetPolicy,
+    CatalogPolicyBundle,
+    PolicySignatureVerifier,
+)
 from .integrity import (
     CATALOG_SCHEMA_VERSION,
     CatalogIntegrityError,
@@ -143,7 +148,8 @@ class InMemoryFactorRepository:
             self.anchor = replace(self.anchor, catalog_content_sha256=content_digest)
 
     async def search(self, intent: RetrievalIntent) -> RetrievalResult:
-        assert self.anchor is not None
+        if self.anchor is None:
+            raise CatalogIntegrityError("in-memory catalog anchor is not configured")
         if self.anchor.content_sha256 != self._content_digest():
             raise CatalogIntegrityError(
                 "in-memory catalog declared SHA-256 does not match actual record content"
@@ -195,70 +201,6 @@ class NullFactorRepository:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class CatalogDatasetPolicy:
-    """Reviewed defaults inherited by matching catalogue records only."""
-
-    policy_id: str
-    record_categories: tuple[str, ...] = ()
-    standards: tuple[str, ...] = ()
-    primary_labels: tuple[str, ...] = ()
-    indicator: str | None = None
-    boundary: str | None = None
-    boundary_modules: tuple[str, ...] = ()
-    geography: str | None = None
-    year: int | None = None
-    declared_product_from_name: bool = False
-    evidence_citation: str = ""
-    production_approval_id: str | None = None
-    source_priority_rank: int = 100
-    catalog_content_sha256: str | None = None
-
-    def __post_init__(self) -> None:
-        if not self.policy_id.strip():
-            raise ValueError("catalogue dataset policy requires a policy_id")
-        if self.catalog_content_sha256 is not None:
-            object.__setattr__(
-                self,
-                "catalog_content_sha256",
-                verify_digest(
-                    self.catalog_content_sha256,
-                    field_name="catalog_content_sha256",
-                ),
-            )
-
-    def applies(self, item: Mapping[str, Any], catalog_content_digest: str) -> bool:
-        def matches(field: str, allowed: tuple[str, ...]) -> bool:
-            if not allowed:
-                return True
-            observed = str(item.get(field) or "").strip().casefold()
-            return observed in {value.strip().casefold() for value in allowed}
-
-        return (
-            self.catalog_content_sha256 == catalog_content_digest
-            and matches("category", self.record_categories)
-            and matches("standard", self.standards)
-            and matches("primary_label", self.primary_labels)
-        )
-
-
-REFRACTORY_A1_STANDARD_POLICY = CatalogDatasetPolicy(
-    policy_id="catalog.refractory-a1-product-carbon-footprint/v1",
-    record_categories=("lifecycle_factor",),
-    standards=("GB/T XXXX-202X 征求意见稿",),
-    primary_labels=("产品碳足迹因子",),
-    indicator="GWP-total",
-    boundary="cradle-to-gate",
-    declared_product_from_name=True,
-    evidence_citation=(
-        "《温室气体 产品碳足迹量化方法与要求 耐火材料》征求意见稿，"
-        "5.2声明单位、5.3.1系统边界、7.1全球变暖潜势"
-    ),
-    production_approval_id="customer.refractory-draft-first/v1",
-    source_priority_rank=0,
-)
-
-
 @dataclass(slots=True)
 class HttpCatalogFactorRepository:
     """Read-only adapter for the formal `/api/v2/factors/catalog` endpoint."""
@@ -269,9 +211,9 @@ class HttpCatalogFactorRepository:
     fetch_json: Callable[[str], Mapping[str, Any]] | None = None
     signature_verifier: Callable[[Mapping[str, Any], bytes], bool] | None = None
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
-    dataset_policies: tuple[CatalogDatasetPolicy, ...] = (
-        REFRACTORY_A1_STANDARD_POLICY,
-    )
+    policy_bundle: CatalogPolicyBundle | None = None
+    policy_signature_verifier: PolicySignatureVerifier | None = None
+    dataset_policies: tuple[CatalogDatasetPolicy, ...] = ()
     _cached_index_key: str | None = field(default=None, init=False)
     _cached_index: SemanticFactorIndex | None = field(default=None, init=False)
     _cached_conversion_diagnostics: tuple[RecordConversionDiagnostic, ...] = field(
@@ -279,6 +221,10 @@ class HttpCatalogFactorRepository:
     )
 
     async def search(self, intent: RetrievalIntent) -> RetrievalResult:
+        if self.dataset_policies:
+            raise CatalogIntegrityError(
+                "legacy dataset_policies are disabled; inject a content-bound policy_bundle"
+            )
         payload = await asyncio.to_thread(self._fetch)
         records = payload.get("records")
         if not isinstance(records, list):
@@ -287,6 +233,25 @@ class HttpCatalogFactorRepository:
             raise CatalogIntegrityError("factor catalog records must be JSON objects")
         raw_records = tuple(item for item in records if isinstance(item, Mapping))
         actual_content_digest = catalog_content_sha256(raw_records)
+        applied_bundle = self.policy_bundle
+        bundle_signature_status = "not_configured"
+        dataset_policies: tuple[CatalogDatasetPolicy, ...] = ()
+        if applied_bundle is not None:
+            if applied_bundle.approved_catalog_content_sha256 != actual_content_digest:
+                raise CatalogIntegrityError(
+                    "catalogue policy bundle does not match the observed catalog content"
+                )
+            bundle_signature_status = applied_bundle.signature_status(
+                self.policy_signature_verifier
+            )
+            if (
+                applied_bundle.authorizes_production_approval
+                and bundle_signature_status != "verified"
+            ):
+                raise CatalogIntegrityError(
+                    "production approval policy requires a verified bundle signature"
+                )
+            dataset_policies = applied_bundle.policies
         manifest = payload.get("manifest")
         schema_version = "legacy-catalog/v1"
         publisher_id = "unverified-legacy"
@@ -337,12 +302,7 @@ class HttpCatalogFactorRepository:
             publisher_id=publisher_id,
             publisher_identity_verified=publisher_identity_verified,
         )
-        policy_key = hashlib.sha256(json.dumps(
-            [asdict(policy) for policy in self.dataset_policies],
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")).hexdigest()
+        policy_key = applied_bundle.content_sha256 if applied_bundle is not None else "none"
         cache_key = (
             f"{anchor.identity}:{self.material_registry.sha256}:"
             f"{policy_key}:{actual_content_digest}"
@@ -377,7 +337,12 @@ class HttpCatalogFactorRepository:
                 if not reasons:
                     try:
                         source = self._to_source_record(
-                            item, anchor, self.dataset_policies, actual_content_digest
+                            item,
+                            anchor,
+                            dataset_policies,
+                            actual_content_digest,
+                            applied_bundle,
+                            bundle_signature_status,
                         )
                     except (TypeError, ValueError) as exc:
                         reasons.append("record_validation_failed")
@@ -419,7 +384,12 @@ class HttpCatalogFactorRepository:
     def _fetch(self) -> Mapping[str, Any]:
         if self.fetch_json is not None:
             return self.fetch_json(self.endpoint)
-        with urlopen(self.endpoint, timeout=self.timeout_seconds) as response:  # nosec B310 - configured local API
+        if not self.endpoint.startswith(("http://", "https://")):
+            raise ValueError("factor catalog endpoint must use HTTP or HTTPS")
+        # Endpoint is deployment-configured and restricted to HTTP(S) above.
+        with urlopen(  # noqa: S310  # nosec B310
+            self.endpoint, timeout=self.timeout_seconds
+        ) as response:
             value = json.loads(response.read().decode("utf-8"))
         if not isinstance(value, Mapping):
             raise ValueError("factor catalog response must be a JSON object")
@@ -451,6 +421,8 @@ class HttpCatalogFactorRepository:
         anchor: DatabaseVersionAnchor,
         dataset_policies: Sequence[CatalogDatasetPolicy] = (),
         catalog_content_digest: str | None = None,
+        policy_bundle: CatalogPolicyBundle | None = None,
+        policy_bundle_signature_status: str = "not_configured",
     ) -> SourceRecord | None:
         try:
             raw_value = item.get("primary_value")
@@ -585,7 +557,7 @@ class HttpCatalogFactorRepository:
             "document_status": str(item.get("document_status") or ""),
             "source_priority": str(item.get("source_priority") or ""),
             "source_priority_rank": str(source_priority_rank),
-            "source_priority_policy": "customer.draft-ecoinvent310-ecoinvent312/v1",
+            "source_priority_policy": "catalog-explicit-or-version-fallback/v1",
             "source_priority_issue": source_priority_issue,
             "aliases": json.dumps(aliases, ensure_ascii=False) if isinstance(aliases, list) else "",
             "catalog_locator": catalog_locator,
@@ -612,6 +584,19 @@ class HttpCatalogFactorRepository:
             "catalog_dataset_policy_ids": json.dumps(
                 tuple(policy.policy_id for policy in applied_policies), ensure_ascii=False
             ),
+            "catalog_policy_bundle_id": policy_bundle.policy_id if policy_bundle else "",
+            "catalog_policy_bundle_version": policy_bundle.version if policy_bundle else "",
+            "catalog_policy_bundle_content_sha256": (
+                policy_bundle.content_sha256 if policy_bundle else ""
+            ),
+            "catalog_policy_bundle_effective_from": (
+                policy_bundle.effective_from if policy_bundle else ""
+            ),
+            "catalog_policy_bundle_effective_until": (
+                policy_bundle.effective_until or "" if policy_bundle else ""
+            ),
+            "catalog_policy_bundle_approved_by": policy_bundle.approved_by if policy_bundle else "",
+            "catalog_policy_bundle_signature_status": policy_bundle_signature_status,
             "catalog_dataset_approval_ids": json.dumps(
                 approved_dataset_ids, ensure_ascii=False
             ),

@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -33,7 +33,7 @@ class DeliveryValue:
 def test_explicit_serializer_handles_domain_container_types():
     value = DeliveryValue(
         Example.VALUE,
-        datetime(2026, 1, 2, 3, 4, tzinfo=timezone.utc),
+        datetime(2026, 1, 2, 3, 4, tzinfo=UTC),
         MappingProxyType({"tuple": (Example.VALUE,)}),
     )
 

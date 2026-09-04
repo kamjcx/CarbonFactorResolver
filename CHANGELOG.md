@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Remove the customer/refractory policy default from the generic catalog core; deployment policy
+  now uses an explicit catalog-content-bound bundle, and production approval requires a verified
+  deployment signature.
+- Remove the five historical core-module `mypy` exemptions and add explicit fail-closed graph-stage
+  invariants without changing frozen resolution behavior.
+- Restrict the positional CLI convenience form to mass-factor queries; retain the full structured
+  JSON contract for energy, transport, process and evidence-bearing requests.
+- Pin CI actions and container inputs, consume the locked runtime dependency graph, add dependency,
+  source, secret and image scans, generate a CycloneDX SBOM, and bind distributable artifacts with
+  checksums and a release manifest.
+- Strengthen public-delivery and archive isolation checks. The inherited autonomous quality gate
+  remains unchanged and is evaluated only after the diagnostic and supply-chain evidence is built.
+
 - Freeze the `/api/v1` operability contract with stable JSON error envelopes, version and
   correlation headers, redacted unhandled-500 behavior, and JSON-only media enforcement.
 - Separate liveness (`/healthz`) from aggregate dependency readiness (`/readyz`); the production

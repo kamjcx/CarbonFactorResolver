@@ -8,13 +8,14 @@ depending on FastAPI/Pydantic serialization details.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 
 def to_jsonable(value: Any) -> Any:

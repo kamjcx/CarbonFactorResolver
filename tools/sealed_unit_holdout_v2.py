@@ -7,8 +7,9 @@ import asyncio
 import hashlib
 import json
 import math
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from a1_factor_engine import A1FactorResolutionEngine
 from a1_factor_engine.adapters import HttpCatalogFactorRepository

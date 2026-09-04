@@ -7,9 +7,10 @@ import asyncio
 import hashlib
 import json
 import subprocess
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from httpx import ASGITransport, AsyncClient
 
@@ -204,7 +205,7 @@ def aggregate(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     def rate(items: Sequence[Mapping[str, Any]], check: str) -> float:
         return sum(bool(item["checks"][check]) for item in items) / len(items) if items else 0.0
 
-    violations = {name: 0 for name in ("boundary", "subject", "unit")}
+    violations = dict.fromkeys(("boundary", "subject", "unit"), 0)
     for item in results:
         dimension = item["safety_dimension"]
         if dimension in violations and not item["checks"]["forbidden_escape"]:

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Mapping, Sequence
 
 from .adapters import (
     DeterministicMaterialUnderstanding,
@@ -27,8 +27,10 @@ from .models import (
     ApprovalRecord,
     ApprovalStatus,
     Candidate,
+    CandidateAdmission,
     CandidateExclusion,
     CandidateOrigin,
+    CandidateQualification,
     GapType,
     LockedResolution,
     LockedResolutionEvidenceSnapshot,
@@ -153,7 +155,7 @@ class A1ResolutionGraph:
         intent = state.normalized.retrieval_intent
         if intent is None:
             return
-        records = []
+        records: list[SourceRecord] = []
         for connector in self.external_connectors:
             try:
                 references = await connector.discover(intent)
@@ -215,8 +217,8 @@ class A1ResolutionGraph:
             "source_ids": tuple(record.source_id for record in records),
         })
         if records:
-            qualifications = []
-            admissions = []
+            qualifications: list[CandidateQualification] = []
+            admissions: list[CandidateAdmission] = []
             observations = list(state.recall_observations)
             candidates, exclusions = await evaluate_records(
                 state.normalized, records, CandidateOrigin.EXTERNAL,
@@ -268,7 +270,7 @@ class A1ResolutionGraph:
                         required=True,
                         options=tuple(subject.value for subject in external_subjects),
                     )
-                    state.request_gaps = tuple((*state.request_gaps, subject_gap))
+                    state.request_gaps = (*state.request_gaps, subject_gap)
                     state.required_fields = tuple(dict.fromkeys((*state.required_fields, "subject_type")))
                     state.request_resolution_plan = RequestResolutionPlan(
                         request_id=state.request.request_id,
@@ -286,14 +288,13 @@ class A1ResolutionGraph:
                     "primary aluminium production": "primary",
                     "secondary aluminium production": "secondary",
                 }
-                variants = tuple(dict.fromkeys(
+                candidate_variants = (
                     product_routes.get(item.source.metadata.get("product_entity_id", ""))
                     or process_routes.get((item.source.production_process or "").casefold())
                     for item in candidates
-                    if (
-                        product_routes.get(item.source.metadata.get("product_entity_id", ""))
-                        or process_routes.get((item.source.production_process or "").casefold())
-                    )
+                )
+                variants = tuple(dict.fromkeys(
+                    variant for variant in candidate_variants if variant is not None
                 ))
                 if len(variants) > 1 and not any(gap.field == "route" for gap in state.request_gaps):
                     route_gap = RequestGap(
@@ -307,7 +308,7 @@ class A1ResolutionGraph:
                         required=True,
                         options=variants + ("unknown",),
                     )
-                    state.request_gaps = tuple((*state.request_gaps, route_gap))
+                    state.request_gaps = (*state.request_gaps, route_gap)
                     state.required_fields = tuple(dict.fromkeys((*state.required_fields, "route")))
                     state.request_resolution_plan = RequestResolutionPlan(
                         request_id=state.request.request_id,
@@ -331,6 +332,7 @@ class A1ResolutionGraph:
             state.recommendation = Recommendation(
                 request_id=request.request_id,
                 status=ResolutionStatus.ERROR,
+                candidates=(),
                 message="input could not be normalized; correct the quantity or unit and retry",
                 trace=state.trace,
             )
@@ -469,11 +471,13 @@ class A1FactorResolutionEngine:
         if await self.store.has_resolution_run(request.request_id):
             raise ValueError(f"duplicate request_id: {request.request_id}")
         state = await self.graph.run(request)
-        assert state.recommendation is not None
+        if state.recommendation is None:
+            raise RuntimeError("resolution graph completed without a recommendation")
         recommendation = self._bind_recommendation(state.recommendation, state.trace)
         await self.store.save_resolution_run(recommendation, state.trace)
         stored = await self.store.get_recommendation(recommendation.request_id)
-        assert stored is not None
+        if stored is None:
+            raise RuntimeError("resolution store did not persist the recommendation")
         return stored
 
     async def resolve_debug(
@@ -488,13 +492,15 @@ class A1FactorResolutionEngine:
         if request.min_score is not None:
             graph = replace(self.graph, deployment_policy=DeploymentPolicy(request.min_score))
             state = await graph.run(request)
-            assert state.recommendation is not None
+            if state.recommendation is None:
+                raise RuntimeError("resolution graph completed without a recommendation")
             recommendation = self._bind_recommendation(
                 state.recommendation, state.trace, policy=graph.deployment_policy
             )
             await self.store.save_resolution_run(recommendation, state.trace)
             stored = await self.store.get_recommendation(recommendation.request_id)
-            assert stored is not None
+            if stored is None:
+                raise RuntimeError("resolution store did not persist the recommendation")
             return stored
         return await self.resolve(request)
 

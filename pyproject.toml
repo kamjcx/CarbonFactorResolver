@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -24,6 +24,11 @@ test = [
 acceptance-tools = ["pdfplumber>=0.11", "python-docx>=1.1"]
 energy-db-build = ["pdfplumber>=0.11", "openpyxl>=3.1"]
 api = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+supply-chain = [
+  "bandit==1.9.4",
+  "cyclonedx-bom==7.3.1",
+  "pip-audit==2.10.1",
+]
 
 [project.scripts]
 cfr = "a1_factor_engine.cli:main"
@@ -49,7 +54,24 @@ target-version = "py311"
 line-length = 110
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "B", "C4", "UP", "ASYNC", "S"]
+# StrEnum rewrites can alter public repr/type contracts; retain explicit str+Enum
+# until a separately versioned API migration.
+ignore = ["UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+# Pytest uses assert by design and secret-shaped placeholders to prove redaction.
+"tests/**/*.py" = ["S101", "S105", "S106"]
+# These tests intentionally invoke the repository-controlled git executable.
+"tests/test_public_release.py" = ["S101", "S105", "S106", "S607"]
+# Offline QA tools intentionally use deterministic PRNGs, synchronous filesystem
+# access, and fixed local executables; inputs are repository-controlled.
+"tools/**/*.py" = ["ASYNC240", "S101", "S311", "S603", "S607"]
+# FastAPI's declarative Body(...) defaults are required for OpenAPI generation.
+"src/a1_factor_engine/api.py" = ["B008"]
+# Dynamic SQL only interpolates generated '?' counts and fixed internal clauses;
+# all data values remain DB-API parameters.
+"src/a1_factor_engine/energy_database.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -57,16 +79,3 @@ packages = ["a1_factor_engine"]
 ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true
-
-# The pre-0.13 numerical/registry core is runtime-validated and is being typed
-# incrementally. New delivery, connector, diagnostic and evaluation modules
-# remain under strict checking above.
-[[tool.mypy.overrides]]
-module = [
-  "a1_factor_engine.energy_database",
-  "a1_factor_engine.engine",
-  "a1_factor_engine.material_registry",
-  "a1_factor_engine.semantic_index",
-  "a1_factor_engine.units",
-]
-ignore_errors = true

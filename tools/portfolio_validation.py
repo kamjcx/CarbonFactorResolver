@@ -18,13 +18,14 @@ import re
 import subprocess
 import sys
 import unicodedata
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from statistics import median
 from time import perf_counter
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from a1_factor_engine import A1FactorResolutionEngine, ResolutionStatus
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
@@ -69,7 +70,7 @@ class ChallengeCase:
     expected_decision: str
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ChallengeCase":
+    def from_mapping(cls, value: Mapping[str, Any]) -> ChallengeCase:
         if value.get("schema_version") != SCHEMA_VERSION:
             raise ValueError("unsupported portfolio challenge schema")
         decision = str(value.get("expected_decision", ""))

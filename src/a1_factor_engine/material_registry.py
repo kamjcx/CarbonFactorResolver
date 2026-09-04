@@ -10,8 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Protocol, Sequence
+from typing import Protocol, TypeVar
 
 from .matching import normalize_text
 from .models import (
@@ -167,6 +168,17 @@ class RegistryResolution:
         return bool(self.identity.head_material and self.identity.category != MaterialCategory.UNKNOWN)
 
 
+RegistryEntryT = TypeVar(
+    "RegistryEntryT",
+    MaterialRule,
+    ProcessRule,
+    FormRule,
+    TypedRelation,
+    PurityGradeSchema,
+)
+MatchRuleT = TypeVar("MatchRuleT", ProcessRule, FormRule)
+
+
 class MaterialSemanticRegistryPort(Protocol):
     @property
     def version(self) -> str: ...
@@ -200,7 +212,7 @@ class VersionedMaterialSemanticRegistry:
     grade_schemas: tuple[PurityGradeSchema, ...] = ()
 
     @staticmethod
-    def _active(values: Sequence[object]) -> tuple[object, ...]:
+    def _active(values: Sequence[RegistryEntryT]) -> tuple[RegistryEntryT, ...]:
         return tuple(
             value for value in values
             if getattr(value, "status", None) == RegistryRuleStatus.ACTIVE
@@ -282,9 +294,9 @@ class VersionedMaterialSemanticRegistry:
 
     @staticmethod
     def _best_rule_match(
-        value: str, rules: Sequence[ProcessRule | FormRule]
-    ) -> tuple[ProcessRule | FormRule, str, int, int] | None:
-        matches: list[tuple[ProcessRule | FormRule, str, int, int]] = []
+        value: str, rules: Sequence[MatchRuleT]
+    ) -> tuple[MatchRuleT, str, int, int] | None:
+        matches: list[tuple[MatchRuleT, str, int, int]] = []
         for rule in rules:
             for raw_alias in rule.aliases:
                 alias = _norm(raw_alias)
@@ -498,15 +510,18 @@ class VersionedMaterialSemanticRegistry:
         # Registered supplier/product prefixes outrank organization bare-number defaults.
         for schema in schemas:
             for prefix in schema.label_prefixes:
-                pattern = re.compile(rf"(?i)(?<![a-z0-9]){re.escape(prefix)}\s*-?\s*(\d{{2}}(?:\.\d+)?)(?!\d)")
-                match = next((item for item in pattern.finditer(value) if not overlaps(item.start(), item.end())), None)
-                if not match:
+                prefix_pattern = re.compile(rf"(?i)(?<![a-z0-9]){re.escape(prefix)}\s*-?\s*(\d{{2}}(?:\.\d+)?)(?!\d)")
+                prefix_match = next((
+                    item for item in prefix_pattern.finditer(value)
+                    if not overlaps(item.start(), item.end())
+                ), None)
+                if not prefix_match:
                     continue
-                grade_value = float(match.group(1))
+                grade_value = float(prefix_match.group(1))
                 if grade_value not in schema.allowed_labels:
                     continue
                 grade = PurityGrade(
-                    raw_label=match.group(0), grade_value=grade_value,
+                    raw_label=prefix_match.group(0), grade_value=grade_value,
                     basis_component_id=schema.basis_component_id,
                     interpretation_kind=schema.interpretation_kind,
                     schema_id=schema.schema_id, schema_version=schema.version,
@@ -514,7 +529,7 @@ class VersionedMaterialSemanticRegistry:
                     parser_rule_ids=("numeric.prefixed_grade/v1",), ordered=schema.ordered,
                 )
                 add_token(
-                    match.group(0), match.start(), match.end(), NumericTokenRole.PURITY_GRADE,
+                    prefix_match.group(0), prefix_match.start(), prefix_match.end(), NumericTokenRole.PURITY_GRADE,
                     "numeric.prefixed_grade/v1", "registered product-grade prefix bound to entity schema",
                     rejected=(NumericTokenRole.MODEL_CODE, NumericTokenRole.GRIT_SIZE),
                 )
@@ -573,16 +588,16 @@ class VersionedMaterialSemanticRegistry:
         value = _norm(name)
         material_matches = self._material_matches(value)
         process_match = self._best_rule_match(
-            value, self._active(self.process_rules)  # type: ignore[arg-type]
+            value, self._active(self.process_rules)
         )
         process_input_match = None if process_match else self._best_rule_match(
-            _norm(production_process), self._active(self.process_rules)  # type: ignore[arg-type]
+            _norm(production_process), self._active(self.process_rules)
         )
         form_match = self._best_rule_match(
-            value, self._active(self.form_rules)  # type: ignore[arg-type]
+            value, self._active(self.form_rules)
         )
         form_input_match = None if form_match else self._best_rule_match(
-            _norm(product_form), self._active(self.form_rules)  # type: ignore[arg-type]
+            _norm(product_form), self._active(self.form_rules)
         )
 
         selected_rules = tuple(dict.fromkeys(match[0] for match in material_matches))
@@ -591,8 +606,10 @@ class VersionedMaterialSemanticRegistry:
         )
         composite = explicit_composite is not None or len(selected_rules) > 1
         material_rule = explicit_composite or (selected_rules[0] if len(selected_rules) == 1 else None)
-        process_rule = (process_match or process_input_match)[0] if (process_match or process_input_match) else None
-        form_rule = (form_match or form_input_match)[0] if (form_match or form_input_match) else None
+        selected_process_match = process_match or process_input_match
+        selected_form_match = form_match or form_input_match
+        process_rule = selected_process_match[0] if selected_process_match else None
+        form_rule = selected_form_match[0] if selected_form_match else None
 
         constituent_ids = tuple(dict.fromkeys(
             entity_id
@@ -646,16 +663,16 @@ class VersionedMaterialSemanticRegistry:
                 start=start, end=end, evidence_id=rule.rule_id, entity_id=rule.entity_id,
             ))
         if process_match:
-            rule, alias, start, end = process_match
+            matched_process_rule, alias, start, end = process_match
             spans.append(SemanticSpan(
                 text=value[start:end], normalized_text=alias, role=SemanticRole.PROCESS,
-                start=start, end=end, evidence_id=rule.rule_id,
+                start=start, end=end, evidence_id=matched_process_rule.rule_id,
             ))
         if form_match:
-            rule, alias, start, end = form_match
+            matched_form_rule, alias, start, end = form_match
             spans.append(SemanticSpan(
                 text=value[start:end], normalized_text=alias, role=SemanticRole.PRODUCT_FORM,
-                start=start, end=end, evidence_id=rule.rule_id,
+                start=start, end=end, evidence_id=matched_form_rule.rule_id,
             ))
 
         entity_type_hint = entity_type
@@ -877,6 +894,7 @@ class VersionedMaterialSemanticRegistry:
             else "none" if any(token in value for token in ("uncoated", "without copper", "未镀铜"))
             else None
         )
+        unresolved: tuple[str, ...]
         if is_fiber and grade is None:
             unresolved = () if coating is not None else (
                 "steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"

@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 CATALOG_SCHEMA_VERSION = "cfr.catalog/v2"
 DECISION_SCHEMA_VERSION = "cfr.decision/v1"

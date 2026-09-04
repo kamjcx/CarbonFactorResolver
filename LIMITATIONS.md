@@ -24,6 +24,12 @@ carbon footprint.
   concurrency is not equivalent to multi-process production capacity, and no SLA is claimed.
 - An unspecified request geography/year remains unknown. Ordinary reviewer assumption acceptance
   cannot override an explicit geography/year conflict.
+- Deployment policy signatures depend on an operator-supplied verifier and trust root; the public
+  project does not ship production keys or an organizational approval service.
+- Request idempotency and the reference approval store are process-local. Multi-worker deployment
+  needs a shared atomic store, durable constraints and recovery procedures.
+- Pinned actions/images, vulnerability scans and SBOM generation strengthen delivery evidence but
+  do not constitute signed provenance or production certification; scanner databases are dynamic.
 
 Roadmap items such as broader ontologies, document intelligence, report generation, complex UI,
 and automatic formal-catalogue workflows are deliberately outside this release.
