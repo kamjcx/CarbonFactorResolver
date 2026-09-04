@@ -43,6 +43,11 @@ specifies the exact terminal status, allowed `REFERENCE_ONLY` IDs, forbidden IDs
 codes, and approval prohibition. A changed runtime output that violates any field remains an
 unresolved Bad Case.
 
+Historical adjudications without an `effective_expectation` remain readable as audit evidence but
+cannot close a current quality-gate failure. Mixed legacy/current adjudication sets fail closed for
+the legacy rows. A candidate that escapes the effective `forbidden_ids` set always fails the gate;
+no adjudication disposition can waive that safety condition.
+
 ## Raw versus effective metrics
 
 V3 keeps both views:

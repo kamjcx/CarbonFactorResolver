@@ -170,32 +170,38 @@ def apply_quality_gate(
     unresolved = []
     for row in annotated:
         entry = row["adjudication"]
-        if entry is None:
+        effective = entry.get("effective_expectation") if entry else None
+        # Historical adjudications remain visible, but only a complete effective
+        # expectation that the observation actually satisfies can close a current
+        # gate failure.  A legacy note is evidence, not a waiver.
+        if not isinstance(effective, Mapping):
             unresolved.append(row)
             continue
-        if isinstance(entry.get("effective_expectation"), Mapping) and not bool(
+        if not bool(
             effective_by_case.get(str(row.get("case_id")), {}).get("passed")
         ):
             unresolved.append(row)
-    escaped = [row for row in payload.get("results", ()) if forbidden_escape_ids(row)]
-    unadjudicated_escaped = [row for row in escaped if str(row.get("case_id")) not in adjudications]
+    raw_escaped = [row for row in payload.get("results", ()) if forbidden_escape_ids(row)]
+    effective_escaped = [row for row in effective_rows if forbidden_escape_ids(row)]
 
     metrics = payload.setdefault("metrics", {})
     raw_gate = bool(metrics.get("hard_gates_pass"))
-    has_effective_contract = bool(adjudications) and all(
+    effective_contract_count = sum(
         isinstance(entry.get("effective_expectation"), Mapping)
         for entry in adjudications.values()
     )
-    effective_metrics = (
-        aggregate_metrics(
-            effective_rows,
-            relation_results=payload.get("relation_results", {}),
-        )
-        if has_effective_contract
-        else dict(metrics)
+    has_effective_contract = bool(effective_contract_count)
+    complete_effective_contract = bool(adjudications) and (
+        effective_contract_count == len(adjudications)
+    )
+    effective_metrics = aggregate_metrics(
+        effective_rows,
+        relation_results=payload.get("relation_results", {}),
     )
     effective_checks = dict(effective_metrics.get("hard_gate_results", {}))
-    effective_checks["zero_forbidden_escape"] = not unadjudicated_escaped
+    # Forbidden candidates are never waivable.  Evaluate the contract that is
+    # actually in force for each row; legacy adjudications retain the raw one.
+    effective_checks["zero_forbidden_escape"] = not effective_escaped
     effective_checks["zero_unresolved_bad_cases"] = not unresolved
     state_attacks = payload.get("state_machine_attacks", ())
     effective_checks["all_state_machine_attacks_pass"] = bool(state_attacks) and all(
@@ -211,6 +217,8 @@ def apply_quality_gate(
         "hard_gates_pass": effective_metrics["hard_gates_pass"],
         "raw_hard_gates_pass": raw_gate,
         "effective_contract_applied": has_effective_contract,
+        "effective_contract_complete": complete_effective_contract,
+        "effective_contract_count": effective_contract_count,
         "raw_bad_case_count": len(annotated),
         "effective_case_count": len(effective_rows),
         "effective_passed_case_count": sum(
@@ -219,8 +227,11 @@ def apply_quality_gate(
         "effective_bad_case_count": len(payload["effective_bad_cases"]),
         "adjudicated_bad_case_count": len(annotated) - len(unresolved),
         "unresolved_bad_case_count": len(unresolved),
-        "raw_forbidden_escape_count": len(escaped),
-        "unadjudicated_forbidden_escape_count": len(unadjudicated_escaped),
+        "raw_forbidden_escape_count": len(raw_escaped),
+        "effective_forbidden_escape_count": len(effective_escaped),
+        # Retained for report-schema compatibility. It now counts every
+        # enforceable escape because adjudication cannot waive this safety gate.
+        "unadjudicated_forbidden_escape_count": len(effective_escaped),
         "adjudicated_case_ids": sorted(adjudications),
     }
     payload["unresolved_bad_cases"] = unresolved

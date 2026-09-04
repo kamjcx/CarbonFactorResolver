@@ -132,7 +132,7 @@ def test_versioned_adjudications_are_bound_to_current_generated_contract() -> No
     assert all(entry["disposition"] == "oracle_preset_error" for entry in safety_v2.values())
 
 
-def test_valid_adjudication_is_visible_but_excluded_from_enforceable_counts() -> None:
+def test_legacy_adjudication_is_visible_but_cannot_waive_forbidden_escape() -> None:
     row = failed_row(forbidden=True)
     payload = payload_with(row)
     apply_quality_gate(payload, {"case-1": {
@@ -142,9 +142,44 @@ def test_valid_adjudication_is_visible_but_excluded_from_enforceable_counts() ->
     }})
     assert payload["quality_gate"]["raw_bad_case_count"] == 1
     assert payload["quality_gate"]["raw_forbidden_escape_count"] == 1
-    assert payload["quality_gate"]["unresolved_bad_case_count"] == 0
-    assert payload["quality_gate"]["unadjudicated_forbidden_escape_count"] == 0
-    assert quality_exit_code(payload) == 0
+    assert payload["quality_gate"]["unresolved_bad_case_count"] == 1
+    assert payload["quality_gate"]["effective_forbidden_escape_count"] == 1
+    assert payload["quality_gate"]["unadjudicated_forbidden_escape_count"] == 1
+    assert quality_exit_code(payload) == 2
+
+
+def test_mixed_effective_and_legacy_adjudications_fail_closed() -> None:
+    effective_row = failed_row(case_id="case-effective")
+    legacy_row = failed_row(case_id="case-legacy", forbidden=True)
+    payload = payload_with(effective_row)
+    payload["results"] = [effective_row, legacy_row]
+    payload["bad_cases"] = [effective_row, legacy_row]
+    effective = {
+        "decision": "abstain",
+        "status": "supplier_data_required",
+        "acceptable_ids": [],
+        "forbidden_ids": [],
+        "reference_only_ids": [],
+        "reason_codes": [],
+        "expected_top_1": None,
+        "approval_allowed": False,
+        "safety_axis": "catalog_coverage",
+    }
+    apply_quality_gate(payload, {
+        "case-effective": {
+            "case_id": "case-effective",
+            "effective_expectation": effective,
+        },
+        "case-legacy": {
+            "case_id": "case-legacy",
+            "disposition": "accepted_limitation",
+        },
+    })
+    assert payload["quality_gate"]["effective_contract_count"] == 1
+    assert payload["quality_gate"]["effective_contract_complete"] is False
+    assert payload["quality_gate"]["unresolved_bad_case_count"] == 1
+    assert payload["quality_gate"]["effective_forbidden_escape_count"] == 1
+    assert quality_exit_code(payload) == 2
 
 
 def test_committed_bad_case_audit_manifest_matches_artifacts() -> None:

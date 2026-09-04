@@ -180,3 +180,37 @@ def test_effective_contract_is_verified_not_blindly_exempted() -> None:
     }
     apply_quality_gate(bad_payload, {"case-1": entry})
     assert bad_payload["quality_gate"]["unresolved_bad_case_count"] == 1
+
+
+def test_effective_contract_fails_on_forbidden_status_and_reference_tampering() -> None:
+    expectation = {
+        "decision": "reference_review",
+        "status": "reference_review_required",
+        "acceptable_ids": [],
+        "forbidden_ids": ["FORBIDDEN"],
+        "reference_only_ids": ["SOURCE"],
+        "reason_codes": ["MANUAL_REVIEW_REQUIRED"],
+        "expected_top_1": None,
+        "approval_allowed": False,
+        "safety_axis": "provenance",
+    }
+    valid = {
+        "status": "reference_review_required",
+        "primary_ids": [],
+        "reviewable_ids": ["SOURCE"],
+        "reason_codes": ["MANUAL_REVIEW_REQUIRED"],
+        "trace_complete": True,
+    }
+    assert _expectation_satisfied(expectation, valid)
+    assert not _expectation_satisfied(
+        expectation,
+        {**valid, "reviewable_ids": ["SOURCE", "FORBIDDEN"]},
+    )
+    assert not _expectation_satisfied(
+        expectation,
+        {**valid, "status": "recommendation_ready"},
+    )
+    assert not _expectation_satisfied(
+        expectation,
+        {**valid, "primary_ids": ["SOURCE"], "reviewable_ids": []},
+    )
