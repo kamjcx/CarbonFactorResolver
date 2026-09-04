@@ -28,7 +28,7 @@ def test_dockerfile_is_digest_locked_frozen_and_minimal() -> None:
     assert "COPY data/fixtures/external/ ./data/fixtures/external/" in dockerfile
     assert "COPY tests" not in dockerfile
     assert "COPY evidence" not in dockerfile
-    assert "pip uninstall --yes pip setuptools wheel" in dockerfile
+    assert "/usr/local/bin/python -m pip uninstall --yes pip setuptools wheel" in dockerfile
     assert "find_spec('jaraco.context') is None" in dockerfile
     assert "USER cfr" in dockerfile
 
