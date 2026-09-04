@@ -13,7 +13,7 @@ from .models import (
     ResultTier,
     TransformationStep,
 )
-from .units import convert_factor
+from .units import convert_factor, parse_factor_unit
 
 TYPE_PRIORITY = {
     ResolutionType.DIRECT_EXACT: 0,
@@ -73,6 +73,8 @@ def resolution_strength(
 
 
 def tier_for(candidate: Candidate) -> ResultTier:
+    if any(item.startswith("formal_admission_incomplete:") for item in candidate.limitations):
+        return ResultTier.REFERENCE_ONLY
     if (
         candidate.source.factor_kind not in {
             FactorKind.LIFECYCLE_FACTOR,
@@ -136,6 +138,9 @@ def derive_candidate(
     limitations: tuple[str, ...] = (),
     assumptions: tuple[str, ...] = (),
     warnings: tuple[str, ...] = (),
+    resolved_activity_value: float | None = None,
+    resolved_activity_unit: str | None = None,
+    activity_dimension: str | None = None,
     resolved_quantity_kg: float | None = None,
     total_emissions_kgco2e: float | None = None,
 ) -> Candidate:
@@ -145,8 +150,16 @@ def derive_candidate(
         if resolved_quantity_kg is not None
         else base.resolved_quantity_kg
     )
+    effective_activity = (
+        resolved_activity_value
+        if resolved_activity_value is not None else base.resolved_activity_value
+    )
+    effective_activity_unit = resolved_activity_unit or base.resolved_activity_unit
+    effective_dimension = activity_dimension or base.activity_dimension
     if total_emissions_kgco2e is not None:
         effective_total = total_emissions_kgco2e
+    elif effective_activity is not None:
+        effective_total = effective_factor * effective_activity
     elif effective_quantity is not None:
         effective_total = (
             convert_factor(effective_factor, base.factor_unit, "kgCO2e/kg")
@@ -166,6 +179,9 @@ def derive_candidate(
         limitations=tuple(dict.fromkeys(base.limitations + limitations)),
         assumptions=tuple(dict.fromkeys(base.assumptions + assumptions)),
         warnings=tuple(dict.fromkeys(base.warnings + warnings)),
+        resolved_activity_value=effective_activity,
+        resolved_activity_unit=effective_activity_unit,
+        activity_dimension=effective_dimension,
         resolved_quantity_kg=effective_quantity,
         total_emissions_kgco2e=effective_total,
     )
@@ -175,6 +191,11 @@ def derive_candidate(
 def expected_total_emissions(candidate: Candidate) -> float | None:
     """Return the total implied by a candidate's normalized factor and quantity."""
 
+    if candidate.resolved_activity_value is not None:
+        denominator = parse_factor_unit(candidate.factor_unit).activity_unit.canonical_unit
+        if candidate.resolved_activity_unit != denominator:
+            return None
+        return candidate.factor_value * candidate.resolved_activity_value
     if candidate.resolved_quantity_kg is None:
         return None
     return (
@@ -206,6 +227,9 @@ def to_derived(candidate: Candidate) -> DerivedFactorCandidate:
         ))),
         assumptions=candidate.assumptions,
         warnings=candidate.warnings,
+        resolved_activity_value=candidate.resolved_activity_value,
+        resolved_activity_unit=candidate.resolved_activity_unit,
+        activity_dimension=candidate.activity_dimension,
         resolved_quantity_kg=candidate.resolved_quantity_kg,
         total_emissions_kgco2e=candidate.total_emissions_kgco2e,
     )

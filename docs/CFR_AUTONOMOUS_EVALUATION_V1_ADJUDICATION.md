@@ -2,6 +2,10 @@
 
 Status: **VERSIONED ADJUDICATION — FROZEN FIRST RUN UNCHANGED**
 
+> Historical notice: Resolution Safety V2 supersedes the runtime interpretation below. The six
+> cases are now classified as real runtime defects and fixed by hard conflict qualification.
+> This V1 record remains unchanged as historical evidence.
+
 Machine-enforced record:
 [`data/benchmarks/autonomous_evaluation_v1_adjudications.json`](../data/benchmarks/autonomous_evaluation_v1_adjudications.json).
 Each entry is bound to the evaluator-contract SHA, semantic case SHA, request-input SHA,

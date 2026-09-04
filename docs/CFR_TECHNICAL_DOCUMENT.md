@@ -232,7 +232,7 @@ production_process  可选
 boundary            默认 cradle-to-gate
 target_factor_unit  默认 kgCO2e/kg
 top_k               1..50，默认 3
-min_score           0..1，默认 0.65；低于阈值的候选最多为 REFERENCE_ONLY，不作一刀切丢弃
+min_score           仅限显式 Debug 接口；正式 JSON 请求拒绝该字段，阈值由 DeploymentPolicy 管理
 request_id          默认 UUID
 ```
 
@@ -593,7 +593,7 @@ evidence_coverage = covered_weight / total_weight
 
 ## 15. 最小硬约束
 
-`min_score` 为兼容旧请求保留，但不再决定“有没有结果”：低于阈值的候选仍可见，但最多进入 `REFERENCE_ONLY`。Process、composition、form、material、geography、time 和证据缺失优先成为 Gap、Assumption 或 Limitation。
+`min_score` 仅在 `resolve_debug`/显式 Debug API 中兼容；正式 `resolve` 使用部署侧不可由请求覆盖的 `DeploymentPolicy`。低于阈值的候选最多进入 `REFERENCE_ONLY`。
 
 V1 只硬阻断：
 

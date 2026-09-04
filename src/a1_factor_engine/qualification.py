@@ -82,6 +82,21 @@ def _dimension(status: QualificationStatus, *reasons: str) -> QualificationDimen
     return QualificationDimension(status, tuple(reason for reason in reasons if reason))
 
 
+def _versioned_substitution_allows(source: SourceRecord, dimension: str) -> bool:
+    """Return true only for an explicit, versioned catalogue substitution rule."""
+
+    policy_id = str(source.metadata.get("substitution_policy_id", "")).strip()
+    version = str(source.metadata.get("substitution_policy_version", "")).strip()
+    raw_dimensions = source.metadata.get("substitution_dimensions", "")
+    if isinstance(raw_dimensions, str):
+        dimensions = {item.strip().casefold() for item in raw_dimensions.split(",")}
+    elif isinstance(raw_dimensions, (list, tuple, set)):
+        dimensions = {str(item).strip().casefold() for item in raw_dimensions}
+    else:
+        dimensions = set()
+    return bool(policy_id and version and dimension.casefold() in dimensions)
+
+
 OPERATIONAL_FACTOR_SUBJECTS = {
     FactorKind.ENERGY_FACTOR: FactorSubjectType.ENERGY,
     FactorKind.COMBUSTION_FACTOR: FactorSubjectType.ENERGY,
@@ -294,6 +309,13 @@ def qualify_record(
             or declared_identity.product_entity_id == target.product_entity_id
         )
     )
+    if (
+        source.subject_type in EXPLICIT_NON_MATERIAL_SUBJECTS
+        and not (exact_primary_name or reviewed_alias_match)
+    ):
+        # Electricity routes, fuels and transport modes are distinct operational
+        # products even when a broad registry entity is shared.
+        declared_entity_compatible = False
     if not source.declared_product:
         declared_dim = _dimension(QualificationStatus.UNKNOWN, "declared product is unspecified")
     elif (
@@ -394,6 +416,34 @@ def qualify_record(
         unit_exclusion = UNIT_SYNTAX_UNSUPPORTED
         unit_dim = _dimension(QualificationStatus.MISMATCH, UNIT_SYNTAX_UNSUPPORTED)
 
+    policy_checks: dict[str, QualificationDimension] = {}
+    for name, requested_value, observed_value in (
+        ("geography", activity.geography, source.geography),
+        ("year", activity.year, source.year),
+    ):
+        if requested_value in (None, ""):
+            policy_checks[name] = _dimension(
+                QualificationStatus.UNKNOWN,
+                f"request {name} is unspecified",
+            )
+        elif observed_value in (None, ""):
+            policy_checks[name] = _dimension(
+                QualificationStatus.UNKNOWN,
+                f"source {name} is unspecified",
+            )
+        elif requested_value == observed_value:
+            policy_checks[name] = _dimension(QualificationStatus.PASS)
+        elif _versioned_substitution_allows(source, name):
+            policy_checks[name] = _dimension(
+                QualificationStatus.PASS,
+                f"explicit versioned {name} substitution policy applied",
+            )
+        else:
+            policy_checks[name] = _dimension(
+                QualificationStatus.MISMATCH,
+                f"source {name} {observed_value!r} conflicts with requested {requested_value!r}",
+            )
+
     exclusions = list(hard_identity_exclusions)
     if kind_dim.status == QualificationStatus.MISMATCH:
         exclusions.append("factor_kind_mismatch")
@@ -407,10 +457,16 @@ def qualify_record(
         exclusions.append("source_quality_not_admissible")
     if indicator_dim.status == QualificationStatus.MISMATCH:
         exclusions.append("indicator_mismatch")
-    if declared_dim.status == QualificationStatus.MISMATCH and policy == QualificationPolicy.DIRECT:
+    if (
+        declared_dim.status == QualificationStatus.MISMATCH
+        and policy not in {QualificationPolicy.GRADE_ANCHOR, QualificationPolicy.PROXY}
+    ):
         exclusions.append("declared_product_mismatch")
     if boundary_dim.status == QualificationStatus.MISMATCH:
         exclusions.append("boundary_mismatch")
+    for name in ("geography", "year"):
+        if policy_checks[name].status == QualificationStatus.MISMATCH:
+            exclusions.append(f"{name}_mismatch")
     if (
         parsed_unit
         and parsed_unit.reference_product_qualifier
@@ -421,7 +477,6 @@ def qualify_record(
     if unit_dim.status == QualificationStatus.MISMATCH:
         exclusions.append(unit_exclusion or UNIT_SYNTAX_UNSUPPORTED)
 
-    policy_checks: dict[str, QualificationDimension] = {}
     if policy == QualificationPolicy.GRADE_ANCHOR:
         if reference is None:
             raise ValueError("grade-anchor qualification requires a reference record")

@@ -53,6 +53,7 @@ class ActivityDimension(str, Enum):
     VOLUME = "VOLUME"
     TRANSPORT_WORK = "TRANSPORT_WORK"
     COUNT = "COUNT"
+    AREA = "AREA"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +164,8 @@ _ACTIVITY_ALIASES: Mapping[str, ActivityUnitSpec] = MappingProxyType({
     "l": _spec("L", ActivityDimension.VOLUME, Decimal("0.001")),
     "nm3": _spec("Nm3", ActivityDimension.VOLUME, _ONE, evidence=True),
     "nm³": _spec("Nm3", ActivityDimension.VOLUME, _ONE, evidence=True),
+    "m2": _spec("m2", ActivityDimension.AREA, _ONE),
+    "m²": _spec("m2", ActivityDimension.AREA, _ONE),
     "tkm": _spec("tkm", ActivityDimension.TRANSPORT_WORK, _ONE),
     "kgkm": _spec("kgkm", ActivityDimension.TRANSPORT_WORK, Decimal("0.001")),
     "item": _spec("item", ActivityDimension.COUNT, _ONE),
@@ -170,6 +173,7 @@ _ACTIVITY_ALIASES: Mapping[str, ActivityUnitSpec] = MappingProxyType({
     "piece": _spec("item", ActivityDimension.COUNT, _ONE),
     "pcs": _spec("item", ActivityDimension.COUNT, _ONE),
     "bag": _spec("item", ActivityDimension.COUNT, _ONE),
+    "roll": _spec("item", ActivityDimension.COUNT, _ONE),
 })
 
 _IMPACT_ALIASES: Mapping[str, ImpactUnitSpec] = MappingProxyType({
@@ -202,7 +206,10 @@ def _decimal(value: Decimal | str | int | float) -> Decimal:
 
 
 def _activity_key(value: str) -> str:
-    return "".join(value.strip().casefold().split())
+    key = "".join(value.strip().casefold().split())
+    while len(key) >= 2 and key[0] == "(" and key[-1] == ")":
+        key = key[1:-1]
+    return key.replace("*", "").replace("·", "").replace(".", "")
 
 
 def _impact_key(value: str) -> str:

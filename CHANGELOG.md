@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Harden formal resolution: explicit geography/year conflicts fail closed unless a versioned
+  deployment substitution policy authorizes that exact dimension; missing declared product or
+  lifecycle boundary is `REFERENCE_ONLY` and cannot be approved or locked.
+- Merge Exact, reviewed Alias and same-entity Related channels before decisive ambiguity
+  analysis; revalidate reference-flow identity/packaging; preserve generic activity units and
+  recompute non-mass totals at lock.
+- Move `min_score` ownership to immutable `DeploymentPolicy`; formal JSON rejects request-side
+  threshold overrides while the opt-in debug API/CLI retain an explicit debug path.
+- Add `m²`, `roll`, `kgCO2e/(t*km)` and numeric-zero catalog coverage. Missing API extras now
+  fail evaluation as an operational precondition instead of fabricating a 101st Bad Case.
 - Make Autonomous Evaluation and Portfolio Validation fail closed when quality gates fail,
   while preserving generated evidence and distinguishing execution completion from quality
   approval.

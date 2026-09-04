@@ -169,17 +169,10 @@ def _api_safety_rows() -> list[dict[str, Any]]:
     try:
         from fastapi.testclient import TestClient
     except ImportError as exc:
-        return [{
-            "case_id": "AUTO-HTTP-DEPENDENCY",
-            "category": "api_safety",
-            "expectation": {"decision": "http_contract"},
-            "observation": {
-                "http_status": 599,
-                "error": True,
-                "exception_type": type(exc).__name__,
-            },
-            "passed": False,
-        }]
+        raise RuntimeError(
+            "autonomous evaluation requires the 'api' dependency extra; "
+            "dependency availability must not change the benchmark case inventory"
+        ) from exc
 
     bundle = generate_bundle()
     case = bundle.cases[0]

@@ -155,7 +155,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
 | Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
-| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases + workflow attacks + 10k/50k scale | systematic contract exploration; six frozen geography/year label disagreements remain visible and adjudicated |
+| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases + workflow attacks + 10k/50k scale | systematic contract exploration; six frozen geography/year disagreements remain historical and are classified as fixed runtime defects by Safety V2 |
 
 RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent

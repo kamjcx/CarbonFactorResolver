@@ -80,6 +80,7 @@ def create_app(
     benchmark_runner: Any = None,
     connector_health: Any = None,
     benchmark_roots: Sequence[str | Path] | None = None,
+    enable_debug_api: bool = False,
 ):
     """Build an application with injected domain services.
 
@@ -160,6 +161,21 @@ def create_app(
                 },
             ) from exc
         return serialize_recommendation(result)
+
+    if enable_debug_api:
+        @app.post("/api/v1/debug/resolve", include_in_schema=True)
+        async def resolve_debug(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+            try:
+                result = await resolver.resolve_debug(payload)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "reason_code": INVALID_RESOLUTION_REQUEST,
+                        "message": "debug resolution request is invalid",
+                    },
+                ) from exc
+            return serialize_recommendation(result)
 
     @app.get("/api/v1/resolutions/{request_id}")
     async def get_resolution(request_id: str) -> dict[str, Any]:

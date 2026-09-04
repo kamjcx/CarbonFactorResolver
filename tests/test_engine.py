@@ -560,9 +560,11 @@ async def test_same_entity_numeric_grade_difference_becomes_grade_gap_not_silent
         local_retrieval=InMemoryFactorRepository([source])
     ).resolve(ResolutionRequest(material_name="90烧结镁砂", quantity=1, geography="CN", year=2024))
 
-    assert result.status == ResolutionStatus.REFERENCE_REVIEW_REQUIRED
+    assert result.status == ResolutionStatus.UNRESOLVED
     assert result.trace.explain()["request_gaps"] == ()
-    assert result.reviewable_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.reviewable_candidates == ()
+    assert result.diagnostic_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert "GRADE_SPECIFICATION_CONFLICT" in result.reason_codes
     grade_gaps = tuple(
         gap
         for candidate in result.trace.explain()["candidate_gaps"]
@@ -729,7 +731,7 @@ def record(source_id: str, name: str, value: float, unit: str = "kgCO2e/kg", **k
         excerpt=kwargs.pop("excerpt", ""),
         factor_kind=kwargs.pop("factor_kind", FactorKind.LIFECYCLE_FACTOR),
         indicator=kwargs.pop("indicator", "GWP-total"),
-        declared_product=kwargs.pop("declared_product", None),
+        declared_product=kwargs.pop("declared_product", name),
         boundary_modules=kwargs.pop("boundary_modules", ()),
         metadata=kwargs.pop("metadata", kwargs),
     )
@@ -1161,7 +1163,7 @@ async def test_http_catalog_adapter_anchors_formal_database_response():
 
 
 @pytest.mark.asyncio
-async def test_exact_link_stops_before_registered_synonym_link():
+async def test_exact_and_registered_synonym_are_merged_before_ranking():
     exact = record("exact", "steel coil", 1.0, source_type=FactorSourceType.LOCAL_DATABASE)
     synonym = record(
         "synonym", "hot rolled steel", 1.1,
@@ -1173,7 +1175,7 @@ async def test_exact_link_stops_before_registered_synonym_link():
     ).resolve(request())
 
     attempts = result.trace.explain()["link_attempts"]
-    assert [candidate.source.source_id for candidate in result.candidates] == ["exact"]
+    assert [candidate.source.source_id for candidate in result.candidates] == ["exact", "synonym"]
     assert attempts[0]["strategy"] == LinkStrategy.EXACT.value
     assert attempts[0]["outcome"] == LinkOutcome.MATCHED.value
     assert attempts[1]["strategy"] == LinkStrategy.SYNONYM.value
@@ -2068,7 +2070,7 @@ async def test_single_grade_is_returned_unchanged_as_grade_proxy():
         local_retrieval=InMemoryFactorRepository([grade_90]),
     ).resolve(request(material_name="magnesia", composition="95% MgO", production_process="sintered"))
 
-    candidate = result.reviewable_candidates[0]
+    candidate = result.diagnostic_candidates[0]
     assert candidate.resolution_type == ResolutionType.GRADE_PROXY
     assert candidate.factor_value == 1.0
     assert any("+5 percentage points" in limitation for limitation in candidate.limitations)
@@ -2603,8 +2605,8 @@ async def test_grade_anchor_must_have_same_series_id():
         grade_series=InMemoryGradeSeriesRepository([wrong]),
     ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
 
-    assert result.reviewable_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
-    assert result.reviewable_candidates[0].factor_value == pytest.approx(1.0)
+    assert result.diagnostic_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.diagnostic_candidates[0].factor_value == pytest.approx(1.0)
 
 
 @pytest.mark.asyncio
@@ -2627,7 +2629,7 @@ async def test_emission_limit_cannot_be_grade_anchor():
         grade_series=InMemoryGradeSeriesRepository([limit]),
     ).resolve(request(material_name="magnesia 90%", composition="95% MgO", production_process="sintered"))
 
-    assert result.reviewable_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
+    assert result.diagnostic_candidates[0].resolution_type == ResolutionType.GRADE_PROXY
     assert any(item["source_id"] == limit.source_id for item in result.trace.explain()["excluded_candidates"])
 
 
@@ -2752,7 +2754,7 @@ async def test_min_score_caps_low_score_candidate_at_reference_only():
     )
     result = await A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository([sparse])
-    ).resolve(request(min_score=0.99))
+    ).resolve_debug(request(min_score=0.99))
 
     assert result.reviewable_candidates[0].score < 0.99
     assert result.reviewable_candidates[0].result_tier == ResultTier.REFERENCE_ONLY

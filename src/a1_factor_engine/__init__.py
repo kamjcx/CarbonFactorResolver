@@ -106,6 +106,7 @@ from .models import (
     SpecificationOperator,
     TransformationStep,
 )
+from .policy import DeploymentPolicy
 from .process_adjustment import stoichiometric_carbon_emission_kgco2e_per_kg
 from .qualification import SOURCE_DOCUMENT_HASH_REQUIRED
 from .units import (
@@ -130,6 +131,7 @@ from .units import (
 
 __all__ = [
     "A1FactorResolutionEngine",
+    "DeploymentPolicy",
     "CatalogDatasetPolicy",
     "REFRACTORY_A1_STANDARD_POLICY",
     "CompositeProcessParameterRepository",

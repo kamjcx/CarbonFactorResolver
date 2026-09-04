@@ -50,6 +50,15 @@ def candidate_hard_rejection_reasons(candidate: Candidate) -> tuple[str, ...]:
         gap.gap_type == GapType.PROCESS_VARIANT for gap in candidate.gaps
     ):
         reasons.append("unresolved_process_variant_requires_process_model")
+    if any(
+        gap.gap_type == GapType.GRADE_COMPOSITION
+        and (
+            "purity grade" in gap.reason
+            or "grades use different schema" in gap.reason
+        )
+        for gap in candidate.gaps
+    ):
+        reasons.append("unresolved_grade_or_specification_conflict")
     return tuple(dict.fromkeys(reasons))
 
 

@@ -84,11 +84,11 @@ def test_three_way_portfolio_evaluation_is_real_and_safety_sensitive(tmp_path: P
         "CFR-PV-WRONG_CANDIDATE_RATE_AT_MOST_5_PERCENT",
     }
     assert all(finding["status"] == "OPEN" for finding in result["known_findings"])
-    assert full["wrong_candidate_rate"] == 6 / 46
-    assert full["wrong_candidate_count"] == 6
-    assert full["returned_candidate_count"] == 46
+    assert full["wrong_candidate_rate"] == 14 / 54
+    assert full["wrong_candidate_count"] == 14
+    assert full["returned_candidate_count"] == 54
     assert full["top_1_correct_count"] == 40
-    assert full["decision_accuracy"] == 53 / 60
+    assert full["decision_accuracy"] == 55 / 60
     assert full["boundary_violation_rate"] == 0
     assert full["subject_violation_rate"] == 0
     assert lexical["recall_at_5"] >= full["recall_at_5"]

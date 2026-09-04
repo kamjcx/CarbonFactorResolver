@@ -63,6 +63,7 @@ from .nodes import (
     ValidateNode,
     evaluate_records,
 )
+from .policy import DeploymentPolicy
 from .ports import (
     ExternalSourceConnectorPort,
     FactorEvidenceExtractorPort,
@@ -92,6 +93,7 @@ class A1ResolutionGraph:
     rule_suggestions: MaterialRuleSuggestionPort = NullMaterialRuleSuggestion()
     external_connectors: Sequence[ExternalSourceConnectorPort] = ()
     external_extractor: FactorEvidenceExtractorPort | None = None
+    deployment_policy: DeploymentPolicy = DeploymentPolicy()
 
     def __post_init__(self) -> None:
         self.validate = ValidateNode()
@@ -107,7 +109,7 @@ class A1ResolutionGraph:
         self.material = MaterialResolutionNode(self.understanding)
         self.proxy = ProxyResolutionNode(self.proxy_retrieval)
         self.proxy_evaluate = ProxyEvaluateNode(self.understanding, self.material_registry)
-        self.re_evaluate = ReEvaluateNode()
+        self.re_evaluate = ReEvaluateNode(self.deployment_policy.min_score)
         self.pool = CandidatePoolNode()
         self.rank = RankNode()
         self.top_k = TopKNode()
@@ -443,6 +445,7 @@ class A1FactorResolutionEngine:
         external_connectors: Sequence[ExternalSourceConnectorPort] = (),
         external_extractor: FactorEvidenceExtractorPort | None = None,
         store: ResolutionStorePort | None = None,
+        deployment_policy: DeploymentPolicy | None = None,
     ) -> None:
         self.store = store or InMemoryResolutionStore()
         self.graph = A1ResolutionGraph(
@@ -456,6 +459,7 @@ class A1FactorResolutionEngine:
             rule_suggestions or NullMaterialRuleSuggestion(),
             external_connectors,
             external_extractor,
+            deployment_policy or DeploymentPolicy(),
         )
 
     async def resolve(self, request: ResolutionRequest | Mapping[str, object]) -> Recommendation:
@@ -467,6 +471,23 @@ class A1FactorResolutionEngine:
         assert state.recommendation is not None
         await self.store.save_resolution_run(state.recommendation, state.trace)
         return state.recommendation
+
+    async def resolve_debug(
+        self, request: ResolutionRequest | Mapping[str, object]
+    ) -> Recommendation:
+        """Resolve with debug-only request controls in an explicitly separate entry point."""
+
+        if isinstance(request, Mapping):
+            request = ResolutionRequest.from_mapping(request, allow_debug_controls=True)
+        if await self.store.has_resolution_run(request.request_id):
+            raise ValueError(f"duplicate request_id: {request.request_id}")
+        if request.min_score is not None:
+            graph = replace(self.graph, deployment_policy=DeploymentPolicy(request.min_score))
+            state = await graph.run(request)
+            assert state.recommendation is not None
+            await self.store.save_resolution_run(state.recommendation, state.trace)
+            return state.recommendation
+        return await self.resolve(request)
 
     async def state(self, request_id: str) -> Recommendation | None:
         return await self.store.get_recommendation(request_id)
@@ -503,6 +524,15 @@ class A1FactorResolutionEngine:
             candidate = reviewable
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        incomplete = tuple(
+            item for item in candidate.limitations
+            if item.startswith("formal_admission_incomplete:")
+        )
+        if incomplete:
+            raise ValueError(
+                "candidate lacks mandatory formal evidence and cannot be approved: "
+                + ", ".join(incomplete)
+            )
         hard_rejections = candidate_hard_rejection_reasons(candidate)
         if hard_rejections:
             raise ValueError(
@@ -568,6 +598,15 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
+        incomplete = tuple(
+            item for item in candidate.limitations
+            if item.startswith("formal_admission_incomplete:")
+        )
+        if incomplete:
+            raise ValueError(
+                "candidate lacks mandatory formal evidence and cannot be locked: "
+                + ", ".join(incomplete)
+            )
         hard_rejections = candidate_hard_rejection_reasons(candidate)
         if hard_rejections:
             raise ValueError(

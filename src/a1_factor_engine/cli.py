@@ -134,7 +134,9 @@ def main(
         }
         if args.request_id:
             payload["request_id"] = args.request_id
-        result = asyncio.run((engine or _demo_engine()).resolve(payload))
+        resolver = engine or _demo_engine()
+        debug_resolve = getattr(resolver, "resolve_debug", resolver.resolve)
+        result = asyncio.run(debug_resolve(payload))
     elif args.command == "benchmark" and args.benchmark_command == "run":
         result = asyncio.run(_benchmark_run(args.path, args.baseline, benchmark_runner))
     elif args.command == "benchmark" and args.benchmark_command == "compare":

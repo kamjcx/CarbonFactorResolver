@@ -7,8 +7,8 @@ carbon footprint.
 - Public fixtures are intentionally small and synthetic; catalogue coverage is not
   representative of ecoinvent or any commercial database.
 - Retrieval quality depends on structured source coverage and supplied query attributes.
-- Non-material factors require an explicit subject. Geography and year differences are
-  surfaced as applicability limitations; CFR does not infer legal/regulatory applicability.
+- Non-material factors require an explicit subject. Explicit geography/year conflicts are hard
+  exclusions unless a versioned deployment substitution policy authorizes that dimension.
 - `MORE_INPUT` and refusal are expected outcomes when identity, unit, boundary, subject, or
   evidence is insufficient.
 - Human review is required before locking a factor. Locked factors still require downstream
@@ -22,9 +22,8 @@ carbon footprint.
   establish general accuracy on enterprise language or licensed catalogs.
 - The 10k/50k benchmark is a synthetic exact-match/robustness workload. Python event-loop
   concurrency is not equivalent to multi-process production capacity, and no SLA is claimed.
-- Geography and year differences are not universal hard exclusions. They may remain selectable
-  only with disclosed applicability limitations and an explicit human assumption decision;
-  deployments that require exact regional or temporal identity must apply a stricter policy.
+- An unspecified request geography/year remains unknown. Ordinary reviewer assumption acceptance
+  cannot override an explicit geography/year conflict.
 
 Roadmap items such as broader ontologies, document intelligence, report generation, complex UI,
 and automatic formal-catalogue workflows are deliberately outside this release.

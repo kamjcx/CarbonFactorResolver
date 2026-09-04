@@ -368,6 +368,10 @@ class ReferenceFlowRecord:
     mass_per_unit_kg: float
     evidence: ParameterEvidence
     method: str = "mass_per_unit"
+    declared_product: str | None = None
+    product_form: str | None = None
+    specification: str | None = None
+    metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.record_id.strip() or not self.material_name.strip() or not self.reference_unit.strip():
@@ -376,6 +380,7 @@ class ReferenceFlowRecord:
             raise ValueError("mass_per_unit_kg must be finite and positive")
         if abs(self.mass_per_unit_kg - self.evidence.value) > 1e-12:
             raise ValueError("reference-flow mass must equal its parameter evidence value")
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1294,7 +1299,6 @@ def resolution_request_fingerprint(request: "ResolutionRequest") -> str:
             if request.unit_conversion_evidence else None
         ),
         "top_k": request.top_k,
-        "min_score": request.min_score,
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -1476,7 +1480,9 @@ class ResolutionRequest:
     unit_conversion_evidence: UnitConversionEvidence | None = None
     top_k: int = 3
     request_id: str = field(default_factory=lambda: str(uuid4()))
-    min_score: float = 0.65
+    # Debug-only compatibility field. Formal resolution ignores request-owned
+    # thresholds and uses the deployment's immutable policy instead.
+    min_score: float | None = None
 
     def __post_init__(self) -> None:
         if not self.material_name.strip():
@@ -1487,7 +1493,7 @@ class ResolutionRequest:
             raise ValueError("year must be a plausible calendar year")
         if not 1 <= self.top_k <= 50:
             raise ValueError("top_k must be between 1 and 50")
-        if not 0 <= self.min_score <= 1:
+        if self.min_score is not None and not 0 <= self.min_score <= 1:
             raise ValueError("min_score must be between 0 and 1")
         if not isinstance(self.subject_type, FactorSubjectType):
             try:
@@ -1496,8 +1502,12 @@ class ResolutionRequest:
                 raise ValueError("subject_type must be a supported FactorSubjectType") from exc
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ResolutionRequest":
+    def from_mapping(
+        cls, value: Mapping[str, Any], *, allow_debug_controls: bool = False
+    ) -> "ResolutionRequest":
         payload = dict(value)
+        if "min_score" in payload and not allow_debug_controls:
+            raise ValueError("min_score is a deployment policy and is not accepted by formal requests")
         evidence = payload.get("unit_conversion_evidence")
         if isinstance(evidence, Mapping):
             evidence_payload = dict(evidence)
@@ -1598,6 +1608,9 @@ class Candidate:
     base_source_ids: tuple[str, ...] = ()
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    resolved_activity_value: Optional[float] = None
+    resolved_activity_unit: Optional[str] = None
+    activity_dimension: Optional[str] = None
     resolved_quantity_kg: Optional[float] = None
     total_emissions_kgco2e: Optional[float] = None
 
@@ -1618,6 +1631,12 @@ class Candidate:
             not isfinite(self.resolved_quantity_kg) or self.resolved_quantity_kg <= 0
         ):
             raise ValueError("resolved quantity must be finite and positive")
+        if self.resolved_activity_value is not None and (
+            not isfinite(self.resolved_activity_value) or self.resolved_activity_value <= 0
+        ):
+            raise ValueError("resolved activity value must be finite and positive")
+        if self.resolved_activity_value is not None and not self.resolved_activity_unit:
+            raise ValueError("resolved activity unit is required with a resolved activity value")
         if self.total_emissions_kgco2e is not None and (
             not isfinite(self.total_emissions_kgco2e) or self.total_emissions_kgco2e < 0
         ):
@@ -1644,6 +1663,9 @@ class DerivedFactorCandidate:
     provenance_lineage: tuple[str, ...]
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    resolved_activity_value: Optional[float] = None
+    resolved_activity_unit: Optional[str] = None
+    activity_dimension: Optional[str] = None
     resolved_quantity_kg: Optional[float] = None
     total_emissions_kgco2e: Optional[float] = None
 

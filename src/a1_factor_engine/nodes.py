@@ -345,6 +345,10 @@ def _candidate(
         limitations.append("source year is unspecified")
     if source.geography is None:
         limitations.append("source geography is unspecified")
+    if not source.declared_product:
+        limitations.append("formal_admission_incomplete:declared_product")
+    if not source.boundary and not source.boundary_modules:
+        limitations.append("formal_admission_incomplete:boundary")
     if evidence_gaps:
         limitations.append("evidence gaps: " + ", ".join(evidence_gaps))
     match_strategy = source.metadata.get("match_strategy", LinkStrategy.EXACT.value)
@@ -379,7 +383,15 @@ def _candidate(
         evidence_gaps=evidence_gaps,
         resolution_type=resolution_type,
         base_source_ids=(source.source_id,),
-        resolved_quantity_kg=activity.quantity_kg,
+        resolved_activity_value=resolved_quantity,
+        resolved_activity_unit=(
+            parse_factor_unit(candidate_factor_unit).activity_unit.canonical_unit
+            if resolved_quantity is not None else None
+        ),
+        activity_dimension=activity.activity_dimension,
+        resolved_quantity_kg=(
+            resolved_quantity if activity.activity_dimension == ActivityDimension.MASS.value else None
+        ),
         total_emissions_kgco2e=(
             resolved_quantity * value if resolved_quantity is not None else None
         ),
@@ -521,6 +533,7 @@ class NormalizeNode(Node[GraphState]):
                 ActivityDimension.VOLUME: "m3",
                 ActivityDimension.TRANSPORT_WORK: "tkm",
                 ActivityDimension.COUNT: "item",
+                ActivityDimension.AREA: "m2",
             }
             quantity_base_unit = base_units[activity_unit.dimension]
             if activity_unit.canonical_unit == "Nm3":
@@ -672,7 +685,7 @@ class NormalizeNode(Node[GraphState]):
             next_question=request_gaps[0] if request_gaps else None,
             provisional_options=state.provisional_options,
         )
-        state.event(Stage.NORMALIZE, "activity normalized; quantity converted to kg", {
+        state.event(Stage.NORMALIZE, "activity normalized; quantity converted to controlled base unit", {
             "input_material_name": state.request.material_name,
             "canonical_name": state.normalized.canonical_name,
             "quantity_kg": state.normalized.quantity_kg,
@@ -812,7 +825,7 @@ class LocalEvaluateNode(Node[GraphState]):
             admissions: list[CandidateAdmission] = []
             observations: list[RecallObservation] = list(state.recall_observations)
             exclusions: tuple[CandidateExclusion, ...] = ()
-            selected: tuple[Candidate, ...] = ()
+            selected_by_id: dict[str, Candidate] = {}
             for strategy in (LinkStrategy.EXACT, LinkStrategy.SYNONYM, LinkStrategy.RELATED):
                 layer = tuple(
                     record for record in state.local_records
@@ -831,10 +844,12 @@ class LocalEvaluateNode(Node[GraphState]):
                     registry=self.registry,
                 )
                 exclusions = (*exclusions, *layer_exclusions)
-                if layer_candidates:
-                    selected = layer_candidates
-                    break
-            state.local_candidates = selected
+                for candidate in layer_candidates:
+                    selected_by_id.setdefault(candidate.candidate_id, candidate)
+            # Exact, reviewed aliases and same-entity Related records form one
+            # qualification pool. Exact is a ranking signal, never permission
+            # to hide a decisive ambiguity carried by another channel.
+            state.local_candidates = tuple(selected_by_id.values())
             state.qualifications = tuple(qualifications)
             dimensions = (
                 "identity", "factor_kind", "subject_type", "source_quality",
@@ -924,7 +939,7 @@ class LocalEvaluateNode(Node[GraphState]):
                     "mat.product.secondary_aluminium": "secondary",
                 }
                 variant_values: list[str] = []
-                for candidate in selected:
+                for candidate in state.local_candidates:
                     variant = (
                         product_routes.get(candidate.source.metadata.get("product_entity_id", ""))
                         or route_aliases.get(_text(candidate.source.production_process))
@@ -1287,14 +1302,17 @@ class ProxyEvaluateNode(Node[GraphState]):
 class ReEvaluateNode(Node[GraphState]):
     name = "re_evaluate"
 
+    def __init__(self, min_score: float) -> None:
+        self.min_score = min_score
+
     async def run(self, state: GraphState) -> GraphState:
         state.stage = Stage.RE_EVALUATE
         state.resolution_candidates = tuple(
-            finalize_candidate(candidate, min_score=state.request.min_score)
+            finalize_candidate(candidate, min_score=self.min_score)
             for candidate in state.resolution_candidates
         )
         state.proxy_candidates = tuple(
-            finalize_candidate(candidate, min_score=state.request.min_score)
+            finalize_candidate(candidate, min_score=self.min_score)
             for candidate in state.proxy_candidates
         )
         all_candidates = state.resolution_candidates + state.proxy_candidates
@@ -1433,6 +1451,18 @@ class TopKNode(Node[GraphState]):
         )
         if conflicting_external_id:
             reason_codes = (*reason_codes, "CONFLICTING_DUPLICATE_SOURCE_ID")
+        grade_specification_conflict = any(
+            "unresolved_grade_or_specification_conflict"
+            in candidate_hard_rejection_reasons(candidate)
+            for candidate in state.ranked_candidates
+        )
+        if grade_specification_conflict:
+            reason_codes = (*reason_codes, "GRADE_SPECIFICATION_CONFLICT")
+        process_model_conflict = any(
+            "unresolved_process_variant_requires_process_model"
+            in candidate_hard_rejection_reasons(candidate)
+            for candidate in state.ranked_candidates
+        )
         if UNIT_CONVERSION_EVIDENCE_REQUIRED in reason_codes:
             state.required_fields = tuple(dict.fromkeys((
                 *state.required_fields,
@@ -1616,6 +1646,12 @@ class TopKNode(Node[GraphState]):
             elif reviewable_top:
                 follow_up = FollowUp.DATA_GOVERNANCE
                 status = ResolutionStatus.REFERENCE_REVIEW_REQUIRED
+            elif process_model_conflict:
+                follow_up = FollowUp.PROCESS_MODEL
+                status = ResolutionStatus.PROCESS_MODEL_REQUIRED
+            elif "GRADE_SPECIFICATION_CONFLICT" in reason_codes:
+                follow_up = FollowUp.DATA_GOVERNANCE
+                status = ResolutionStatus.UNRESOLVED
             elif any(
                 candidate_hard_rejection_reasons(candidate)
                 for candidate in state.ranked_candidates

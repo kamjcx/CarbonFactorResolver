@@ -287,7 +287,8 @@ class HttpCatalogFactorRepository:
                 reasons: list[str] = []
                 dropped_fields: list[str] = []
                 try:
-                    value = float(item.get("primary_value") or "")
+                    raw_value = item.get("primary_value")
+                    value = float("" if raw_value is None else raw_value)
                     if not (value >= 0 and value < float("inf")):
                         reasons.append("primary_value_missing_or_invalid")
                 except (TypeError, ValueError):
@@ -374,7 +375,8 @@ class HttpCatalogFactorRepository:
         dataset_policies: Sequence[CatalogDatasetPolicy] = (),
     ) -> SourceRecord | None:
         try:
-            value = float(item.get("primary_value") or "")
+            raw_value = item.get("primary_value")
+            value = float("" if raw_value is None else raw_value)
         except (TypeError, ValueError):
             return None
         unit = str(item.get("primary_unit") or "").strip()
