@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
+import logging
 import os
 import stat
 import tempfile
@@ -14,6 +16,21 @@ from typing import Any, Awaitable, Callable, Mapping, Sequence
 from uuid import uuid4
 
 from .engine import A1FactorResolutionEngine
+from .models import ResolutionRequest, resolution_request_fingerprint
+from .operability import (
+    API_CONTRACT_VERSION,
+    API_VERSION_HEADER,
+    CORRELATION_ID_HEADER,
+    INTERNAL_SERVER_ERROR,
+    REQUEST_VALIDATION_FAILED,
+    RESOURCE_NOT_FOUND,
+    SERVICE_NOT_READY,
+    UNSUPPORTED_MEDIA_TYPE,
+    error_detail,
+)
+from .operability import (
+    request_id as safe_request_id,
+)
 from .serialization import serialize_benchmark, serialize_recommendation, serialize_trace, to_jsonable
 
 INVALID_RESOLUTION_REQUEST = "INVALID_RESOLUTION_REQUEST"
@@ -23,9 +40,21 @@ BENCHMARK_COMPARISON_FAILED = "BENCHMARK_COMPARISON_FAILED"
 ADMIN_AUTHORIZATION_REQUIRED = "ADMIN_AUTHORIZATION_REQUIRED"
 BENCHMARK_DATASET_REJECTED = "BENCHMARK_DATASET_REJECTED"
 RESOLUTION_SCOPE_CONFLICT = "RESOLUTION_SCOPE_CONFLICT"
+RESOLUTION_PAYLOAD_CONFLICT = "RESOLUTION_PAYLOAD_CONFLICT"
 MAX_BENCHMARK_BYTES = 2_000_000
 MAX_BENCHMARK_RUNS = 64
 MAX_BENCHMARK_CACHE_BYTES = 8_000_000
+LOGGER = logging.getLogger("a1_factor_engine.api")
+
+
+def _documented_error(description: str, reason: str, message: str) -> dict[str, Any]:
+    return {
+        "description": description,
+        "content": {"application/json": {"example": {
+            "detail": error_detail(reason, message),
+            "request_id": "018f-example-correlation-id",
+        }}},
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,13 +127,131 @@ def _public_health(payload: Mapping[str, Any]) -> dict[str, str]:
     return {"status": status if status in {"ok", "degraded", "not_configured"} else "degraded"}
 
 
-def _default_engine() -> A1FactorResolutionEngine:
-    from .external_connectors import FixtureExternalConnector, StructuredEPDEvidenceExtractor
+def _unconfigured_engine() -> A1FactorResolutionEngine:
+    """Return an empty production engine; demo fixtures require explicit opt-in."""
 
-    return A1FactorResolutionEngine(
-        external_connectors=(FixtureExternalConnector(),),
-        external_extractor=StructuredEPDEvidenceExtractor(),
-    )
+    return A1FactorResolutionEngine()
+
+
+def _engine_is_configured(engine: Any, *, explicitly_supplied: bool) -> bool:
+    if not explicitly_supplied:
+        return False
+    if not isinstance(engine, A1FactorResolutionEngine):
+        return True
+    from .adapters import NullFactorRepository
+
+    graph = engine.graph
+    return not isinstance(graph.local_retrieval, NullFactorRepository) or bool(graph.external_connectors)
+
+
+def _install_http_contract(app: Any) -> None:
+    from fastapi import Request
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    globals()["Request"] = Request
+
+    def envelope(request: Request, status_code: int, reason: str, message: str) -> JSONResponse:
+        correlation_id = getattr(request.state, "correlation_id", safe_request_id())
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": error_detail(reason, message), "request_id": correlation_id},
+        )
+
+    @app.middleware("http")
+    async def correlation_contract(request: Request, call_next: Callable[..., Any]):
+        supplied = request.headers.get("x-request-id") or request.headers.get(CORRELATION_ID_HEADER)
+        request.state.correlation_id = safe_request_id(supplied)
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+        if (
+            request.method == "POST"
+            and request.url.path in {"/api/v1/resolve", "/api/v1/debug/resolve"}
+            and media_type != "application/json"
+            and not media_type.endswith("+json")
+        ):
+            response = envelope(
+                request, 415, UNSUPPORTED_MEDIA_TYPE, "application/json is required"
+            )
+        else:
+            response = await call_next(request)
+        response.headers[API_VERSION_HEADER] = API_CONTRACT_VERSION
+        response.headers[CORRELATION_ID_HEADER] = request.state.correlation_id
+        LOGGER.info(
+            "http request completed",
+            extra={"correlation_id": request.state.correlation_id, "status_code": response.status_code},
+        )
+        return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, _exc: RequestValidationError):
+        return envelope(request, 422, REQUEST_VALIDATION_FAILED, "request validation failed")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException):
+        if isinstance(exc.detail, Mapping) and exc.detail.get("reason_code"):
+            response = JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": dict(exc.detail), "request_id": request.state.correlation_id},
+            )
+            return response
+        reason = RESOURCE_NOT_FOUND if exc.status_code == 404 else REQUEST_VALIDATION_FAILED
+        message = "resource not found" if exc.status_code == 404 else "request could not be completed"
+        return envelope(request, exc.status_code, reason, message)
+
+    @app.exception_handler(Exception)
+    async def internal_error(request: Request, _exc: Exception):
+        LOGGER.error(
+            "unhandled API failure",
+            extra={"correlation_id": request.state.correlation_id},
+        )
+        return envelope(request, 500, INTERNAL_SERVER_ERROR, "internal server error")
+
+
+async def _readiness(
+    *,
+    engine_configured: bool,
+    required: Mapping[str, Any],
+    optional: Mapping[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    async def available(probe: Any) -> bool:
+        try:
+            value = probe() if callable(probe) else probe
+            value = await _maybe_await(value)
+            if isinstance(value, Mapping):
+                has_status = "status" in value
+                has_available = "available" in value
+                if not has_status and not has_available:
+                    return False
+                status_ok = (
+                    isinstance(value.get("status"), str)
+                    and value["status"].casefold() in {"ok", "ready", "available"}
+                ) if has_status else True
+                available_ok = value.get("available") is True if has_available else True
+                return status_ok and available_ok
+            return bool(value)
+        except Exception:
+            return False
+
+    required_results = {"engine": engine_configured}
+    required_results.update({name: await available(probe) for name, probe in required.items()})
+    optional_results = {name: await available(probe) for name, probe in optional.items()}
+    failed_required = sum(not item for item in required_results.values())
+    failed_optional = sum(not item for item in optional_results.values())
+    if failed_required:
+        return 503, {
+            "status": "not_ready",
+            "detail": error_detail(SERVICE_NOT_READY, "required dependency is unavailable"),
+            "required_total": len(required_results),
+            "required_unavailable": failed_required,
+            "optional_unavailable": failed_optional,
+        }
+    return 200, {
+        "status": "degraded" if failed_optional else "ready",
+        "required_total": len(required_results),
+        "required_unavailable": 0,
+        "optional_unavailable": failed_optional,
+    }
 
 
 def _connector_health_for(engine: A1FactorResolutionEngine, explicit: Any) -> Any:
@@ -121,8 +268,14 @@ def _register_public_routes(
     *,
     resolution_authorizer: Callable[[Any, str], Awaitable[AuthorizationContext]] | None = None,
     resolution_owners: dict[str, tuple[str, str]] | None = None,
+    resolution_fingerprints: dict[tuple[str, str, str], str] | None = None,
+    resolution_locks: dict[tuple[str, str, str], asyncio.Lock] | None = None,
+    engine_configured: bool = True,
+    required_readiness: Mapping[str, Any] | None = None,
+    optional_readiness: Mapping[str, Any] | None = None,
 ) -> None:
     from fastapi import Body, HTTPException, Request
+    from fastapi.responses import JSONResponse
 
     globals()["Request"] = Request
 
@@ -130,55 +283,147 @@ def _register_public_routes(
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get(
+        "/readyz",
+        responses={503: _documented_error(
+            "Required dependency unavailable", SERVICE_NOT_READY, "required dependency is unavailable"
+        )},
+    )
+    async def readyz(request: Request):
+        status_code, payload = await _readiness(
+            engine_configured=engine_configured,
+            required=required_readiness or {},
+            optional=optional_readiness or {},
+        )
+        if status_code != 200:
+            payload["request_id"] = request.state.correlation_id
+        return JSONResponse(status_code=status_code, content=payload)
+
     @app.post(
         "/api/v1/resolve",
-        responses={400: {"description": "Invalid structured resolution request", "content": {
-            "application/json": {"example": {"detail": {
-                "reason_code": INVALID_RESOLUTION_REQUEST,
-                "message": "resolution request is invalid",
-            }}}
-        }}},
+        openapi_extra={"x-cfr-reason-codes": [
+            INVALID_RESOLUTION_REQUEST,
+            RESOLUTION_SCOPE_CONFLICT,
+            RESOLUTION_PAYLOAD_CONFLICT,
+            UNSUPPORTED_MEDIA_TYPE,
+            REQUEST_VALIDATION_FAILED,
+            INTERNAL_SERVER_ERROR,
+        ]},
+        responses={
+            400: _documented_error(
+                "Invalid structured resolution request",
+                INVALID_RESOLUTION_REQUEST,
+                "resolution request is invalid",
+            ),
+            409: _documented_error(
+                "Request ID scope conflict",
+                RESOLUTION_SCOPE_CONFLICT,
+                "resolution request id is already scoped",
+            ),
+            415: _documented_error(
+                "JSON media type required", UNSUPPORTED_MEDIA_TYPE, "application/json is required"
+            ),
+            422: _documented_error(
+                "JSON request validation failed",
+                REQUEST_VALIDATION_FAILED,
+                "request validation failed",
+            ),
+            500: _documented_error(
+                "Stable internal failure", INTERNAL_SERVER_ERROR, "internal server error"
+            ),
+        },
     )
     async def resolve(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+        if content_type != "application/json" and not content_type.endswith("+json"):
+            raise HTTPException(
+                status_code=415,
+                detail=error_detail(UNSUPPORTED_MEDIA_TYPE, "application/json is required"),
+            )
+        payload = dict(payload)
+        payload["request_id"] = safe_request_id(
+            payload.get("request_id") or request.headers.get("x-request-id")
+            or request.headers.get(CORRELATION_ID_HEADER)
+        )
+        request.state.correlation_id = payload["request_id"]
         context = (
             await resolution_authorizer(request, "resolve:execute")
             if resolution_authorizer is not None
             else None
         )
-        reserved_id = ""
-        reserved_new = False
-        if context is not None and resolution_owners is not None:
-            requested_id = payload.get("request_id")
-            if isinstance(requested_id, str) and requested_id.strip():
-                reserved_id = requested_id.strip()
-                scope = (context.tenant_id, context.project_id)
-                owner = resolution_owners.get(reserved_id)
+        try:
+            parsed_request = ResolutionRequest.from_mapping(payload)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail={
+                "reason_code": INVALID_RESOLUTION_REQUEST,
+                "message": "resolution request is invalid",
+            }) from exc
+        fingerprint = resolution_request_fingerprint(parsed_request)
+        scope = (
+            (context.tenant_id, context.project_id)
+            if context is not None else ("__public__", "__public__")
+        )
+        key = (*scope, parsed_request.request_id)
+        fingerprints = resolution_fingerprints if resolution_fingerprints is not None else {}
+        locks = resolution_locks if resolution_locks is not None else {}
+        lock = locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            reserved_new = False
+            if context is not None and resolution_owners is not None:
+                owner = resolution_owners.get(parsed_request.request_id)
                 if owner is not None and owner != scope:
                     raise HTTPException(status_code=409, detail={
                         "reason_code": RESOLUTION_SCOPE_CONFLICT,
                         "message": "resolution request id is already scoped",
                     })
                 reserved_new = owner is None
-                resolution_owners[reserved_id] = scope
-        try:
-            result = await resolver.resolve(payload)
-        except (TypeError, ValueError) as exc:
-            if reserved_new and resolution_owners is not None:
-                resolution_owners.pop(reserved_id, None)
-            raise HTTPException(status_code=400, detail={
-                "reason_code": INVALID_RESOLUTION_REQUEST,
-                "message": "resolution request is invalid",
-            }) from exc
-        except Exception:
-            if reserved_new and resolution_owners is not None:
-                resolution_owners.pop(reserved_id, None)
-            raise
-        serialized = serialize_recommendation(result)
-        if context is not None and resolution_owners is not None:
-            request_id = str(serialized.get("request_id", ""))
-            if request_id:
-                resolution_owners[request_id] = (context.tenant_id, context.project_id)
-        return serialized
+                resolution_owners[parsed_request.request_id] = scope
+            known_fingerprint = fingerprints.get(key)
+            if known_fingerprint is not None and known_fingerprint != fingerprint:
+                if reserved_new and resolution_owners is not None:
+                    resolution_owners.pop(parsed_request.request_id, None)
+                raise HTTPException(status_code=409, detail={
+                    "reason_code": RESOLUTION_PAYLOAD_CONFLICT,
+                    "message": "resolution request id is bound to different input",
+                })
+            state_reader = getattr(resolver, "state", None)
+            existing = (
+                await _maybe_await(state_reader(parsed_request.request_id))
+                if callable(state_reader) else None
+            )
+            if existing is not None:
+                if known_fingerprint is None:
+                    if reserved_new and resolution_owners is not None:
+                        resolution_owners.pop(parsed_request.request_id, None)
+                    raise HTTPException(status_code=409, detail={
+                        "reason_code": RESOLUTION_PAYLOAD_CONFLICT,
+                        "message": "stored resolution lacks an idempotency binding",
+                    })
+                serialized_existing = serialize_recommendation(existing)
+                serialized_existing["request_id"] = parsed_request.request_id
+                return serialized_existing
+            fingerprints[key] = fingerprint
+            try:
+                result = await resolver.resolve(payload)
+            except (TypeError, ValueError) as exc:
+                fingerprints.pop(key, None)
+                if reserved_new and resolution_owners is not None:
+                    resolution_owners.pop(parsed_request.request_id, None)
+                raise HTTPException(status_code=400, detail={
+                    "reason_code": INVALID_RESOLUTION_REQUEST,
+                    "message": "resolution request is invalid",
+                }) from exc
+            except Exception:
+                fingerprints.pop(key, None)
+                if reserved_new and resolution_owners is not None:
+                    resolution_owners.pop(parsed_request.request_id, None)
+                raise
+            serialized = serialize_recommendation(result)
+            serialized["request_id"] = safe_request_id(
+                serialized.get("request_id") or parsed_request.request_id
+            )
+            request.state.correlation_id = serialized["request_id"]
+            return serialized
 
     @app.get("/api/v1/resolutions/{request_id}")
     async def get_resolution(request: Request, request_id: str) -> dict[str, Any]:
@@ -203,6 +448,8 @@ def create_app(
     *,
     engine: A1FactorResolutionEngine | None = None,
     connector_health: Any = None,
+    required_readiness: Mapping[str, Any] | None = None,
+    optional_readiness: Mapping[str, Any] | None = None,
     **legacy_admin_options: Any,
 ):
     """Build the production surface without benchmark, debug or full-trace routes."""
@@ -215,11 +462,28 @@ def create_app(
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("FastAPI delivery requires fastapi and uvicorn") from exc
-    resolver = engine or _default_engine()
+    resolver = engine or _unconfigured_engine()
+    engine_configured = _engine_is_configured(resolver, explicitly_supplied=engine is not None)
     health = _connector_health_for(resolver, connector_health)
-    app = FastAPI(title="Carbon Factor Resolver", version="1")
+    app = FastAPI(title="Carbon Factor Resolver", version=API_CONTRACT_VERSION)
     app.state.engine = resolver
-    _register_public_routes(app, resolver, health)
+    resolution_fingerprints: dict[tuple[str, str, str], str] = {}
+    resolution_locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+    app.state.resolution_fingerprints = resolution_fingerprints
+    _install_http_contract(app)
+    optional = dict(optional_readiness or {})
+    if connector_health is not None:
+        optional.setdefault("connectors", lambda: _probe_connectors(health))
+    _register_public_routes(
+        app,
+        resolver,
+        health,
+        resolution_fingerprints=resolution_fingerprints,
+        resolution_locks=resolution_locks,
+        engine_configured=engine_configured,
+        required_readiness=required_readiness,
+        optional_readiness=optional,
+    )
     assets = Path(__file__).with_name("web_assets")
 
     @app.get("/", include_in_schema=False)
@@ -250,15 +514,20 @@ def create_admin_app(
     # Route annotations are postponed; expose the lazily imported type for
     # FastAPI/Pydantic resolution without making FastAPI a core dependency.
     globals()["Request"] = Request
-    resolver = engine or _default_engine()
+    resolver = engine or _unconfigured_engine()
+    engine_configured = _engine_is_configured(resolver, explicitly_supplied=engine is not None)
     health = _connector_health_for(resolver, connector_health)
     roots = tuple(Path(item).resolve() for item in benchmark_roots)
     runs: OrderedDict[tuple[str, str, str], tuple[Any, int]] = OrderedDict()
     resolution_owners: dict[str, tuple[str, str]] = {}
-    app = FastAPI(title="Carbon Factor Resolver Admin", version="1")
+    resolution_fingerprints: dict[tuple[str, str, str], str] = {}
+    resolution_locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+    app = FastAPI(title="Carbon Factor Resolver Admin", version=API_CONTRACT_VERSION)
     app.state.engine = resolver
     app.state.benchmark_runner = benchmark_runner
     app.state.benchmark_runs = runs
+    app.state.resolution_fingerprints = resolution_fingerprints
+    _install_http_contract(app)
 
     async def require(request: Request, permission: str) -> AuthorizationContext:
         try:
@@ -288,6 +557,10 @@ def create_admin_app(
         health,
         resolution_authorizer=require,
         resolution_owners=resolution_owners,
+        resolution_fingerprints=resolution_fingerprints,
+        resolution_locks=resolution_locks,
+        engine_configured=engine_configured,
+        optional_readiness={"connectors": lambda: _probe_connectors(health)} if health else {},
     )
 
     def require_resolution_owner(context: AuthorizationContext, request_id: str) -> None:
@@ -297,6 +570,12 @@ def create_admin_app(
     @app.post("/api/v1/debug/resolve")
     async def resolve_debug(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
         context = await require(request, "resolve:debug")
+        payload = dict(payload)
+        payload["request_id"] = safe_request_id(
+            payload.get("request_id") or request.headers.get("x-request-id")
+            or request.headers.get(CORRELATION_ID_HEADER)
+        )
+        request.state.correlation_id = payload["request_id"]
         try:
             result = serialize_recommendation(await resolver.resolve_debug(payload))
         except (TypeError, ValueError) as exc:
@@ -304,7 +583,9 @@ def create_admin_app(
                 "reason_code": INVALID_RESOLUTION_REQUEST,
                 "message": "debug resolution request is invalid",
             }) from exc
-        request_id = str(result.get("request_id", ""))
+        request_id = safe_request_id(result.get("request_id") or payload["request_id"])
+        result["request_id"] = request_id
+        request.state.correlation_id = request_id
         if request_id:
             resolution_owners[request_id] = (context.tenant_id, context.project_id)
         return result
@@ -455,6 +736,7 @@ __all__ = [
     "BENCHMARK_RUN_FAILED",
     "HEALTH_PROBE_FAILED",
     "INVALID_RESOLUTION_REQUEST",
+    "RESOLUTION_PAYLOAD_CONFLICT",
     "RESOLUTION_SCOPE_CONFLICT",
     "create_admin_app",
     "create_app",

@@ -142,7 +142,10 @@ def test_resolve_api_is_json_only_and_openapi_has_no_upload_surface() -> None:
         )
 
     assert accepted.status_code == 200
-    assert rejected.status_code == 422
+    assert rejected.status_code == 415
     assert rejected_array.status_code == 422
-    assert rejected_text.status_code == 422
-    assert resolver.requests == [{"material_name": "steel", "quantity": 1}]
+    assert rejected_text.status_code == 415
+    assert len(resolver.requests) == 1
+    assert resolver.requests[0]["material_name"] == "steel"
+    assert resolver.requests[0]["quantity"] == 1
+    assert resolver.requests[0]["request_id"]

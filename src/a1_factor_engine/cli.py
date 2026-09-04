@@ -8,10 +8,24 @@ import inspect
 import json
 import sys
 from pathlib import Path
-from typing import Any, Sequence, TextIO
+from typing import Any, Mapping, NoReturn, Sequence, TextIO
 
 from .engine import A1FactorResolutionEngine
+from .operability import CliExitCode, cli_exit_code, error_detail
+from .operability import request_id as safe_request_id
 from .serialization import to_jsonable
+
+CLI_INVALID_REQUEST = "CLI_INVALID_REQUEST"
+CLI_INTERNAL_FAILURE = "CLI_INTERNAL_FAILURE"
+
+
+class CliUsageError(ValueError):
+    pass
+
+
+class ContractArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise CliUsageError(message)
 
 
 def _demo_engine() -> A1FactorResolutionEngine:
@@ -26,7 +40,7 @@ def _demo_engine() -> A1FactorResolutionEngine:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cfr", description="Carbon factor resolution tools")
+    parser = ContractArgumentParser(prog="cfr", description="Carbon factor resolution tools")
     commands = parser.add_subparsers(dest="command", required=True)
 
     resolve = commands.add_parser("resolve", help="resolve one material activity")
@@ -46,7 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--boundary", default="cradle-to-gate")
     resolve.add_argument("--target-factor-unit", default="kgCO2e/kg")
     resolve.add_argument("--top-k", type=int, default=3)
-    resolve.add_argument("--min-score", type=float, default=0.65)
+    resolve.add_argument(
+        "--min-score", type=float, default=None,
+        help="deprecated debug control; formal resolve rejects this option",
+    )
+    resolve.add_argument("--input-json", metavar="PATH_OR_DASH", help="structured JSON request; '-' reads stdin")
+    resolve.add_argument("--demo", action="store_true", help="explicitly use public synthetic demo data")
 
     benchmark = commands.add_parser("benchmark", help="run or compare FactorBench results")
     benchmark_commands = benchmark.add_subparsers(dest="benchmark_command", required=True)
@@ -60,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve", help="serve the API and dashboard")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--demo", action="store_true", help="explicitly serve public synthetic demo data")
     return parser
 
 
@@ -107,63 +127,100 @@ def main(
     engine: A1FactorResolutionEngine | None = None,
     benchmark_runner: Any = None,
     stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
+    stdin: TextIO | None = None,
 ) -> int:
-    args = build_parser().parse_args(argv)
     output = stdout or sys.stdout
+    diagnostics = stderr or sys.stderr
+    input_stream = stdin or sys.stdin
 
-    if args.command == "resolve":
-        material = args.material_opt or args.material_pos
-        quantity = args.quantity_opt if args.quantity_opt is not None else args.quantity_pos
-        unit = args.unit_opt or args.unit_pos
-        process = args.process_opt or args.process_pos
-        if material is None or quantity is None or unit is None:
-            build_parser().error("resolve requires material, quantity and unit")
-        payload = {
-            "material_name": material,
-            "quantity": quantity,
-            "quantity_unit": unit,
-            "production_process": process,
-            "geography": args.geography,
-            "year": args.year,
-            "product_form": args.product_form,
-            "composition": args.composition,
-            "boundary": args.boundary,
-            "target_factor_unit": args.target_factor_unit,
-            "top_k": args.top_k,
-            "min_score": args.min_score,
-        }
-        if args.request_id:
-            payload["request_id"] = args.request_id
-        resolver = engine or _demo_engine()
-        debug_resolve = getattr(resolver, "resolve_debug", resolver.resolve)
-        result = asyncio.run(debug_resolve(payload))
-    elif args.command == "benchmark" and args.benchmark_command == "run":
-        result = asyncio.run(_benchmark_run(args.path, args.baseline, benchmark_runner))
-    elif args.command == "benchmark" and args.benchmark_command == "compare":
-        result = asyncio.run(_benchmark_compare(args.base, args.candidate, benchmark_runner))
-    elif args.command == "serve":
-        try:
-            import uvicorn
-        except ImportError as exc:
-            raise RuntimeError("serve requires uvicorn and fastapi") from exc
-        from .api import create_app
+    def emit(value: Mapping[str, Any]) -> None:
+        json.dump(to_jsonable(value), output, ensure_ascii=False, separators=(",", ":"))
+        output.write("\n")
 
-        uvicorn.run(
-            create_app(engine=engine or _demo_engine()),
-            host=args.host,
-            port=args.port,
-        )
-        return 0
-    else:  # pragma: no cover - argparse enforces this
-        raise AssertionError("unreachable command")
+    try:
+        args = build_parser().parse_args(argv)
+    except CliUsageError:
+        emit({"detail": error_detail(CLI_INVALID_REQUEST, "invalid command arguments")})
+        diagnostics.write("cfr: invalid command arguments\n")
+        return int(CliExitCode.INVALID_REQUEST)
 
-    json.dump(to_jsonable(result), output, ensure_ascii=False, indent=2)
-    output.write("\n")
-    return 0
+    try:
+        if args.command == "resolve":
+            if args.min_score is not None:
+                raise CliUsageError("--min-score is not available on formal resolve")
+            if args.input_json:
+                raw = input_stream.read() if args.input_json == "-" else Path(args.input_json).read_text(
+                    encoding="utf-8"
+                )
+                payload = json.loads(raw)
+                if not isinstance(payload, dict):
+                    raise CliUsageError("resolution input must be a JSON object")
+            else:
+                material = args.material_opt or args.material_pos
+                quantity = args.quantity_opt if args.quantity_opt is not None else args.quantity_pos
+                unit = args.unit_opt or args.unit_pos
+                process = args.process_opt or args.process_pos
+                if material is None or quantity is None or unit is None:
+                    raise CliUsageError("resolve requires material, quantity and unit")
+                payload = {
+                    "material_name": material,
+                    "quantity": quantity,
+                    "quantity_unit": unit,
+                    "production_process": process,
+                    "geography": args.geography,
+                    "year": args.year,
+                    "product_form": args.product_form,
+                    "composition": args.composition,
+                    "boundary": args.boundary,
+                    "target_factor_unit": args.target_factor_unit,
+                    "top_k": args.top_k,
+                }
+                if args.request_id:
+                    payload["request_id"] = args.request_id
+            if engine is None and not args.demo:
+                raise CliUsageError("resolve requires an injected engine or explicit --demo")
+            payload["request_id"] = safe_request_id(payload.get("request_id"))
+            resolver = engine or _demo_engine()
+            result = asyncio.run(resolver.resolve(payload))
+            serialized = to_jsonable(result)
+            if not isinstance(serialized, dict):
+                raise TypeError("resolver result must be an object")
+            emit(serialized)
+            return int(cli_exit_code(serialized))
+        if args.command == "benchmark" and args.benchmark_command == "run":
+            result = asyncio.run(_benchmark_run(args.path, args.baseline, benchmark_runner))
+        elif args.command == "benchmark" and args.benchmark_command == "compare":
+            result = asyncio.run(_benchmark_compare(args.base, args.candidate, benchmark_runner))
+        elif args.command == "serve":
+            try:
+                import uvicorn
+            except ImportError as exc:
+                raise RuntimeError("serve dependencies are unavailable") from exc
+            from .api import create_app
+
+            selected_engine = engine or (_demo_engine() if args.demo else None)
+            uvicorn.run(create_app(engine=selected_engine), host=args.host, port=args.port)
+            return int(CliExitCode.SUCCESS)
+        else:  # pragma: no cover - argparse enforces this
+            raise AssertionError("unreachable command")
+        serialized = to_jsonable(result)
+        if not isinstance(serialized, dict):
+            raise TypeError("command result must be an object")
+        emit(serialized)
+        return int(CliExitCode.SUCCESS)
+    except (CliUsageError, json.JSONDecodeError, OSError, ValueError):
+        emit({"detail": error_detail(CLI_INVALID_REQUEST, "request could not be parsed or validated")})
+        diagnostics.write("cfr: invalid request\n")
+        return int(CliExitCode.INVALID_REQUEST)
+    except Exception:
+        emit({"detail": error_detail(CLI_INTERNAL_FAILURE, "internal command failure")})
+        diagnostics.write("cfr: internal failure\n")
+        return int(CliExitCode.INTERNAL_FAILURE)
 
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
 
 
-__all__ = ["build_parser", "main"]
+__all__ = ["CLI_INTERNAL_FAILURE", "CLI_INVALID_REQUEST", "build_parser", "main"]

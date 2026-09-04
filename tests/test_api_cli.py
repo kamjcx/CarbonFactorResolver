@@ -95,7 +95,7 @@ def test_cli_resolve_maps_material_quantity_unit_and_process():
     output = io.StringIO()
     engine = FakeEngine()
 
-    assert main(["resolve", "steel coil", "2", "t", "EAF"], engine=engine, stdout=output) == 0
+    assert main(["resolve", "steel coil", "2", "t", "EAF"], engine=engine, stdout=output) == 11
 
     assert engine.requests[0]["material_name"] == "steel coil"
     assert engine.requests[0]["quantity"] == 2

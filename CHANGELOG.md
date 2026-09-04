@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Freeze the `/api/v1` operability contract with stable JSON error envelopes, version and
+  correlation headers, redacted unhandled-500 behavior, and JSON-only media enforcement.
+- Separate liveness (`/healthz`) from aggregate dependency readiness (`/readyz`); the production
+  factory no longer loads synthetic fixtures or claims readiness without explicit configuration.
+- Make mapping-based readiness probes fail closed unless they report an explicit, consistent
+  healthy state.
+- Make CLI resolution scriptable with JSON stdin/file input, machine-only stdout, sanitized stderr,
+  explicit demo selection, a formal-only Resolver path, and stable domain/usage/internal exit codes.
+- Bind request-ID replay to canonical request fingerprints with per-key concurrency serialization;
+  mismatched reuse returns a stable 409 instead of replaying an unrelated result.
+
 - Added the frozen `cfr.catalog/v2` canonical content manifest and strict
   declared-versus-observed record digest validation.
 - Bound dataset policy, source records, candidates, recommendations, approvals,

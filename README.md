@@ -11,7 +11,8 @@ candidate, a precise `MORE_INPUT` question, or a safe refusal. Numeric values al
 from traceable source records; deterministic gates enforce unit, lifecycle-boundary,
 subject, and provenance compatibility before human review and immutable locking.
 
-The default HTTP application is a production-safe data plane: benchmark execution, debug
+The default HTTP application is a production-safe, fail-closed data plane: it does not load demo
+fixtures or claim readiness without an explicitly injected engine/catalog. Benchmark execution, debug
 resolution, full traces, and full diagnostics are absent. Deployments that need those operations
 must bind the explicit admin/dev application to a separate protected port and inject their own
 actor/tenant/project authorization policy. Live structured-source adapters are HTTPS-only,
@@ -45,14 +46,16 @@ and [SVG](docs/assets/cfr-resolution-architecture.svg).
 
 ## Five-minute quickstart
 
-The default runtime uses small project-authored synthetic fixtures. It does not download or
-ship ecoinvent, customer records, or any commercial factor database.
+The Compose quickstart explicitly selects demo mode and uses small project-authored synthetic
+fixtures. The image's default production command does not load them. Neither mode downloads or ships
+ecoinvent, customer records, or any commercial factor database.
 
 ```bash
 git clone https://github.com/kamjcx/CarbonFactorResolver.git
 cd CarbonFactorResolver
 docker compose up --build -d
 curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/readyz
 ```
 
 Open `http://127.0.0.1:8000`, or submit a JSON request:
@@ -72,10 +75,16 @@ Python/CLI development setup:
 
 ```bash
 pip install -e ".[test,api]"
-cfr resolve --material "aluminium" --quantity 1 --unit t
+cfr resolve --demo --material "aluminium" --quantity 1 --unit t
 cfr benchmark run data/benchmarks/factorbench_v3.jsonl
-cfr serve --host 127.0.0.1 --port 8000
+cfr serve --demo --host 127.0.0.1 --port 8000
 ```
+
+`/healthz` is liveness only. `/readyz` returns `503 SERVICE_NOT_READY` when an explicitly
+configured engine or another required dependency is unavailable; optional external connectors
+degrade readiness without taking the service down. CLI exit codes are `0` (direct/reviewable
+result), `2` (invalid request), `10` (`MORE_INPUT`), `11` (unresolved), and `70` (internal failure).
+See the [versioned API and operability contract](docs/CFR_VERSIONED_API_OPERABILITY_V5.md).
 
 To connect your own licensed or internal structured catalogue, follow the
 [Bring Your Own Catalog tutorial](docs/BRING_YOUR_OWN_CATALOG.md). It includes a 20-record
@@ -158,6 +167,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
 | PR3 stacked candidate | 411 passed, 86.42% branch coverage | current Catalog-to-lock integrity regression gate |
 | PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
+| PR5 stacked candidate | 464 passed, 87.01% branch coverage | versioned API, fail-closed readiness, idempotency and scriptable CLI contract gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
