@@ -47,6 +47,12 @@ The delivery pipeline pins action revisions and container base images, consumes 
 dependency graph, scans source/dependencies/secrets/container content, generates a CycloneDX SBOM,
 and binds build artifacts with checksums and a release manifest. Archive and public-delivery checks
 reject common database, document, environment, credential, nested-archive, and customer-data paths.
+Path checks tokenize case, camel-case, underscore, and hyphen boundaries so compound names such as
+`customer-data` cannot bypass the rule; secret-key checks apply the same canonicalization to common
+access-key spellings. The runtime image removes `pip`, `setuptools`, and `wheel` after the locked
+application environment is copied, preventing build-only tooling from expanding the production
+attack surface. The Dockerfile frontend and Node 24-compatible GitHub Actions are commit/digest
+pinned.
 
 These controls improve reproducibility but do not make this research prototype a production
 service:

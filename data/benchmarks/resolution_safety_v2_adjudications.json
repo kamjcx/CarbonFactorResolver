@@ -5,7 +5,7 @@
   "supersedes": "autonomous_evaluation_v1_adjudications/1.0.0",
   "runtime_source_sha256": {
     "src/a1_factor_engine/qualification.py": "faa5e0109b031216592791b2797698e73a27d9c8f8fee6c178e6ab4a45c8e849",
-    "src/a1_factor_engine/nodes.py": "b67419cd6e3276b448d3862ebaa6973c6f4bb8957b2daf6e9b3f67a4ab246537",
+    "src/a1_factor_engine/nodes.py": "8538c19736a3a23991282af301a721e48a1416cb69c0ede00334f750f6329c72",
     "src/a1_factor_engine/engine.py": "c2efab3af67ec2c0de7a0f53d07acb5f42de5f6bef1c16d6ad1c977501d485d1",
     "src/a1_factor_engine/models.py": "a901fe54c7618103d1090197ef9f2180889010ed4eac5311b981912b7f830e0d",
     "src/a1_factor_engine/units.py": "86260127d33428ab957c48353ebffe95f26f16394395e730d64c7a4486b02903",

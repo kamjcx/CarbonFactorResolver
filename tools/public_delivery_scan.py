@@ -12,11 +12,20 @@ from typing import Any
 ALLOWED_SUFFIXES = {".json", ".jsonl"}
 MAX_PUBLIC_FILE_BYTES = 1_000_000
 RESTRICTED_MARKERS = {"confidential", "customer", "internal", "licensed", "private", "proprietary", "restricted"}
-SECRET_KEYS = {
-    "access_key", "access_token", "api_key", "client_secret", "credential", "credentials",
-    "password", "private_key", "secret", "token",
+SECRET_KEY_TOKENS = {
+    "accesskey", "accesstoken", "apikey", "awssecretaccesskey", "clientsecret",
+    "credential", "credentials", "password", "privatekey", "secret", "token",
 }
 WINDOWS_ABSOLUTE = re.compile(r"^[a-zA-Z]:[/\\]")
+
+
+def _words(value: str) -> set[str]:
+    separated = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", value)
+    return set(re.findall(r"[a-z0-9]+", separated.casefold()))
+
+
+def _key_token(value: str) -> str:
+    return "".join(re.findall(r"[a-z0-9]+", value.casefold()))
 
 
 def _pointer(parts: Iterable[str]) -> str:
@@ -63,8 +72,10 @@ def scan_public_data(root: Path) -> dict[str, Any]:
         for path in sorted(candidate for candidate in data_root.rglob("*") if candidate.is_file()):
             relative = path.relative_to(root).as_posix()
             scanned += 1
-            lowered_parts = {part.casefold() for part in path.relative_to(data_root).parts}
-            if lowered_parts.intersection(RESTRICTED_MARKERS):
+            path_words = set().union(*(
+                _words(part) for part in path.relative_to(data_root).parts
+            ))
+            if path_words.intersection(RESTRICTED_MARKERS):
                 violations.append({"path": relative, "location": "/", "reason": "RESTRICTED_PATH"})
             if path.suffix.casefold() not in ALLOWED_SUFFIXES:
                 violations.append({"path": relative, "location": "/", "reason": "NON_REVIEWABLE_FORMAT"})
@@ -80,9 +91,9 @@ def scan_public_data(root: Path) -> dict[str, Any]:
             for document_index, document in enumerate(documents):
                 prefix = (str(document_index),) if len(documents) > 1 else ()
                 for parts, key, value in _walk(document, prefix):
-                    normalized_key = (key or "").casefold().replace("-", "_")
+                    normalized_key = _key_token(key or "")
                     location = _pointer(parts)
-                    if normalized_key in SECRET_KEYS and value not in (None, "", "REDACTED"):
+                    if normalized_key in SECRET_KEY_TOKENS and value not in (None, "", "REDACTED"):
                         violations.append({"path": relative, "location": location, "reason": "SECRET_VALUE"})
                     if isinstance(value, str) and _is_absolute_locator(value):
                         violations.append({"path": relative, "location": location, "reason": "ABSOLUTE_LOCAL_PATH"})

@@ -308,7 +308,12 @@ class HttpCatalogFactorRepository:
             publisher_identity_verified=publisher_identity_verified,
         )
         policy_key = (
-            f"{applied_bundle.content_sha256}:{bundle_effective_on}"
+            stable_sha256({
+                "content_sha256": applied_bundle.content_sha256,
+                "effective_on": bundle_effective_on,
+                "signature_sha256": stable_sha256(applied_bundle.signature or ""),
+                "signature_status": bundle_signature_status,
+            })
             if applied_bundle is not None
             else "none"
         )

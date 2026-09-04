@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_dockerfile_is_digest_locked_frozen_and_minimal() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert dockerfile.startswith(
+        "# syntax=docker/dockerfile:1.7@sha256:"
+        "a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e"
+    )
     assert "python:3.11.16-slim-trixie@sha256:9534e5a8" in dockerfile
     assert "ghcr.io/astral-sh/uv:0.11.7@sha256:240fb85a" in dockerfile
     assert "uv sync --frozen --no-dev --extra api" in dockerfile
@@ -24,6 +28,8 @@ def test_dockerfile_is_digest_locked_frozen_and_minimal() -> None:
     assert "COPY data/fixtures/external/ ./data/fixtures/external/" in dockerfile
     assert "COPY tests" not in dockerfile
     assert "COPY evidence" not in dockerfile
+    assert "pip uninstall --yes pip setuptools wheel" in dockerfile
+    assert "find_spec('jaraco.context') is None" in dockerfile
     assert "USER cfr" in dockerfile
 
 
@@ -32,6 +38,10 @@ def test_ci_uses_immutable_actions_and_runs_delivery_gates_before_final_gate() -
     uses = re.findall(r"^\s*-?\s*uses:\s*([^\s#]+)", workflow, flags=re.MULTILINE)
     assert uses
     assert all(re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", value) for value in uses)
+    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in workflow
+    assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in workflow
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
+    assert "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d" in workflow
     assert "ubuntu-latest" not in workflow
     assert "runs-on: ubuntu-24.04" in workflow
     for required in (
@@ -81,6 +91,23 @@ def test_public_data_scanner_redacts_restricted_secret_and_local_path_values(tmp
     assert local_path not in encoded
 
 
+def test_public_data_scanner_rejects_compound_paths_and_camelcase_secrets(tmp_path: Path) -> None:
+    data = tmp_path / "data" / "customer-data"
+    data.mkdir(parents=True)
+    (data / "payload.json").write_text(
+        json.dumps({"accessKey": "redacted-by-report", "aws_secret_access_key": "also-redacted"}),
+        encoding="utf-8",
+    )
+
+    report = scan_public_data(tmp_path)
+
+    assert report["passed"] is False
+    assert {item["reason"] for item in report["violations"]} >= {
+        "RESTRICTED_PATH",
+        "SECRET_VALUE",
+    }
+
+
 def test_archive_scanner_rejects_case_variants_secrets_and_unsafe_paths(tmp_path: Path) -> None:
     archive_path = tmp_path / "unsafe.whl"
     members = (
@@ -105,6 +132,18 @@ def test_archive_scanner_reports_secret_member_without_echoing_value(tmp_path: P
     violations = verify_archive(archive_path)
     assert violations == ("package/config.json",)
     assert secret not in json.dumps(violations)
+
+
+def test_archive_scanner_rejects_compound_customer_path_and_access_key(tmp_path: Path) -> None:
+    archive_path = tmp_path / "compound.whl"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("package/customer-data/catalog.json", "placeholder")
+        archive.writestr("package/config.json", json.dumps({"accessKey": "hidden-value"}))
+
+    assert verify_archive(archive_path) == (
+        "package/customer-data/catalog.json",
+        "package/config.json",
+    )
 
 
 def test_release_manifest_is_source_timestamped_and_validates_image_digest(monkeypatch) -> None:

@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
 FROM ghcr.io/astral-sh/uv:0.11.7@sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a AS uv-bin
 
@@ -32,7 +32,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
-RUN adduser --disabled-password --gecos "" --uid 10001 cfr
+RUN python -m pip uninstall --yes pip setuptools wheel \
+    && python -c "import importlib.util; assert importlib.util.find_spec('wheel') is None; assert importlib.util.find_spec('jaraco.context') is None" \
+    && adduser --disabled-password --gecos "" --uid 10001 cfr
 
 USER cfr
 EXPOSE 8000

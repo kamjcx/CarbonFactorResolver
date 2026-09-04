@@ -7,13 +7,32 @@ from pathlib import Path
 import pytest
 
 from a1_factor_engine import CatalogDatasetPolicy, CatalogPolicyBundle
-from a1_factor_engine.adapters import HttpCatalogFactorRepository, NullFactorRepository
+from a1_factor_engine.adapters import (
+    DeterministicMaterialUnderstanding,
+    HttpCatalogFactorRepository,
+    NullFactorRepository,
+    NullProxyRepository,
+)
 from a1_factor_engine.catalog_policy import POLICY_BUNDLE_SCHEMA_VERSION
 from a1_factor_engine.cli import main
 from a1_factor_engine.graph import GraphInvariantError, GraphState
 from a1_factor_engine.integrity import CatalogIntegrityError, catalog_content_sha256
+from a1_factor_engine.material_registry import DEFAULT_MATERIAL_REGISTRY
 from a1_factor_engine.models import ResolutionRequest, RetrievalIntent
-from a1_factor_engine.nodes import LocalRetrievalNode, UnitScaleResolutionNode
+from a1_factor_engine.nodes import (
+    CandidatePoolNode,
+    GapAnalysisNode,
+    LocalEvaluateNode,
+    LocalRetrievalNode,
+    MaterialResolutionNode,
+    ProxyEvaluateNode,
+    ProxyResolutionNode,
+    RankNode,
+    ReEvaluateNode,
+    ResolutionPlannerNode,
+    TopKNode,
+    UnitScaleResolutionNode,
+)
 
 
 def _catalog() -> dict[str, object]:
@@ -193,9 +212,56 @@ async def test_policy_bundle_requires_explicit_replayable_effective_date() -> No
 
 
 @pytest.mark.asyncio
+async def test_policy_cache_does_not_reuse_stale_signature_audit_metadata() -> None:
+    catalog = _catalog()
+    records = catalog["records"]
+    assert isinstance(records, list)
+    digest = catalog_content_sha256(records)
+    policy = CatalogDatasetPolicy(
+        policy_id="deployment-policy:test-records/v1",
+        catalog_content_sha256=digest,
+    )
+    common = {
+        "policy_id": "deployment-bundle:test/v1",
+        "version": "1",
+        "approved_catalog_content_sha256": digest,
+        "effective_from": "2026-09-04",
+        "approved_by": "test-reviewer",
+        "policies": (policy,),
+    }
+    repository = HttpCatalogFactorRepository(
+        fetch_json=lambda _url: catalog,
+        policy_bundle=CatalogPolicyBundle(signature="verified-signature", **common),
+        policy_signature_verifier=lambda _payload, _signature: True,
+        policy_effective_on="2026-09-04",
+    )
+    first = await repository.search(RetrievalIntent("synthetic steel", None))
+    assert first.records[0].metadata["catalog_policy_bundle_signature_status"] == "verified"
+
+    repository.policy_bundle = CatalogPolicyBundle(signature=None, **common)
+    repository.policy_signature_verifier = None
+    second = await repository.search(RetrievalIntent("synthetic steel", None))
+
+    assert second.records[0].metadata["catalog_policy_bundle_signature_status"] == "unsigned"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "node",
-    [LocalRetrievalNode(NullFactorRepository()), UnitScaleResolutionNode()],
+    [
+        LocalRetrievalNode(NullFactorRepository()),
+        LocalEvaluateNode(DeterministicMaterialUnderstanding(), DEFAULT_MATERIAL_REGISTRY),
+        GapAnalysisNode(),
+        ResolutionPlannerNode(),
+        UnitScaleResolutionNode(),
+        MaterialResolutionNode(DeterministicMaterialUnderstanding()),
+        ProxyResolutionNode(NullProxyRepository()),
+        ProxyEvaluateNode(DeterministicMaterialUnderstanding(), DEFAULT_MATERIAL_REGISTRY),
+        ReEvaluateNode(0.0),
+        CandidatePoolNode(),
+        RankNode(),
+        TopKNode(),
+    ],
 )
 async def test_graph_nodes_fail_closed_without_normalized_predecessor(node: object) -> None:
     state = GraphState(ResolutionRequest(material_name="synthetic steel", quantity=1))

@@ -20,10 +20,15 @@ FORBIDDEN_PARTS = {
 }
 WINDOWS_ABSOLUTE = re.compile(r"^[a-zA-Z]:[/\\]")
 SECRET_ASSIGNMENT = re.compile(
-    rb'''(?ix)["']?(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|private[_-]?key)'''
+    rb'''(?ix)["']?(?:api[_-]?key|access[_-]?(?:key|token)|aws[_-]?secret[_-]?access[_-]?key|client[_-]?secret|password|private[_-]?key)'''
     rb'''["']?\s*[:=]\s*["'][^"']{4,}["']'''
 )
 MAX_INSPECTED_MEMBER_BYTES = 1_000_000
+
+
+def _path_words(value: str) -> set[str]:
+    separated = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", value)
+    return set(re.findall(r"[a-z0-9]+", separated.casefold()))
 
 
 def members(path: Path) -> tuple[str, ...]:
@@ -82,7 +87,7 @@ def verify_archive(path: Path) -> tuple[str, ...]:
     for name in members(path):
         normalized = name.replace("\\", "/")
         parsed = PurePosixPath(normalized)
-        parts = {part.casefold() for part in parsed.parts}
+        parts = set().union(*(_path_words(part) for part in parsed.parts))
         filename = parsed.name.casefold()
         suffix = parsed.suffix.casefold()
         unsafe_path = _unsafe_member_path(normalized)

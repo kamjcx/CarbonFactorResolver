@@ -16,6 +16,10 @@
 - Strengthen public-delivery and archive isolation checks. The inherited autonomous quality gate
   remains unchanged and is evaluated only after the diagnostic and supply-chain evidence is built.
 - Enable Ruff's unused-suppression gate and remove the obsolete whole-file S608 exemption.
+- Close the final delivery-audit gaps: every post-normalization graph node now rejects missing
+  predecessor state, policy-index caches bind signature audit state, compound restricted paths and
+  camel-case secret keys fail the public/archive scanners, and the runtime image removes packaging
+  tools affected by the pinned Trivy findings. Dockerfile frontend and Node 24 actions are pinned.
 
 - Freeze the `/api/v1` operability contract with stable JSON error envelopes, version and
   correlation headers, redacted unhandled-500 behavior, and JSON-only media enforcement.
