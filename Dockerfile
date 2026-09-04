@@ -33,7 +33,7 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 RUN /usr/local/bin/python -m pip uninstall --yes pip setuptools wheel \
-    && /usr/local/bin/python -c "import importlib.util; assert importlib.util.find_spec('wheel') is None; assert importlib.util.find_spec('jaraco.context') is None" \
+    && /usr/local/bin/python -c "import importlib.util; assert importlib.util.find_spec('wheel') is None; assert importlib.util.find_spec('jaraco') is None" \
     && adduser --disabled-password --gecos "" --uid 10001 cfr
 
 USER cfr
