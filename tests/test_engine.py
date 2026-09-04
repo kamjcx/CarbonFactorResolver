@@ -2944,6 +2944,7 @@ async def test_refractory_catalog_policy_inherits_only_reviewed_dataset_fields()
             fetch_json=lambda _: payload,
             policy_bundle=bundle,
             policy_signature_verifier=lambda _payload, _signature: True,
+            policy_effective_on="2026-09-04",
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",
@@ -3165,6 +3166,7 @@ async def test_explicit_dataset_approval_anchor_can_lift_draft_tier_cap():
             fetch_json=lambda _: payload,
             policy_bundle=approved_bundle,
             policy_signature_verifier=lambda _payload, _signature: True,
+            policy_effective_on="2026-09-04",
         )
     ).resolve(ResolutionRequest(
         material_name="烧结尖晶石",

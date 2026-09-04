@@ -874,7 +874,7 @@ class SqliteEnergyProcessParameterRepository:
 
     @staticmethod
     def _scope_suffix(common_scope: Mapping[str, str]) -> str:
-        return hashlib.sha1(  # noqa: S324 - stable non-security identifier
+        return hashlib.sha1(
             common_scope["reference_source_id"].encode("utf-8"), usedforsecurity=False
         ).hexdigest()[:12]
 

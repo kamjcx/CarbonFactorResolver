@@ -205,6 +205,7 @@ async def test_dataset_policy_only_applies_to_its_exact_catalog_digest() -> None
                 approved_by="test-reviewer",
                 policies=(wrong,),
             ),
+            policy_effective_on="2026-09-04",
         ).search(intent)
     bundle = CatalogPolicyBundle(
         policy_id="deployment-policy:test/v1",
@@ -219,6 +220,7 @@ async def test_dataset_policy_only_applies_to_its_exact_catalog_digest() -> None
         fetch_json=lambda _url: catalog,
         policy_bundle=bundle,
         policy_signature_verifier=lambda _payload, _signature: True,
+        policy_effective_on="2026-09-04",
     ).search(intent)
 
     assert exact_result.records[0].metadata["catalog_dataset_policy_ids"] == '["policy:test/v1"]'
@@ -286,7 +288,7 @@ async def test_locked_snapshot_is_unchanged_when_live_trace_is_appended() -> Non
     assert locked.evidence_snapshot is not None
     frozen_bytes = locked.evidence_snapshot.canonical_bytes
     frozen_sha = locked.evidence_snapshot.snapshot_sha256
-    await engine._append_trace(  # noqa: SLF001 - verifies the public integrity contract
+    await engine._append_trace(
         result.request_id, "post_lock_note", "later live annotation", {"note": "safe"}
     )
     stored = await engine.locked(result.request_id)

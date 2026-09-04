@@ -356,6 +356,7 @@ async def test_http_catalog_cache_rebuilds_when_decision_policy_changes() -> Non
             approved_by="test-reviewer",
             policies=(policy_cn,),
         ),
+        policy_effective_on="2026-09-04",
     )
     intent = DEFAULT_MATERIAL_REGISTRY.resolve("policy cache electricity").retrieval_intent
     assert intent is not None

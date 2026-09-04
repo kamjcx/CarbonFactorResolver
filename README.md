@@ -175,7 +175,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | PR3 stacked candidate | 411 passed, 86.42% branch coverage | current Catalog-to-lock integrity regression gate |
 | PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
 | PR5 stacked candidate | 464 passed, 87.01% branch coverage | versioned API, fail-closed readiness, idempotency and scriptable CLI contract gate |
-| PR6 stacked candidate | 479 passed, 86.96% branch coverage | generic policy boundary, full-package typing, graph invariants and supply-chain evidence gate |
+| PR6 stacked candidate | 483 passed, 87.00% branch coverage | generic policy boundary, full-package typing, graph invariants and supply-chain evidence gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |

@@ -12,6 +12,10 @@ The generic HTTP catalog repository no longer embeds a customer- or refractory-s
 policy. Deployments may inject a versioned `CatalogPolicyBundle`, but the bundle is valid only for
 the exact canonical catalog-content SHA-256 it declares. Any policy that can grant production
 approval also requires a deployment-supplied signature verifier and a verified signature.
+Bundle dates use strict `YYYY-MM-DD` calendar values, must form a valid interval, and are evaluated
+only against an explicitly injected `policy_effective_on`. Missing, future, or expired evaluation
+dates fail closed; CFR never consults the wall clock to make this decision. The evaluation date is
+part of the repository cache key and source metadata for deterministic replay.
 
 The public repository intentionally does not include a production key-management, signer,
 certificate-rotation, or organizational approval service. A verified bundle proves conformance to

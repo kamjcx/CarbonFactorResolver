@@ -82,6 +82,7 @@ async def test_production_approval_bundle_requires_real_signature_verification()
         await HttpCatalogFactorRepository(
             fetch_json=lambda _url: catalog,
             policy_bundle=bundle,
+            policy_effective_on="2026-09-04",
         ).search(RetrievalIntent("synthetic steel", None))
 
     observed: list[tuple[bytes, str]] = []
@@ -94,9 +95,101 @@ async def test_production_approval_bundle_requires_real_signature_verification()
         fetch_json=lambda _url: catalog,
         policy_bundle=bundle,
         policy_signature_verifier=verify,
+        policy_effective_on="2026-09-04",
     ).search(RetrievalIntent("synthetic steel", None))
     assert observed and observed[0][1] == bundle.signature
     assert result.records[0].metadata["catalog_policy_bundle_signature_status"] == "verified"
+    assert result.records[0].metadata["catalog_policy_bundle_effective_on"] == "2026-09-04"
+
+
+def test_policy_bundle_rejects_malformed_and_reversed_date_windows() -> None:
+    common = {
+        "policy_id": "deployment-bundle:test/v1",
+        "version": "1",
+        "approved_catalog_content_sha256": "a" * 64,
+        "approved_by": "test-reviewer",
+    }
+    with pytest.raises(ValueError, match="effective_from must use YYYY-MM-DD"):
+        CatalogPolicyBundle(effective_from="20260904", **common)
+    with pytest.raises(ValueError, match="effective_from must be a valid calendar date"):
+        CatalogPolicyBundle(effective_from="2026-02-30", **common)
+    with pytest.raises(ValueError, match="effective_until must be on or after"):
+        CatalogPolicyBundle(
+            effective_from="2026-09-04",
+            effective_until="2026-09-03",
+            **common,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("effective_from", "effective_until", "effective_on"),
+    [
+        ("2026-09-05", None, "2026-09-04"),
+        ("2026-09-01", "2026-09-03", "2026-09-04"),
+    ],
+)
+async def test_policy_bundle_rejects_future_or_expired_application(
+    effective_from: str,
+    effective_until: str | None,
+    effective_on: str,
+) -> None:
+    catalog = _catalog()
+    records = catalog["records"]
+    assert isinstance(records, list)
+    digest = catalog_content_sha256(records)
+    policy = CatalogDatasetPolicy(
+        policy_id="deployment-policy:test-records/v1",
+        production_approval_id="deployment-approval:test/v1",
+        catalog_content_sha256=digest,
+    )
+    bundle = CatalogPolicyBundle(
+        policy_id="deployment-bundle:test/v1",
+        version="1",
+        approved_catalog_content_sha256=digest,
+        effective_from=effective_from,
+        effective_until=effective_until,
+        approved_by="test-reviewer",
+        policies=(policy,),
+        signature="test-signature",
+    )
+
+    with pytest.raises(CatalogIntegrityError, match="is not effective"):
+        await HttpCatalogFactorRepository(
+            fetch_json=lambda _url: catalog,
+            policy_bundle=bundle,
+            policy_signature_verifier=lambda _payload, _signature: True,
+            policy_effective_on=effective_on,
+        ).search(RetrievalIntent("synthetic steel", None))
+
+
+@pytest.mark.asyncio
+async def test_policy_bundle_requires_explicit_replayable_effective_date() -> None:
+    catalog = _catalog()
+    records = catalog["records"]
+    assert isinstance(records, list)
+    digest = catalog_content_sha256(records)
+    policy = CatalogDatasetPolicy(
+        policy_id="deployment-policy:test-records/v1",
+        production_approval_id="deployment-approval:test/v1",
+        catalog_content_sha256=digest,
+    )
+    bundle = CatalogPolicyBundle(
+        policy_id="deployment-bundle:test/v1",
+        version="1",
+        approved_catalog_content_sha256=digest,
+        effective_from="2026-09-04",
+        approved_by="test-reviewer",
+        policies=(policy,),
+        signature="test-signature",
+    )
+
+    with pytest.raises(CatalogIntegrityError, match="explicit policy_effective_on"):
+        await HttpCatalogFactorRepository(
+            fetch_json=lambda _url: catalog,
+            policy_bundle=bundle,
+            policy_signature_verifier=lambda _payload, _signature: True,
+        ).search(RetrievalIntent("synthetic steel", None))
 
 
 @pytest.mark.asyncio

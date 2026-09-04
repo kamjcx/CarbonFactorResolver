@@ -213,6 +213,7 @@ class HttpCatalogFactorRepository:
     material_registry: MaterialSemanticRegistryPort = DEFAULT_MATERIAL_REGISTRY
     policy_bundle: CatalogPolicyBundle | None = None
     policy_signature_verifier: PolicySignatureVerifier | None = None
+    policy_effective_on: str | None = None
     dataset_policies: tuple[CatalogDatasetPolicy, ...] = ()
     _cached_index_key: str | None = field(default=None, init=False)
     _cached_index: SemanticFactorIndex | None = field(default=None, init=False)
@@ -235,8 +236,12 @@ class HttpCatalogFactorRepository:
         actual_content_digest = catalog_content_sha256(raw_records)
         applied_bundle = self.policy_bundle
         bundle_signature_status = "not_configured"
+        bundle_effective_on = ""
         dataset_policies: tuple[CatalogDatasetPolicy, ...] = ()
         if applied_bundle is not None:
+            bundle_effective_on = applied_bundle.require_effective_on(
+                self.policy_effective_on
+            )
             if applied_bundle.approved_catalog_content_sha256 != actual_content_digest:
                 raise CatalogIntegrityError(
                     "catalogue policy bundle does not match the observed catalog content"
@@ -302,7 +307,11 @@ class HttpCatalogFactorRepository:
             publisher_id=publisher_id,
             publisher_identity_verified=publisher_identity_verified,
         )
-        policy_key = applied_bundle.content_sha256 if applied_bundle is not None else "none"
+        policy_key = (
+            f"{applied_bundle.content_sha256}:{bundle_effective_on}"
+            if applied_bundle is not None
+            else "none"
+        )
         cache_key = (
             f"{anchor.identity}:{self.material_registry.sha256}:"
             f"{policy_key}:{actual_content_digest}"
@@ -343,6 +352,7 @@ class HttpCatalogFactorRepository:
                             actual_content_digest,
                             applied_bundle,
                             bundle_signature_status,
+                            bundle_effective_on,
                         )
                     except (TypeError, ValueError) as exc:
                         reasons.append("record_validation_failed")
@@ -423,6 +433,7 @@ class HttpCatalogFactorRepository:
         catalog_content_digest: str | None = None,
         policy_bundle: CatalogPolicyBundle | None = None,
         policy_bundle_signature_status: str = "not_configured",
+        policy_bundle_effective_on: str = "",
     ) -> SourceRecord | None:
         try:
             raw_value = item.get("primary_value")
@@ -597,6 +608,7 @@ class HttpCatalogFactorRepository:
             ),
             "catalog_policy_bundle_approved_by": policy_bundle.approved_by if policy_bundle else "",
             "catalog_policy_bundle_signature_status": policy_bundle_signature_status,
+            "catalog_policy_bundle_effective_on": policy_bundle_effective_on,
             "catalog_dataset_approval_ids": json.dumps(
                 approved_dataset_ids, ensure_ascii=False
             ),

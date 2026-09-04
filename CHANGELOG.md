@@ -4,7 +4,8 @@
 
 - Remove the customer/refractory policy default from the generic catalog core; deployment policy
   now uses an explicit catalog-content-bound bundle, and production approval requires a verified
-  deployment signature.
+  deployment signature. Strict policy date intervals are evaluated against an explicit,
+  replayable `policy_effective_on`; missing, future and expired policy applications fail closed.
 - Remove the five historical core-module `mypy` exemptions and add explicit fail-closed graph-stage
   invariants without changing frozen resolution behavior.
 - Restrict the positional CLI convenience form to mass-factor queries; retain the full structured
@@ -14,6 +15,7 @@
   checksums and a release manifest.
 - Strengthen public-delivery and archive isolation checks. The inherited autonomous quality gate
   remains unchanged and is evaluated only after the diagnostic and supply-chain evidence is built.
+- Enable Ruff's unused-suppression gate and remove the obsolete whole-file S608 exemption.
 
 - Freeze the `/api/v1` operability contract with stable JSON error envelopes, version and
   correlation headers, redacted unhandled-500 behavior, and JSON-only media enforcement.

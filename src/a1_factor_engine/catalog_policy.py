@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from .integrity import CatalogIntegrityError, canonical_json_bytes, stable_sha256, verify_digest
 
 POLICY_BUNDLE_SCHEMA_VERSION = "cfr.catalog-policy-bundle/v1"
+POLICY_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def parse_policy_date(value: str, *, field_name: str) -> date:
+    """Parse a canonical calendar date without consulting the wall clock."""
+
+    if not POLICY_DATE_PATTERN.fullmatch(value):
+        raise ValueError(f"{field_name} must use YYYY-MM-DD")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid calendar date") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +99,13 @@ class CatalogPolicyBundle:
         object.__setattr__(self, "approved_catalog_content_sha256", digest)
         if any(policy.catalog_content_sha256 != digest for policy in self.policies):
             raise ValueError("every dataset policy must bind to the bundle catalogue digest")
+        effective_from = parse_policy_date(self.effective_from, field_name="effective_from")
+        if self.effective_until is not None:
+            effective_until = parse_policy_date(
+                self.effective_until, field_name="effective_until"
+            )
+            if effective_until < effective_from:
+                raise ValueError("effective_until must be on or after effective_from")
 
     @property
     def content_sha256(self) -> str:
@@ -115,6 +136,33 @@ class CatalogPolicyBundle:
         if not verified:
             raise CatalogIntegrityError("catalogue policy signature verification failed")
         return "verified"
+
+    def require_effective_on(self, value: str | None) -> str:
+        """Return the audited evaluation date or reject a non-replayable policy use."""
+
+        if value is None:
+            raise CatalogIntegrityError(
+                "catalogue policy bundle requires explicit policy_effective_on"
+            )
+        try:
+            observed = parse_policy_date(value, field_name="policy_effective_on")
+            effective_from = parse_policy_date(
+                self.effective_from, field_name="effective_from"
+            )
+            effective_until = (
+                parse_policy_date(self.effective_until, field_name="effective_until")
+                if self.effective_until is not None
+                else None
+            )
+        except ValueError as exc:
+            raise CatalogIntegrityError(str(exc)) from exc
+        if observed < effective_from or (
+            effective_until is not None and observed > effective_until
+        ):
+            raise CatalogIntegrityError(
+                "catalogue policy bundle is not effective on policy_effective_on"
+            )
+        return observed.isoformat()
 
     @property
     def authorizes_production_approval(self) -> bool:

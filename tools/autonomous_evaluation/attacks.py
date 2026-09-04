@@ -91,7 +91,7 @@ async def _expect_failure(
             "exception_type": type(exc).__name__,
             "sanitized_message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001 - unexpected exception is benchmark evidence
+    except Exception as exc:
         return {
             "attack_id": name,
             "passed": False,
