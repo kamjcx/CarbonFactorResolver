@@ -54,6 +54,7 @@ def _rate(value: Mapping[str, Any]) -> str:
 
 def render_markdown(payload: Mapping[str, Any]) -> str:
     metrics = payload.get("metrics", {})
+    effective_metrics = payload.get("effective_metrics", {})
     rows = payload.get("results", ())
     attacks = payload.get("state_machine_attacks", ())
     failures = payload.get("bad_cases", ())
@@ -68,6 +69,9 @@ def render_markdown(payload: Mapping[str, Any]) -> str:
         f"- Generated cases: **{len(rows)}**",
         f"- Passed cases: **{sum(bool(row.get('passed')) for row in rows)} / {len(rows)}**",
         f"- Bad Cases: **{len(failures)}**",
+        f"- Effective contract cases passed: **{gate.get('effective_passed_case_count', 'N/A')} / "
+        f"{gate.get('effective_case_count', 'N/A')}**",
+        f"- Effective Bad Cases: **{gate.get('effective_bad_case_count', 'N/A')}**",
         f"- State-machine attacks passed: **{sum(bool(row.get('passed')) for row in attacks)} / {len(attacks)}**",
         f"- Evaluation execution: **{gate.get('execution_status', 'completed')}**",
         f"- Quality gate: **{gate.get('quality_status', 'PASS' if metrics.get('hard_gates_pass') else 'FAIL')}**",
@@ -97,6 +101,21 @@ def render_markdown(payload: Mapping[str, Any]) -> str:
         value = metrics.get(key)
         if isinstance(value, Mapping):
             lines.append(f"| {label} | {_rate(value)} |")
+    if isinstance(effective_metrics, Mapping) and effective_metrics:
+        lines.extend((
+            "",
+            "## Effective V3 contract metrics",
+            "",
+            "> Raw V1 metrics above remain immutable. These metrics apply only SHA-bound,",
+            "> versioned adjudications whose effective expectations match the observed result.",
+            "",
+            "| Metric | Result |",
+            "|---|---:|",
+        ))
+        for key, label in labels.items():
+            value = effective_metrics.get(key)
+            if isinstance(value, Mapping):
+                lines.append(f"| {label} | {_rate(value)} |")
     lines.extend((
         "",
         "## Bad Case Attribution",

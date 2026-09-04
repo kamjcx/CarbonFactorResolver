@@ -133,7 +133,8 @@ python -m tools.autonomous_evaluation.performance --sizes 10000,50000 --concurre
 Generated expectations come from explicit contracts rather than from Resolver output. First
 runs, failures, Bad Case attribution and artifact hashes are retained; a failed gate is a
 diagnostic result, not tuned away. See the
-[autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md).
+[autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md) and the
+[V3 quality-gate contract](docs/CFR_AUTONOMOUS_QUALITY_GATE_V3.md).
 
 ## Architecture and product boundary
 
@@ -176,13 +177,14 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
 | PR5 stacked candidate | 464 passed, 87.01% branch coverage | versioned API, fail-closed readiness, idempotency and scriptable CLI contract gate |
 | PR6 stacked candidate | 483 passed, 87.00% branch coverage | generic policy boundary, full-package typing, graph invariants and supply-chain evidence gate |
+| Autonomous Contract V3 stacked candidate | 501 passed, 87.03% branch coverage | SHA-bound effective expectations, raw/effective metric separation and zero unresolved Autonomous Bad Cases |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
 | Portfolio Challenge V1 raw / V2 effective | raw 58/60 decisions and 14/54 legacy wrong/unlisted; effective 60/60, 12/12 `MORE_INPUT`, 8/8 option contracts, 0 formal escapes | immutable V1 evidence plus SHA-bound selectable-vs-reference adjudication |
 | Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
-| Autonomous Evaluation V1 / Safety V2 | 414 generated resolution contracts + 4 API fault cases; 103 raw bad, 13 adjudicated, 90 unresolved; 0 safety escapes | systematic contract exploration; the effective gate remains closed while unresolved cases remain |
+| Autonomous Evaluation V1 / Contract V3 | 414 generated resolution contracts + 4 API fault cases; raw 230/259 Top-1 and 103 Bad Cases remain visible; V3 effective 230/230 Top-1, 145/145 abstention, 23/23 `MORE_INPUT`, 0 unresolved and 0 safety escapes | systematic contract exploration plus per-case SHA-bound Oracle/status adjudication; not an independent holdout |
 
 RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent

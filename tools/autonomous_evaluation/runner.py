@@ -18,7 +18,7 @@ from .contracts import ExpectedDecision, GeneratedCase
 from .generator import generate_bundle, materialize_catalog
 from .metrics import aggregate_metrics, bad_cases
 
-SCHEMA_VERSION = "cfr-autonomous-evaluation-run/v1"
+SCHEMA_VERSION = "cfr-autonomous-evaluation-run/v2"
 
 
 def _source_ids(candidates: Sequence[Candidate]) -> tuple[str, ...]:

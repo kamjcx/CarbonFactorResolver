@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add Autonomous Contract V3 with a 418-case SHA freeze and 103 per-case adjudications that retain
+  all raw V1 failures while recomputing separately labelled effective metrics. The resulting gate
+  has zero unresolved Bad Cases and zero safety escapes without changing Resolver runtime behavior,
+  formal factor values, candidate IDs, or historical V1/V2 evidence.
+
 - Remove the customer/refractory policy default from the generic catalog core; deployment policy
   now uses an explicit catalog-content-bound bundle, and production approval requires a verified
   deployment signature. Strict policy date intervals are evaluated against an explicit,

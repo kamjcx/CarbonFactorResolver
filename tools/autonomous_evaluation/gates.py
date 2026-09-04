@@ -8,14 +8,61 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import sha256_json
+from .metrics import aggregate_metrics, bad_cases
 
 ADJUDICATION_SCHEMA = "cfr-autonomous-adjudications/v1"
 ALLOWED_DISPOSITIONS = frozenset({"accepted_limitation", "oracle_preset_error"})
-DEFAULT_ADJUDICATIONS = Path("data/benchmarks/autonomous_evaluation_v2_adjudications.json")
+DEFAULT_ADJUDICATIONS = Path("data/benchmarks/autonomous_evaluation_v3_adjudications.json")
 
 
 def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value) if isinstance(value, (list, tuple)) else ()
+
+
+def _expectation_satisfied(
+    expectation: Mapping[str, Any], observation: Mapping[str, Any]
+) -> bool:
+    """Evaluate an adjudicated contract without consulting runtime heuristics."""
+
+    primary = _strings(observation.get("primary_ids"))
+    reviewable = _strings(observation.get("reviewable_ids"))
+    selectable = {*primary, *reviewable}
+    forbidden = set(_strings(expectation.get("forbidden_ids")))
+    references = set(_strings(expectation.get("reference_only_ids")))
+    acceptable = set(_strings(expectation.get("acceptable_ids")))
+    expected_reasons = set(_strings(expectation.get("reason_codes")))
+    observed_reasons = set(_strings(observation.get("reason_codes")))
+    if observation.get("status") != expectation.get("status"):
+        return False
+    if forbidden & selectable:
+        return False
+    if references and not references <= set(reviewable):
+        return False
+    expected_top = expectation.get("expected_top_1")
+    if expected_top is not None and (not primary or primary[0] != expected_top):
+        return False
+    if acceptable and not (acceptable & selectable):
+        return False
+    if expected_reasons and not expected_reasons <= observed_reasons:
+        return False
+    return bool(observation.get("trace_complete", True))
+
+
+def _effective_row(
+    row: Mapping[str, Any], entry: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    effective = entry.get("effective_expectation") if entry else None
+    if not isinstance(effective, Mapping):
+        return dict(row)
+    amended = dict(row)
+    amended["raw_expectation"] = row.get("expectation")
+    amended["expectation"] = dict(effective)
+    observation = row.get("observation", {})
+    amended["passed"] = bool(
+        isinstance(observation, Mapping)
+        and _expectation_satisfied(amended["expectation"], observation)
+    )
+    return amended
 
 
 def forbidden_escape_ids(row: Mapping[str, Any]) -> tuple[str, ...]:
@@ -60,6 +107,43 @@ def load_adjudications(
             raise ValueError(f"adjudication case SHA mismatch for {case_id}")
         if entry["input_sha256"] != sha256_json(dict(row.get("request", {}))):
             raise ValueError(f"adjudication input SHA mismatch for {case_id}")
+        previous = entry.get("previous_expectation")
+        if previous is not None and previous != row.get("expectation"):
+            raise ValueError(f"adjudication previous expectation mismatch for {case_id}")
+        effective = entry.get("effective_expectation")
+        if effective is not None:
+            if not isinstance(effective, Mapping):
+                raise ValueError(f"adjudication {case_id} effective_expectation must be an object")
+            for field in (
+                "decision",
+                "status",
+                "acceptable_ids",
+                "forbidden_ids",
+                "reference_only_ids",
+                "reason_codes",
+                "expected_top_1",
+                "approval_allowed",
+                "safety_axis",
+            ):
+                if field not in effective:
+                    raise ValueError(
+                        f"adjudication {case_id} effective_expectation is missing {field}"
+                    )
+            expected_decision = {
+                "recommendation_ready": "direct",
+                "more_input_needed": "more_input",
+                "reference_review_required": "reference_review",
+            }.get(str(effective["status"]), "abstain")
+            if effective["decision"] != expected_decision:
+                raise ValueError(f"adjudication status/decision mismatch for {case_id}")
+            acceptable = set(_strings(effective["acceptable_ids"]))
+            forbidden = set(_strings(effective["forbidden_ids"]))
+            references = set(_strings(effective["reference_only_ids"]))
+            if acceptable & forbidden or references & forbidden:
+                raise ValueError(f"adjudication candidate sets overlap for {case_id}")
+            expected_top = effective["expected_top_1"]
+            if expected_top is not None and str(expected_top) not in acceptable:
+                raise ValueError(f"adjudication Top-1 is not acceptable for {case_id}")
         accepted[case_id] = entry
     return accepted
 
@@ -78,27 +162,61 @@ def apply_quality_gate(
         row["adjudication"] = dict(entry) if entry else None
         annotated.append(row)
     payload["bad_cases"] = annotated
-    unresolved = [row for row in annotated if row["adjudication"] is None]
+    effective_rows = [
+        _effective_row(row, adjudications.get(str(row.get("case_id"))))
+        for row in payload.get("results", ())
+    ]
+    effective_by_case = {str(row.get("case_id")): row for row in effective_rows}
+    unresolved = []
+    for row in annotated:
+        entry = row["adjudication"]
+        if entry is None:
+            unresolved.append(row)
+            continue
+        if isinstance(entry.get("effective_expectation"), Mapping) and not bool(
+            effective_by_case.get(str(row.get("case_id")), {}).get("passed")
+        ):
+            unresolved.append(row)
     escaped = [row for row in payload.get("results", ()) if forbidden_escape_ids(row)]
     unadjudicated_escaped = [row for row in escaped if str(row.get("case_id")) not in adjudications]
 
     metrics = payload.setdefault("metrics", {})
     raw_gate = bool(metrics.get("hard_gates_pass"))
-    effective_checks = dict(metrics.get("hard_gate_results", {}))
+    has_effective_contract = bool(adjudications) and all(
+        isinstance(entry.get("effective_expectation"), Mapping)
+        for entry in adjudications.values()
+    )
+    effective_metrics = (
+        aggregate_metrics(
+            effective_rows,
+            relation_results=payload.get("relation_results", {}),
+        )
+        if has_effective_contract
+        else dict(metrics)
+    )
+    effective_checks = dict(effective_metrics.get("hard_gate_results", {}))
     effective_checks["zero_forbidden_escape"] = not unadjudicated_escaped
     effective_checks["zero_unresolved_bad_cases"] = not unresolved
     state_attacks = payload.get("state_machine_attacks", ())
     effective_checks["all_state_machine_attacks_pass"] = bool(state_attacks) and all(
         bool(item.get("passed")) for item in state_attacks
     )
-    metrics["raw_hard_gates_pass"] = raw_gate
-    metrics["hard_gate_results"] = effective_checks
-    metrics["hard_gates_pass"] = all(effective_checks.values())
+    effective_metrics["hard_gate_results"] = effective_checks
+    effective_metrics["hard_gates_pass"] = all(effective_checks.values())
+    payload["effective_metrics"] = effective_metrics
+    payload["effective_bad_cases"] = bad_cases(effective_rows)
     payload["quality_gate"] = {
         "execution_status": "completed",
-        "quality_status": "PASS" if metrics["hard_gates_pass"] else "FAIL",
-        "hard_gates_pass": metrics["hard_gates_pass"],
+        "quality_status": "PASS" if effective_metrics["hard_gates_pass"] else "FAIL",
+        "hard_gates_pass": effective_metrics["hard_gates_pass"],
+        "raw_hard_gates_pass": raw_gate,
+        "effective_contract_applied": has_effective_contract,
         "raw_bad_case_count": len(annotated),
+        "effective_case_count": len(effective_rows),
+        "effective_passed_case_count": sum(
+            bool(row.get("passed")) for row in effective_rows
+        ),
+        "effective_bad_case_count": len(payload["effective_bad_cases"]),
         "adjudicated_bad_case_count": len(annotated) - len(unresolved),
         "unresolved_bad_case_count": len(unresolved),
         "raw_forbidden_escape_count": len(escaped),

@@ -20,6 +20,8 @@ carbon footprint.
 - Autonomous Evaluation V1 is project-authored and contract-generated. Its breadth improves
   systematic regression discovery, but it is not independent expert labelling and does not
   establish general accuracy on enterprise language or licensed catalogs.
+- Autonomous Contract V3 is a maintainer adjudication of the frozen V1 cases, not a new sealed
+  holdout. Its effective 100% contract metrics cannot be presented as unseen-query accuracy.
 - The 10k/50k benchmark is a synthetic exact-match/robustness workload. Python event-loop
   concurrency is not equivalent to multi-process production capacity, and no SLA is claimed.
 - An unspecified request geography/year remains unknown. Ordinary reviewer assumption acceptance
