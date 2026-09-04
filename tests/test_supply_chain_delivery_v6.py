@@ -60,6 +60,22 @@ def test_ci_uses_immutable_actions_and_runs_delivery_gates_before_final_gate() -
         assert workflow.index(preceding) < final_gate
 
 
+def test_container_required_check_is_a_fail_closed_test_dependent_sentinel() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    sentinel = workflow.split("\n  container:\n", 1)[1]
+    assert "    name: container\n" in sentinel
+    assert "    needs: test\n" in sentinel
+    assert "    if: ${{ needs.test.result == 'success' }}\n" in sentinel
+    assert 'test "$CFR_UPSTREAM_RESULT" = "success"' in sentinel
+    assert '"upstream_job":"test"' in sentinel
+    assert '"upstream_result":"success"' in sentinel
+    assert "name: Upload required-check compatibility evidence" in sentinel
+    assert "if-no-files-found: error" in sentinel
+    assert "continue-on-error" not in sentinel
+    assert "always()" not in sentinel
+    assert "|| true" not in sentinel
+
+
 def test_public_data_scanner_accepts_reviewable_synthetic_json(tmp_path: Path) -> None:
     data = tmp_path / "data" / "fixtures"
     data.mkdir(parents=True)

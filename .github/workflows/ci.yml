@@ -233,3 +233,29 @@ jobs:
         run: >-
           uv run --python ${{ matrix.python-version }} --extra test --extra api
           python -m pytest -q -p no:cacheprovider
+
+  # Branch-protection compatibility sentinel. The upstream test job performs
+  # the real locked image build, runtime health check, and Trivy scan. Keep this
+  # named job until the protected-branch required context is deliberately
+  # migrated; it must never report success independently of that upstream gate.
+  container:
+    name: container
+    needs: test
+    if: ${{ needs.test.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Record required-check compatibility sentinel
+        env:
+          CFR_UPSTREAM_RESULT: ${{ needs.test.result }}
+          CFR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$CFR_UPSTREAM_RESULT" = "success"
+          printf '%s\n' \
+            '{"schema_version":"cfr-required-check-sentinel/v1","required_context":"container","upstream_job":"test","upstream_result":"success","head_sha":"'"$CFR_HEAD_SHA"'"}' \
+            > container-required-check.json
+      - name: Upload required-check compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-required-check-${{ github.sha }}
+          path: container-required-check.json
+          if-no-files-found: error
