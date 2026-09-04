@@ -177,7 +177,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
 | PR5 stacked candidate | 464 passed, 87.01% branch coverage | versioned API, fail-closed readiness, idempotency and scriptable CLI contract gate |
 | PR6 stacked candidate | 483 passed, 87.00% branch coverage | generic policy boundary, full-package typing, graph invariants and supply-chain evidence gate |
-| Autonomous Contract V3 stacked candidate | 501 passed, 87.03% branch coverage | SHA-bound effective expectations, raw/effective metric separation and zero unresolved Autonomous Bad Cases |
+| v0.14.3 release candidate | 505 passed, 87.03% branch coverage | integrated safety, integrity, operability, supply-chain and Autonomous Contract V3 regression gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
@@ -189,9 +189,12 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent
 sealed unit v4 acceptance. `v0.14.2` contains the subsequently merged contract-backed runtime
-repairs, public BYOC example, and release presentation evidence. See [Evaluation](EVALUATION.md),
-[v0.14.2 Release Readiness](docs/RELEASE_READINESS_V0.14.2.md), and the
-[v0.14.2 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.2).
+repairs, public BYOC example, and release presentation evidence. `v0.14.3` adds the reviewed
+resolution-safety, catalog-lock, connector/control-plane, operability, supply-chain and
+evaluation-governance hardening stack without an incompatible public API change. See
+[Evaluation](EVALUATION.md),
+[v0.14.3 Release Readiness](docs/RELEASE_READINESS_V0.14.3.md), and the
+[v0.14.3 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.3).
 
 ## Design guarantees
 
@@ -214,7 +217,7 @@ repairs, public BYOC example, and release presentation evidence. See [Evaluation
 - [Contributing](CONTRIBUTING.md)
 - [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
 - [Catalog-to-lock integrity contract](docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md)
-- [Release notes](docs/RELEASE_NOTES_V0.14.2.md)
+- [Release notes](docs/RELEASE_NOTES_V0.14.3.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 
 ## Data and license

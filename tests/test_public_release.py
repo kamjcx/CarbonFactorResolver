@@ -24,6 +24,20 @@ def test_canonical_public_release_documents_exist() -> None:
     assert "CarbonFactorResolver contributors" in (ROOT / "LICENSE").read_text(encoding="utf-8")
 
 
+def test_v0143_release_documents_preserve_raw_and_effective_metric_scope() -> None:
+    notes = (ROOT / "docs" / "RELEASE_NOTES_V0.14.3.md").read_text(encoding="utf-8")
+    readiness = (ROOT / "docs" / "RELEASE_READINESS_V0.14.3.md").read_text(encoding="utf-8")
+    for document in (notes, readiness):
+        assert "230/259" in document
+        assert "103" in document
+        assert "418/418" in document
+        assert "0 unresolved" in document
+        assert "0 forbidden" in document
+        assert "public-synthetic" in document
+        assert "not an independent Holdout" in document
+        assert "not a real-world accuracy" in document
+
+
 def test_runtime_dependency_groups_exclude_file_parsers() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     parser_packages = {"pdfplumber", "python-docx", "openpyxl"}
