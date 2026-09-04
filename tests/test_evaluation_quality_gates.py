@@ -122,6 +122,15 @@ def test_versioned_adjudications_are_bound_to_current_generated_contract() -> No
     assert len(loaded) == 6
     assert all(entry["reviewer"] and entry["authority"] for entry in loaded.values())
 
+    safety_v2 = load_adjudications(
+        Path("data/benchmarks/autonomous_evaluation_v2_adjudications.json"),
+        generator_sha256=bundle.sha256,
+        rows=rows,
+    )
+    assert len(safety_v2) == 13
+    assert all(case_id.startswith("AUTO-20-") for case_id in safety_v2)
+    assert all(entry["disposition"] == "oracle_preset_error" for entry in safety_v2.values())
+
 
 def test_valid_adjudication_is_visible_but_excluded_from_enforceable_counts() -> None:
     row = failed_row(forbidden=True)

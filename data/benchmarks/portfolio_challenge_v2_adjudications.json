@@ -1,0 +1,108 @@
+{
+  "schema_version": "cfr-portfolio-adjudications/v2",
+  "adjudication_version": "2.0.0",
+  "challenge": {
+    "name": "portfolio_challenge_v1.jsonl",
+    "sha256": "e99858e99c735ee334d1015364edf257dce12080c8e40a3d8e20acf16ab5b498"
+  },
+  "authority": "CFR benchmark governance",
+  "effective_software_version": "0.14.2+resolution-safety-v2",
+  "entries": [
+    {
+      "case_id": "FIN-05",
+      "case_sha256": "db90e83ccddc6155e745180c1ea2cd9a21ce9d103fe49f6a98253fd3ca694313",
+      "input_sha256": "2041d2f23776a220bbf062ee4231a677ce97e71c960e643ff7ae326a5387ce4c",
+      "disposition": "benchmark_contract_error",
+      "original_expected_decision": "retrieve",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["pc:steel-fiber-product"],
+      "expected_provisional_option_types": ["ordinary_uncoated_reference", "copper_plated_reference", "ferritic_stainless_reference"],
+      "expected_required_choice": {"field": "steel_fiber_type", "options": ["ordinary_uncoated_carbon_steel", "copper_plated_steel", "heat_resistant_stainless_steel", "unknown"]},
+      "reason": "The frozen V1 label predates the fail-closed steel-fibre subtype contract. The traceable product record remains reference-only until subtype, grade/family, coating and application are resolved; historical V1 results are not rewritten."
+    },
+    {
+      "case_id": "CNF-01",
+      "case_sha256": "8fdde3ea30d90f75fe3072b7fe9aade46aced5f35dc3da5778a98c5a95aa44e6",
+      "input_sha256": "7fbe809f2e6d8fc422557b899ece962e24825e30cc983ff1d4df1c5cf05e32ad",
+      "disposition": "benchmark_contract_error",
+      "original_expected_decision": "retrieve",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:aluminium", "fb:primary-aluminium", "fb:secondary-aluminium"],
+      "expected_provisional_option_types": [],
+      "expected_required_choice": {"field": "route", "options": ["primary", "secondary", "unknown"]},
+      "reason": "Generic metallic aluminium does not identify primary versus secondary production. The old direct-retrieval label conflicts with the later route-ambiguity safety contract; the three records are non-selectable route evidence."
+    },
+    {
+      "case_id": "MI-01",
+      "case_sha256": "8fb3a7d8f9515e36568c2204a1f1489772f382ab687d1d3b2349b079b57048a2",
+      "input_sha256": "389c81fdae32c576265703aa5d4543c0dac0c34f2c73552f9d5fda7a26203916",
+      "disposition": "evaluation_contract_completion",
+      "original_expected_decision": "more_input",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:aluminium", "fb:primary-aluminium", "fb:secondary-aluminium"],
+      "expected_provisional_option_types": [],
+      "expected_required_choice": {"field": "route", "options": ["primary", "secondary", "unknown"]},
+      "reason": "V1 correctly expects MORE_INPUT but has no field for permitted non-selectable route evidence. V2 records the exact allowed reference set instead of counting it as a formal wrong candidate."
+    },
+    {
+      "case_id": "MI-02",
+      "case_sha256": "e2fdce39dfca1a19b6e7eadea41581dc42e43177dacde0b59bac8bdc271888ea",
+      "input_sha256": "fe77af7d9f32c121cd4ce9cfe30b91c2a93c935062e5b1ec99d7bb96eee5debb",
+      "disposition": "evaluation_contract_completion",
+      "original_expected_decision": "more_input",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:aluminium", "fb:primary-aluminium", "fb:secondary-aluminium"],
+      "expected_provisional_option_types": [],
+      "expected_required_choice": {"field": "route", "options": ["primary", "secondary", "unknown"]},
+      "reason": "The Chinese generic-aluminium request must retain its three non-selectable route references while asking for the production route."
+    },
+    {
+      "case_id": "MI-03",
+      "case_sha256": "78188bb96b33d601608cd1b495ef9995fdbfdbe4ad7f7e1403fa81d70edb7e1e",
+      "input_sha256": "640f4a96f9cdbec10179b2828ac497b4bcbac23b851b518ab8aeb0f281b95d24",
+      "disposition": "evaluation_contract_completion",
+      "original_expected_decision": "more_input",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:aluminium", "fb:primary-aluminium", "fb:secondary-aluminium"],
+      "expected_provisional_option_types": [],
+      "expected_required_choice": {"field": "route", "options": ["primary", "secondary", "unknown"]},
+      "reason": "The American-English generic-aluminium request follows the same exact route-evidence contract."
+    },
+    {
+      "case_id": "MI-04",
+      "case_sha256": "e6029cde5b4cbf6c3bedd55fa709bdfe17f92e7f199169b886d8fcbc0a7cac85",
+      "input_sha256": "dee814e21f82e57acf12b1ed59ba203b4a69c1f32907baead353fc6634d726c5",
+      "disposition": "runtime_contract_confirmation",
+      "original_expected_decision": "more_input",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:steel"],
+      "expected_provisional_option_types": ["ordinary_uncoated_reference", "copper_plated_reference", "ferritic_stainless_reference"],
+      "expected_required_choice": {"field": "steel_fiber_type", "options": ["ordinary_uncoated_carbon_steel", "copper_plated_steel", "heat_resistant_stainless_steel", "unknown"]},
+      "reason": "English steel-fibre input lacks a decisive fibre subtype. Ordinary steel is discovery evidence only and cannot be selected."
+    },
+    {
+      "case_id": "MI-05",
+      "case_sha256": "ed0b358717d8ad43f4775044307e8f7ac51dbc69ebb48e1b7143f62ce95389dc",
+      "input_sha256": "47e5907a6af6c852a73409fffc29d191a94fe5e5b30e0ad57f8d4d8b8868cf15",
+      "disposition": "runtime_contract_confirmation",
+      "original_expected_decision": "more_input",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:steel"],
+      "expected_provisional_option_types": ["ordinary_uncoated_reference", "copper_plated_reference", "ferritic_stainless_reference"],
+      "expected_required_choice": {"field": "steel_fiber_type", "options": ["ordinary_uncoated_carbon_steel", "copper_plated_steel", "heat_resistant_stainless_steel", "unknown"]},
+      "reason": "Chinese steel-fibre input follows the same fail-closed subtype contract; the generic steel record is non-selectable."
+    },
+    {
+      "case_id": "MI-06",
+      "case_sha256": "f39957dbbb88866aa24ae8ac8f7f69c7cb8c6fa6b2d71bce92b5023bedf89fb7",
+      "input_sha256": "6635713e9e8e31dfaecfa9f23107f62ea6045d99cca7055a31d430f36a9ad3f4",
+      "disposition": "runtime_contract_confirmation",
+      "original_expected_decision": "more_input",
+      "effective_expected_decision": "more_input",
+      "expected_reference_only_ids": ["fb:steel"],
+      "expected_provisional_option_types": ["ordinary_uncoated_reference", "copper_plated_reference", "ferritic_stainless_reference"],
+      "expected_required_choice": {"field": "steel_fiber_type", "options": ["ordinary_uncoated_carbon_steel", "copper_plated_steel", "heat_resistant_stainless_steel", "unknown"]},
+      "reason": "American-English steel-fiber input follows the same fail-closed subtype contract; the generic steel record is non-selectable."
+    }
+  ]
+}

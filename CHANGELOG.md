@@ -18,6 +18,13 @@
 - Add SHA-bound machine adjudications, dynamic Portfolio findings, reverse gate tests, and a
   100-case root-cause audit for the unchanged `5155a682` baseline; no Resolver behavior or
   frozen answer is changed.
+- Add the SHA-bound Portfolio Challenge V2 adjudication overlay. Raw V1 metrics remain visible;
+  effective metrics separately score formal candidates and exact `REFERENCE_ONLY`/provisional
+  option contracts for FIN-05, CNF-01 and MI-01 through MI-06.
+- Require broad English and Chinese steel-fibre raw-material queries to return
+  `MORE_INPUT_NEEDED`; generic steel remains non-selectable reference evidence.
+- Preserve the resulting 103 Autonomous raw failures and add a complete 13-case Safety V2
+  oracle adjudication, leaving 90 unresolved effective failures instead of hiding the V1 delta.
 
 ## 0.14.2 - 2026-09-03
 

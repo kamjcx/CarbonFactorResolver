@@ -594,7 +594,6 @@ class NormalizeNode(Node[GraphState]):
         for field in first_unresolved:
             if (
                 field in {"steel_fiber_type", "steel_grade_or_family", "surface_coating", "application"}
-                and subject_type != FactorSubjectType.RAW_MATERIAL
             ):
                 request_gap_items.append(RequestGap(
                     gap_id=f"{state.request.request_id}:{field}",

@@ -10,7 +10,7 @@ from .contracts import sha256_json
 
 ADJUDICATION_SCHEMA = "cfr-autonomous-adjudications/v1"
 ALLOWED_DISPOSITIONS = frozenset({"accepted_limitation", "oracle_preset_error"})
-DEFAULT_ADJUDICATIONS = Path("data/benchmarks/autonomous_evaluation_v1_adjudications.json")
+DEFAULT_ADJUDICATIONS = Path("data/benchmarks/autonomous_evaluation_v2_adjudications.json")
 
 
 def _strings(value: object) -> tuple[str, ...]:

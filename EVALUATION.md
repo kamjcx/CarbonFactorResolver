@@ -23,6 +23,13 @@ completed run cannot appear as release approval. See the
 - **Portfolio Challenge V1** is a closed regression/safety diagnostic, not an unseen-query
   benchmark. It returns 39 direct recommendations plus FIN-05 as `MORE_INPUT_NEEDED` with
   the correct source retained as `REFERENCE_ONLY`; boundary and subject escapes remain zero.
+- **Portfolio Challenge V2 adjudication overlay** leaves every V1 line and raw metric intact.
+  It separately evaluates selectable candidates, non-selectable reference/provisional evidence,
+  and required choices for eight SHA-bound ambiguity cases. This prevents valid discovery clues
+  from being counted as formal recommendations without simply ignoring them.
+- **Autonomous Safety V2 adjudication** records 13 stale steel-fibre oracle presets introduced by
+  the stricter subtype requirement. Current raw results retain all 103 failures; the effective
+  view adjudicates those 13 and leaves 90 unresolved, so the release gate remains closed.
 - **Frozen Unit Regression Set** contains 28 cases. Its independent first run was 24/28;
   runtime code was then repaired and the regression rerun was 28/28. It is not described as
   an independent holdout after that repair.
@@ -82,7 +89,9 @@ peak RSS was 205.5 MB, and one-process throughput was about 0.75 requests/second
 
 The post-first-run repair cycle is a regression, not a new independent evaluation. It fixes
 decisive-attribute `MORE_INPUT`, structured-source document-hash admission, and concurrent
-terminal-decision races without changing the V1 generator or frozen first-run evidence. Six
-geography/year cases remain raw failures because their frozen labels conflict with CFR's
-published `USABLE_WITH_ASSUMPTIONS` contract. The versioned rationale and exact case IDs are in
-[the V1 adjudication](docs/CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION.md).
+terminal-decision races without changing the V1 generator or frozen first-run evidence. Safety V2
+classifies the six geography/year disagreements as fixed runtime defects: explicit conflicts now
+hard-reject unless a versioned substitution policy applies. The historical V1 interpretation and
+its superseding SHA-bound record remain available in
+[the V1 adjudication](docs/CFR_AUTONOMOUS_EVALUATION_V1_ADJUDICATION.md) and
+[the Safety V2 contract](docs/CFR_RESOLUTION_SAFETY_HARDENING_V2.md).

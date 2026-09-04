@@ -180,6 +180,37 @@ async def test_non_mass_lock_rejects_a_tampered_total() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("material_name", ("steel fibre", "钢纤维", "steel fiber"))
+async def test_broad_steel_fibre_is_more_input_with_non_selectable_steel_reference(
+    material_name: str,
+) -> None:
+    record = source("generic-steel", "steel")
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository([record])
+    )
+    result = await engine.resolve(ResolutionRequest(
+        material_name=material_name,
+        quantity=1,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+        boundary="cradle-to-gate",
+    ))
+
+    assert result.status == ResolutionStatus.MORE_INPUT_NEEDED
+    assert result.candidates == ()
+    assert [item.source.source_id for item in result.reviewable_candidates] == [
+        "generic-steel"
+    ]
+    assert result.reviewable_candidates[0].result_tier == ResultTier.REFERENCE_ONLY
+    assert result.trace.explain()["required_choice"]["field"] == "steel_fiber_type"
+    with pytest.raises(ValueError, match="recommendation-ready or reference-review"):
+        await engine.approve(
+            result.request_id,
+            result.reviewable_candidates[0].candidate_id,
+            "reviewer",
+        )
+
+
+@pytest.mark.asyncio
 async def test_reference_flow_rejects_wrong_packaging_before_arithmetic() -> None:
     evidence = ParameterEvidence(
         "roll-mass", "mass_per_roll", 5, "kg/roll",

@@ -37,7 +37,15 @@ inputs and expectations are not edited.
 
 ## Verification boundary
 
-The Portfolio post-fix regression has zero forbidden, boundary, subject and unit escapes. Its
-remaining precision/MORE_INPUT findings remain visible because this PR does not weaken PR1's
-quality thresholds or relabel frozen cases. Autonomous Evaluation remains a diagnostic gate and
-its post-fix output is not represented as an independent or sealed first run.
+The Portfolio V1 post-fix regression remains visible as raw evidence: 58/60 decisions and 14/54
+wrong-or-unlisted returned records when selectable and `REFERENCE_ONLY` records are deliberately
+collapsed into one legacy list. The SHA-bound V2 interpretation records 60/60 decisions, 12/12
+MORE_INPUT, zero formal wrong/forbidden candidates, and 8/8 exact provisional-option contracts.
+It changes no frozen V1 line. Autonomous Evaluation remains a diagnostic gate and its post-fix
+output is not represented as an independent or sealed first run.
+
+The steel-fibre runtime correction creates 13 additional raw Autonomous V1 disagreements because
+its synthetic oracle treats an unspecified steel-fibre record as directly selectable. Those raw
+failures remain visible. A complete case/input/generator-bound V2 adjudication classifies only
+those 13 oracle presets as stale, so the effective unresolved count remains 90; the quality gate
+continues to fail rather than treating the regression run as release approval.

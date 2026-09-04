@@ -153,9 +153,10 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |
+| Portfolio Challenge V1 raw / V2 effective | raw 58/60 decisions and 14/54 legacy wrong/unlisted; effective 60/60, 12/12 `MORE_INPUT`, 8/8 option contracts, 0 formal escapes | immutable V1 evidence plus SHA-bound selectable-vs-reference adjudication |
 | Sealed Unit Holdout v4 | independent first run 21/21; all checks 100% | post-fix unit-only acceptance |
 | RC6 sealed first run | 48/48 full contracts; 0 safety escapes or HTTP 500 | frozen public-synthetic release gate |
-| Autonomous Evaluation V1 | 414 generated resolution contracts + 4 API fault cases + workflow attacks + 10k/50k scale | systematic contract exploration; six frozen geography/year disagreements remain historical and are classified as fixed runtime defects by Safety V2 |
+| Autonomous Evaluation V1 / Safety V2 | 414 generated resolution contracts + 4 API fault cases; 103 raw bad, 13 adjudicated, 90 unresolved; 0 safety escapes | systematic contract exploration; the effective gate remains closed while unresolved cases remain |
 
 RC3-RC5 and sealed unit v2/v3 remain preserved NO-GO evidence. `v0.14.1` added the
 conditioned-volume direction repair, FIN-05 reference-only adjudication, and the independent
