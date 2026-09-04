@@ -15,8 +15,8 @@ not changed.
 | Portfolio challenge | `e99858e99c735ee334d1015364edf257dce12080c8e40a3d8e20acf16ab5b498` |
 | Combined portfolio catalogue | `328e433dc39c539f231bad643478266880f34a95f630eb808e5eb114f31b90a4` |
 
-The portfolio hashes use the evaluator's canonical LF/text or canonical JSON hashing rules;
-raw filesystem hashes may differ across line-ending platforms.
+The portfolio and committed audit-artifact hashes use canonical LF/text or canonical JSON
+hashing rules; raw filesystem hashes may differ across line-ending platforms.
 
 ## Autonomous evaluation result
 

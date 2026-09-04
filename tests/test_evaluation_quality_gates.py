@@ -142,7 +142,8 @@ def test_committed_bad_case_audit_manifest_matches_artifacts() -> None:
     root = Path("evidence/evaluation_gate_audit/5155a68")
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     for name, expected in manifest["artifacts"].items():
-        assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected
+        canonical = (root / name).read_bytes().replace(b"\r\n", b"\n")
+        assert hashlib.sha256(canonical).hexdigest() == expected
 
 
 def test_portfolio_gate_fails_false_quality_and_forbidden_escape() -> None:
