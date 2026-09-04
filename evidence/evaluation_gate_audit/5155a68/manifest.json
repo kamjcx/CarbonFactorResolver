@@ -1,0 +1,17 @@
+{
+  "schema_version": "cfr-evaluation-gate-audit-manifest/v1",
+  "baseline_commit": "5155a6829fcdd521f04359263f543245a1c6b03f",
+  "dependency_inputs": {
+    "pyproject_sha256": "cad796270cfad81e3f59e6dd36c6b5e3d3fc28c4563e5c63f6a7d5350555a2c1",
+    "uv_lock_sha256": "63078667b69a992bda8b243e568a200f376bc79395eaec3a291ce3e97149adf1"
+  },
+  "evaluation_inputs": {
+    "autonomous_generated_contract_sha256": "5882e4de5b7831bc757eb2e0c3ab3cf25026773035f6bf7ead647f00417d4b6f",
+    "portfolio_challenge_canonical_sha256": "e99858e99c735ee334d1015364edf257dce12080c8e40a3d8e20acf16ab5b498",
+    "portfolio_catalog_canonical_sha256": "328e433dc39c539f231bad643478266880f34a95f630eb808e5eb114f31b90a4"
+  },
+  "artifacts": {
+    "bad_case_inventory.json": "97ed848dee2259120a446c17a9a827b5dca998acd50694baa962427d66c89b6b",
+    "BAD_CASE_REPORT.md": "e9fdeb7214d9ae1ae7941911816b47a611f44e66555e2aee9e7d2e5bda865ec2"
+  }
+}

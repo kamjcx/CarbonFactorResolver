@@ -62,11 +62,15 @@ jobs:
         run: >-
           uv run --extra test python -m tools.sealed_unit_holdout_v4
           --output outputs/sealed_unit_holdout_v4/result.json
-      - name: Run Portfolio Challenge
+      - name: Enforce Portfolio Challenge quality gate
+        id: portfolio_quality
+        continue-on-error: true
         run: >-
           uv run --extra test --extra api python tools/portfolio_validation.py
           --output outputs/portfolio_validation
-      - name: Run autonomous public-synthetic evaluation
+      - name: Enforce autonomous public-synthetic quality gate
+        id: autonomous_quality
+        continue-on-error: true
         run: >-
           uv run --extra test --extra api python -m tools.autonomous_evaluation
           --output outputs/autonomous_evaluation/ci-run.json
@@ -89,6 +93,11 @@ jobs:
           name: portfolio-validation-${{ github.sha }}
           path: outputs/portfolio_validation/
           if-no-files-found: error
+      - name: Fail CI when evaluation quality gates fail
+        if: always()
+        run: |
+          [ "${{ steps.portfolio_quality.outcome }}" = "success" ] || exit 1
+          [ "${{ steps.autonomous_quality.outcome }}" = "success" ] || exit 1
       - name: Build package
         run: uv build
       - name: Verify release archive contents

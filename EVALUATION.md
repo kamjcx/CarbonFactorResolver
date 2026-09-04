@@ -3,6 +3,16 @@
 CFR uses versioned, public-synthetic regression suites. These results measure the shipped
 fixtures and contracts; they are not a claim of accuracy across all real-world factor queries.
 
+## Current gate audit
+
+A read-only rerun on `main` commit `5155a6829fcdd521f04359263f543245a1c6b03f`
+completed successfully but did **not** pass its quality gates. Autonomous Evaluation reported
+100 raw Bad Cases (94 unresolved after six validated adjudications) and six raw forbidden
+escapes; Portfolio Validation reported 53/60 decision accuracy, 4/10 MORE_INPUT positive
+recall, and 6/46 wrong candidates. The evaluator CLIs now return non-zero for this result so a
+completed run cannot appear as release approval. See the
+[bound baseline and Bad Case audit](evidence/evaluation_gate_audit/5155a68/BASELINE.md).
+
 ## Published suites
 
 - **FactorBench V1** is immutable historical evidence. Its `wrong-unit-53` historical label

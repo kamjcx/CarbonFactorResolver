@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Make Autonomous Evaluation and Portfolio Validation fail closed when quality gates fail,
+  while preserving generated evidence and distinguishing execution completion from quality
+  approval.
+- Add SHA-bound machine adjudications, dynamic Portfolio findings, reverse gate tests, and a
+  100-case root-cause audit for the unchanged `5155a682` baseline; no Resolver behavior or
+  frozen answer is changed.
+
 ## 0.14.2 - 2026-09-03
 
 - Add a developer-only autonomous contract evaluator with 414 deterministic public-synthetic

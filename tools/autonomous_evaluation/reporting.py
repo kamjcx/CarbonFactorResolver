@@ -56,6 +56,7 @@ def render_markdown(payload: Mapping[str, Any]) -> str:
     rows = payload.get("results", ())
     attacks = payload.get("state_machine_attacks", ())
     failures = payload.get("bad_cases", ())
+    gate = payload.get("quality_gate", {})
     lines = [
         "# CFR Autonomous Public-Synthetic Contract Evaluation",
         "",
@@ -67,7 +68,9 @@ def render_markdown(payload: Mapping[str, Any]) -> str:
         f"- Passed cases: **{sum(bool(row.get('passed')) for row in rows)} / {len(rows)}**",
         f"- Bad Cases: **{len(failures)}**",
         f"- State-machine attacks passed: **{sum(bool(row.get('passed')) for row in attacks)} / {len(attacks)}**",
-        f"- Hard safety gates: **{'PASS' if metrics.get('hard_gates_pass') else 'FAIL'}**",
+        f"- Evaluation execution: **{gate.get('execution_status', 'completed')}**",
+        f"- Quality gate: **{gate.get('quality_status', 'PASS' if metrics.get('hard_gates_pass') else 'FAIL')}**",
+        f"- Unresolved Bad Cases: **{gate.get('unresolved_bad_case_count', len(failures))}**",
         "",
         "## Metrics",
         "",
@@ -141,7 +144,7 @@ def write_first_run(
     pre_run_dirty = bool(_git(root, "status", "--porcelain"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    failures = bad_cases(payload.get("results", ()))
+    failures = list(payload.get("bad_cases") or bad_cases(payload.get("results", ())))
     complete = {**dict(payload), "bad_cases": failures}
     result_path = output_dir / "first_run.json"
     bad_case_path = output_dir / "bad_cases.json"

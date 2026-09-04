@@ -2,6 +2,12 @@
 
 Status: **VERSIONED ADJUDICATION — FROZEN FIRST RUN UNCHANGED**
 
+Machine-enforced record:
+[`data/benchmarks/autonomous_evaluation_v1_adjudications.json`](../data/benchmarks/autonomous_evaluation_v1_adjudications.json).
+Each entry is bound to the evaluator-contract SHA, semantic case SHA, request-input SHA,
+reason, reviewer/authority, adjudication version, and effective software version. A mismatch
+fails closed; prose alone cannot exempt a case from a quality gate.
+
 This record resolves six disagreements discovered by Autonomous Evaluation V1. It does not
 rewrite the generated cases, their expected answers, the immutable first-run output, or any
 historical score.

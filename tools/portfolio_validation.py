@@ -29,6 +29,7 @@ from typing import Any, Mapping, Sequence
 from a1_factor_engine import A1FactorResolutionEngine, ResolutionStatus
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
 from a1_factor_engine.serialization import serialize_trace
+from a1_factor_engine.units import UnitConversionError, parse_factor_unit
 
 SCHEMA_VERSION = "portfolio-challenge/v1"
 ABSTENTION_STATUSES = {
@@ -187,6 +188,7 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
         ranks.append(rank)
     boundary_violations = 0
     subject_violations = 0
+    unit_violations = 0
     for row in results:
         request = row["request"]
         for candidate_id in row["observed_ids"]:
@@ -199,6 +201,15 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
             observed_boundary = str(record.get("boundary") or "")
             if requested_boundary and observed_boundary != requested_boundary:
                 boundary_violations += 1
+            requested_factor_unit = str(request.get("target_factor_unit") or "")
+            observed_factor_unit = str(record.get("factor_unit") or "")
+            if requested_factor_unit and observed_factor_unit:
+                try:
+                    requested_dimension = parse_factor_unit(requested_factor_unit).activity_unit.dimension
+                    observed_dimension = parse_factor_unit(observed_factor_unit).activity_unit.dimension
+                    unit_violations += requested_dimension != observed_dimension
+                except UnitConversionError:
+                    unit_violations += 1
     abstain = metric_prf(
         [row["expected_decision"] == "abstain" for row in results],
         [row["observed_decision"] == "abstain" for row in results],
@@ -215,6 +226,9 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
         return latencies[min(len(latencies) - 1, math.ceil(q * len(latencies)) - 1)]
 
     errors = sum(row["observed_decision"] == "error" for row in results)
+    decision_correct = sum(
+        row["observed_decision"] == row["expected_decision"] for row in results
+    )
     returned_count = len(returned)
     retrieval_count = len(retrieval)
     return {
@@ -235,14 +249,89 @@ def aggregate(results: Sequence[Mapping[str, Any]], records_by_id: Mapping[str, 
         "boundary_violation_rate": _rate(boundary_violations, returned_count),
         "subject_violation_count": subject_violations,
         "subject_violation_rate": _rate(subject_violations, returned_count),
+        "unit_violation_count": unit_violations,
+        "unit_violation_rate": _rate(unit_violations, returned_count),
         "error_count": errors,
         "error_rate": _rate(errors, len(results)),
+        "decision_correct_count": decision_correct,
+        "decision_accuracy": _rate(decision_correct, len(results)),
         "abstention": abstain,
         "more_input": more_input,
         "p50_latency_ms": median(latencies) if latencies else 0.0,
         "p95_latency_ms": percentile(0.95),
         "p99_latency_ms": percentile(0.99),
     }
+
+
+def portfolio_quality_gate(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a fail-closed release gate separately from execution success."""
+
+    more_input = metrics.get("more_input", {})
+    more_input_recall = more_input.get("recall") if isinstance(more_input, Mapping) else None
+    checks = {
+        "decision_accuracy_at_least_95_percent": bool(
+            metrics.get("decision_accuracy") is not None and metrics["decision_accuracy"] >= 0.95
+        ),
+        "top_1_at_least_90_percent": bool(
+            metrics.get("top_1_accuracy") is not None and metrics["top_1_accuracy"] >= 0.90
+        ),
+        "recall_at_5_at_least_95_percent": bool(
+            metrics.get("recall_at_5") is not None and metrics["recall_at_5"] >= 0.95
+        ),
+        "more_input_positive_recall_at_least_90_percent": bool(
+            more_input_recall is not None and more_input_recall >= 0.90
+        ),
+        "wrong_candidate_rate_at_most_5_percent": bool(
+            metrics.get("wrong_candidate_rate") is not None
+            and metrics["wrong_candidate_rate"] <= 0.05
+        ),
+        "zero_forbidden_candidate_escape": metrics.get("forbidden_candidate_count") == 0,
+        "zero_boundary_violation": metrics.get("boundary_violation_count") == 0,
+        "zero_subject_violation": metrics.get("subject_violation_count") == 0,
+        "zero_unit_dimension_violation": metrics.get("unit_violation_count") == 0,
+        "zero_errors": metrics.get("error_count") == 0,
+    }
+    return {
+        "execution_status": "completed",
+        "quality_status": "PASS" if all(checks.values()) else "FAIL",
+        "hard_gates_pass": all(checks.values()),
+        "checks": checks,
+    }
+
+
+def dynamic_findings(gate: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Create findings from this run's failed checks; never carry stale prose."""
+
+    checks = gate.get("checks", {})
+    if not isinstance(checks, Mapping):
+        return [{
+            "id": "CFR-PV-GATE-MISSING",
+            "severity": "CRITICAL",
+            "status": "OPEN",
+            "summary": "Portfolio quality-gate checks are missing from this run.",
+        }]
+    severity = {
+        "decision_accuracy_at_least_95_percent": "HIGH",
+        "top_1_at_least_90_percent": "HIGH",
+        "recall_at_5_at_least_95_percent": "HIGH",
+        "more_input_positive_recall_at_least_90_percent": "HIGH",
+        "wrong_candidate_rate_at_most_5_percent": "HIGH",
+        "zero_forbidden_candidate_escape": "CRITICAL",
+        "zero_boundary_violation": "CRITICAL",
+        "zero_subject_violation": "CRITICAL",
+        "zero_unit_dimension_violation": "CRITICAL",
+        "zero_errors": "CRITICAL",
+    }
+    return [
+        {
+            "id": f"CFR-PV-{name.upper()}",
+            "severity": severity[name],
+            "status": "OPEN",
+            "summary": f"Current run failed quality check: {name}.",
+        }
+        for name, passed in checks.items()
+        if passed is not True
+    ]
 
 
 async def run_full_cfr(cases: Sequence[ChallengeCase], catalog: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -338,6 +427,7 @@ def _format_rate(value: float | None) -> str:
 
 def _report(payload: Mapping[str, Any], *, chinese: bool) -> str:
     runs = payload["runs"]
+    gate = payload["quality_gate"]
     lines = [
         "# CFR 作品集验证报告" if chinese else "# CFR Portfolio Validation Report",
         "",
@@ -347,18 +437,25 @@ def _report(payload: Mapping[str, Any], *, chinese: bool) -> str:
             "This developer-only offline QA run approves no formal factor and is not a production-admission decision."
         ),
         "",
-        "| Method | Top-1 | Recall@5 | MRR | Wrong candidates | Boundary | Subject | Errors |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        (
+            f"评测进程：**{gate['execution_status']}**；质量门禁：**{gate['quality_status']}**。"
+            if chinese else
+            f"Evaluation execution: **{gate['execution_status']}**; quality gate: **{gate['quality_status']}**."
+        ),
+        "",
+        "| Method | Decision | Top-1 | Recall@5 | Wrong candidates | Boundary | Subject | Unit | Errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for name, run in runs.items():
         metric = run["metrics"]
         lines.append(
-            f"| {name} | {_format_rate(metric['top_1_accuracy'])} | "
-            f"{_format_rate(metric['recall_at_5'])} | {_format_rate(metric['mrr'])} | "
+            f"| {name} | {_format_rate(metric['decision_accuracy'])} | "
+            f"{_format_rate(metric['top_1_accuracy'])} | {_format_rate(metric['recall_at_5'])} | "
             f"{_format_rate(metric['wrong_candidate_rate'])} "
             f"({metric['wrong_candidate_count']}/{metric['returned_candidate_count']}) | "
             f"{_format_rate(metric['boundary_violation_rate'])} | "
             f"{_format_rate(metric['subject_violation_rate'])} | "
+            f"{_format_rate(metric['unit_violation_rate'])} | "
             f"{metric['error_count']}/{metric['case_count']} |"
         )
     lines.extend([
@@ -379,26 +476,23 @@ def _report(payload: Mapping[str, Any], *, chinese: bool) -> str:
             "Full-CFR safety metrics score every returned candidate; unlisted candidates on MORE_INPUT or abstention cases count as wrong."
         ),
         "",
-        "## " + ("已知阻断" if chinese else "Known blockers"),
+        "## " + ("本次动态发现" if chinese else "Current-run findings"),
         "",
-        (
-            "故障注入确认：本地目录异常可能导致 resolve API 500；连接器健康端点可能回显异常中的敏感文本。"
-            if chinese else
-            "Fault injection confirms that a local-catalogue failure can produce a resolve API 500 and connector health can echo sensitive exception text."
-        ),
-        "",
-        (
-            "治理审计还发现：人工 REJECTED 记录目前可被后续 APPROVED 覆盖；本验证只证明拒绝后不能直接锁定。"
-            if chinese else
-            "Governance audit also found that a human REJECTED record can currently be overwritten by a later APPROVED record; this validation proves only that a rejected candidate cannot be locked directly."
-        ),
-        "",
-        (
-            "因此本次结果可用于作品集内部诊断，但在上述安全问题修复并复测前不应声明生产可用。"
-            if chinese else
-            "The run is useful as an internal portfolio diagnostic, but production-readiness must not be claimed before those safety findings are fixed and retested."
-        ),
     ])
+    findings = payload.get("known_findings", ())
+    if findings:
+        for finding in findings:
+            lines.append(f"- **{finding['severity']}** `{finding['id']}`: {finding['summary']}")
+    else:
+        lines.append("- " + ("本次门禁没有未解决发现。" if chinese else "No unresolved gate finding in this run."))
+    lines.extend((
+        "",
+        (
+            "脚本完成不等于质量通过；发布流程必须使用质量门禁退出码。"
+            if chinese else
+            "Successful script execution is not a quality PASS; release automation must enforce the quality-gate exit code."
+        ),
+    ))
     return "\n".join(lines) + "\n"
 
 
@@ -443,7 +537,8 @@ def write_outputs(output_dir: Path, payload: Mapping[str, Any], manifest: Mappin
         "Safety and error rates",
         [(f"{name} wrong", metric["wrong_candidate_rate"] or 0.0) for name, metric in metrics.items()] +
         [(f"{name} boundary", metric["boundary_violation_rate"] or 0.0) for name, metric in metrics.items()] +
-        [(f"{name} subject", metric["subject_violation_rate"] or 0.0) for name, metric in metrics.items()],
+        [(f"{name} subject", metric["subject_violation_rate"] or 0.0) for name, metric in metrics.items()] +
+        [(f"{name} unit", metric["unit_violation_rate"] or 0.0) for name, metric in metrics.items()],
     ), encoding="utf-8")
     latency_max = max(metric["p99_latency_ms"] for metric in metrics.values()) or 1.0
     (output_dir / "latency_percentiles.svg").write_text(_svg_bar_chart(
@@ -471,6 +566,7 @@ async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_d
         runs[method] = {"metrics": aggregate(results, records_by_id), "results": results}
     full_results = await run_full_cfr(cases, catalog)
     runs["full_cfr"] = {"metrics": aggregate(full_results, records_by_id), "results": full_results}
+    quality_gate = portfolio_quality_gate(runs["full_cfr"]["metrics"])
     payload = {
         "schema_version": "portfolio-validation-run/v1",
         "challenge_sha256": sha256_text_file(challenge_path),
@@ -481,26 +577,9 @@ async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_d
             category: sum(case.category == category for case in cases)
             for category in sorted({case.category for case in cases})
         },
-        "known_findings": [
-            {
-                "id": "CFR-PV-001",
-                "severity": "P0",
-                "status": "OPEN",
-                "summary": "Local catalogue timeout/connection failures can return HTTP 500.",
-            },
-            {
-                "id": "CFR-PV-002",
-                "severity": "P0",
-                "status": "OPEN",
-                "summary": "Connector health can echo sensitive exception text.",
-            },
-            {
-                "id": "CFR-PV-003",
-                "severity": "P1",
-                "status": "OPEN",
-                "summary": "A human REJECTED record can be overwritten by a later approval.",
-            },
-        ],
+        "execution_status": "completed",
+        "quality_gate": quality_gate,
+        "known_findings": dynamic_findings(quality_gate),
         "runs": runs,
     }
     git_status = _git_value("status", "--porcelain")
@@ -526,19 +605,24 @@ async def evaluate(challenge_path: Path, catalog_paths: Sequence[Path], output_d
     return payload
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--challenge", type=Path, default=Path("data/benchmarks/portfolio_challenge_v1.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("outputs/portfolio_validation"))
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     catalog_paths = (
         Path("data/fixtures/catalog/factorbench_catalog.json"),
         Path("data/fixtures/catalog/factorbench_extended_catalog.json"),
         Path("data/fixtures/catalog/portfolio_catalog_additions.json"),
     )
     result = asyncio.run(evaluate(args.challenge, catalog_paths, args.output))
-    print(json.dumps({name: run["metrics"] for name, run in result["runs"].items()}, indent=2))
+    print(json.dumps({
+        "execution_status": result["execution_status"],
+        "quality_gate": result["quality_gate"],
+        "metrics": {name: run["metrics"] for name, run in result["runs"].items()},
+    }, indent=2))
+    return 0 if result["quality_gate"]["hard_gates_pass"] else 2
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
