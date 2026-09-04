@@ -11,6 +11,13 @@ candidate, a precise `MORE_INPUT` question, or a safe refusal. Numeric values al
 from traceable source records; deterministic gates enforce unit, lifecycle-boundary,
 subject, and provenance compatibility before human review and immutable locking.
 
+The default HTTP application is a production-safe data plane: benchmark execution, debug
+resolution, full traces, and full diagnostics are absent. Deployments that need those operations
+must bind the explicit admin/dev application to a separate protected port and inject their own
+actor/tenant/project authorization policy. Live structured-source adapters are HTTPS-only,
+same-origin by default, and bounded against SSRF, redirect, credential-forwarding, timeout, and
+oversized-response attacks. See [the v4 threat model](docs/CFR_CONNECTOR_CONTROL_PLANE_SECURITY_V4.md).
+
 > **Status:** portfolio-ready, reproducible research prototype. Bundled evaluations use
 > public-synthetic fixtures. Results are not a claim of universal real-world accuracy or
 > production carbon-accounting readiness.
@@ -150,6 +157,7 @@ QA harness. It is not imported by the runtime or exposed through the CFR API.
 |---|---:|---|
 | v0.14.1 core package (historical) | 324 passed, 87.06% branch coverage | prior stable-release gate |
 | PR3 stacked candidate | 411 passed, 86.42% branch coverage | current Catalog-to-lock integrity regression gate |
+| PR4 stacked candidate | 438 passed, 86.82% branch coverage | Python 3.11/3.12/3.13 connector and control-plane security regression gate |
 | FactorBench V3 | 57 cases, contract metrics passed | versioned resolver behavior |
 | Frozen Unit Regression | first run 24/28; post-fix 28/28 | unit-system regression, not an independent holdout |
 | Closed Portfolio Benchmark | 39 direct + 1 `MORE_INPUT` with correct `REFERENCE_ONLY`; 0 boundary/subject violations | public-synthetic comparison and safety diagnostic |

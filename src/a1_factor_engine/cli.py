@@ -149,7 +149,7 @@ def main(
         from .api import create_app
 
         uvicorn.run(
-            create_app(engine=engine or _demo_engine(), benchmark_runner=benchmark_runner),
+            create_app(engine=engine or _demo_engine()),
             host=args.host,
             port=args.port,
         )

@@ -66,7 +66,7 @@ def test_default_api_reports_fixture_connector_health():
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["connectors"]["FixtureExternalConnector"]["available"] is True
+    assert set(payload) == {"status"}
 
 
 @pytest.mark.asyncio
@@ -111,4 +111,4 @@ def test_default_benchmark_api_rejects_paths_outside_configured_root(tmp_path):
         "/api/v1/benchmarks/runs", json={"path": str(outside)}
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404

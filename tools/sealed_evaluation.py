@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 from a1_factor_engine import A1FactorResolutionEngine
 from a1_factor_engine.adapters import HttpCatalogFactorRepository
-from a1_factor_engine.api import create_app
+from a1_factor_engine.api import AuthorizationContext, create_admin_app
 
 
 def sha256_file(path: Path) -> str:
@@ -110,7 +110,15 @@ async def _post_once(
         fetch_json=lambda _endpoint: catalog,
     )
     engine = A1FactorResolutionEngine(local_retrieval=repository)
-    app = create_app(engine=engine)
+    async def authorize(_headers: Mapping[str, str], _permission: str) -> AuthorizationContext:
+        return AuthorizationContext(
+            actor_id="sealed-evaluation",
+            tenant_id="offline-qa",
+            project_id=str(case["case_id"]),
+            permissions=("resolve:execute", "trace:read"),
+        )
+
+    app = create_admin_app(engine=engine, authorizer=authorize)
     body = case["request"]
     if isinstance(body, Mapping):
         body = dict(body)

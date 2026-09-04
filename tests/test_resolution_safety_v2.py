@@ -324,7 +324,7 @@ def test_formal_http_contract_rejects_min_score_and_debug_route_is_opt_in() -> N
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
-    from a1_factor_engine.api import create_app
+    from a1_factor_engine.api import AuthorizationContext, create_admin_app, create_app
 
     payload = {"material_name": "synthetic alumina", "quantity": 1, "min_score": 0}
     with TestClient(create_app()) as client:
@@ -332,7 +332,9 @@ def test_formal_http_contract_rejects_min_score_and_debug_route_is_opt_in() -> N
         assert response.status_code == 400
         assert client.post("/api/v1/debug/resolve", json=payload).status_code == 404
 
-    with TestClient(create_app(enable_debug_api=True)) as client:
+    async def allow(_headers, _permission):
+        return AuthorizationContext("tester", "tenant", "project", ("resolve:debug",))
+    with TestClient(create_admin_app(authorizer=allow)) as client:
         response = client.post("/api/v1/debug/resolve", json=payload)
         assert response.status_code < 500
 
