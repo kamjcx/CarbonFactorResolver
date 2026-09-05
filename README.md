@@ -114,7 +114,7 @@ Exclusions remain visible with reason codes in Trace. Editable diagram sources:
 
 | Gate | Current `main` result |
 |---|---:|
-| Test suite | 586 passed |
+| Test suite | 587 passed |
 | Branch coverage | 86.91% |
 | Python compatibility | 3.11 / 3.12 / 3.13 |
 | Boundary, subject and unit safety regressions | PASS |
