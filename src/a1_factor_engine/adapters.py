@@ -876,6 +876,24 @@ class InMemoryResolutionStore:
             raise ValueError("trace updates require an existing atomic resolution run")
         trace.verify_hash_chain()
         current = self.traces[trace.request_id]
+        trace_envelope = (
+            trace.trace_id,
+            trace.request_id,
+            trace.request_fingerprint,
+            trace.raw_request_fingerprint,
+            trace.normalized_business_fingerprint,
+            trace.database_anchor,
+        )
+        current_envelope = (
+            current.trace_id,
+            current.request_id,
+            current.request_fingerprint,
+            current.raw_request_fingerprint,
+            current.normalized_business_fingerprint,
+            current.database_anchor,
+        )
+        if trace_envelope != current_envelope:
+            raise PersistenceIntegrityError("trace envelope is immutable")
         if trace.revision < current.revision:
             raise ValueError("trace revision cannot move backwards")
         current_hashes = tuple(item.entry_hash for item in current.entries)
@@ -977,6 +995,13 @@ class InMemoryResolutionStore:
             if approval.status not in {ApprovalStatus.APPROVED, ApprovalStatus.REJECTED}:
                 raise ReviewStateConflictError(
                     "only approved or rejected terminal decisions can be persisted"
+                )
+            if (
+                approval.status == ApprovalStatus.REJECTED
+                and approval.mode != ApprovalMode.STANDARD
+            ):
+                raise ReviewStateConflictError(
+                    "rejected decisions require standard approval mode"
                 )
             if approval.status == ApprovalStatus.APPROVED and any(
                 item.request_id == approval.request_id
@@ -1104,6 +1129,20 @@ class InMemoryResolutionStore:
             if locked.approval != replace(approval, status=ApprovalStatus.LOCKED):
                 raise PersistenceIntegrityError(
                     "lock embeds an approval different from the canonical stored approval"
+                )
+            canonical_candidate = next((
+                item for item in (
+                    *recommendation.candidates, *recommendation.reviewable_candidates
+                )
+                if item.candidate_id == locked.candidate.candidate_id
+            ), None)
+            if (
+                canonical_candidate is None
+                or locked.candidate != canonical_candidate
+                or locked.candidate.content_sha256 != approval.candidate_content_sha256
+            ):
+                raise PersistenceIntegrityError(
+                    "lock candidate differs from the approved recommendation candidate"
                 )
             expected_snapshot = LockedResolutionEvidenceSnapshot.from_trace(
                 trace,

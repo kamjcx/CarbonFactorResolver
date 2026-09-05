@@ -376,6 +376,60 @@ async def test_store_rejects_trace_envelope_and_nested_lock_approval_forgery() -
             expected_trace_revision=current.revision,
         )
 
+    forged_candidate = replace(candidate_a, factor_value=778.0)
+    candidate_forged_lock = LockedResolution(
+        request_id=result.request_id,
+        candidate=forged_candidate,
+        reviewer="locker",
+        approval=replace(approval, status=ApprovalStatus.LOCKED),
+        evidence_snapshot=snapshot,
+        candidate_content_sha256=forged_candidate.content_sha256,
+        recommendation_content_sha256=result.content_sha256,
+        approval_content_sha256=approval.content_sha256,
+    )
+    with pytest.raises(PersistenceIntegrityError, match="recommendation candidate"):
+        await engine.store.save_locked(
+            candidate_forged_lock,
+            lock_trace,
+            expected_recommendation_sha256=result.content_sha256,
+            expected_trace_revision=current.revision,
+        )
+
+
+@pytest.mark.asyncio
+async def test_store_rejects_general_trace_envelope_rewrite_and_reject_override() -> None:
+    engine = _engine()
+    result, candidate_a, _ = await _recommend(engine, "review-general-trace-integrity")
+    trace = await engine.trace(result.request_id)
+    assert trace is not None
+    forged = trace.clone()
+    forged.trace_id = "forged-trace-id"
+    with pytest.raises(PersistenceIntegrityError, match="trace envelope"):
+        await engine.store.save_trace(forged)
+
+    decision_trace = trace.clone()
+    decision_trace.append("human_approval", "candidate rejected", {
+        "candidate_id": candidate_a.candidate_id,
+        "reviewer": "reviewer",
+        "note": "not selected",
+    })
+    invalid_rejection = engine._bound_approval(
+        result,
+        candidate_a,
+        decision_trace,
+        "reviewer",
+        ApprovalStatus.REJECTED,
+        note="not selected",
+        mode=ApprovalMode.REFERENCE_OVERRIDE,
+    )
+    with pytest.raises(ReviewStateConflictError, match="standard approval mode"):
+        await engine.store.save_approval(
+            invalid_rejection,
+            decision_trace,
+            expected_recommendation_sha256=result.content_sha256,
+            expected_trace_revision=trace.revision,
+        )
+
 
 @pytest.mark.asyncio
 async def test_explicit_same_revision_concurrent_mutations_have_one_stale_loser() -> None:
