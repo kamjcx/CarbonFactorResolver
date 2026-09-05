@@ -74,12 +74,13 @@ def validate_mass_quantity_kg(candidate: Candidate) -> None:
     """Validate the auxiliary kg field against authoritative mass activity."""
 
     if (
-        candidate.activity_dimension != "MASS"
-        or candidate.resolved_quantity_kg is None
+        candidate.resolved_quantity_kg is None
         or candidate.resolved_activity_value is None
         or candidate.resolved_activity_unit is None
     ):
         return
+    if parse_factor_unit(candidate.factor_unit).activity_unit.dimension.value != "MASS":
+        raise ValueError("resolved_quantity_kg requires denominator-aligned mass activity")
     expected_kg = float(convert_activity_decimal(
         candidate.resolved_activity_value,
         candidate.resolved_activity_unit,
@@ -87,7 +88,7 @@ def validate_mass_quantity_kg(candidate: Candidate) -> None:
     ))
     if not isfinite(expected_kg):
         raise ValueError("resolved mass in kilograms must be finite")
-    tolerance = max(1e-9, abs(expected_kg) * 1e-9)
+    tolerance = abs(expected_kg) * 1e-9
     if abs(candidate.resolved_quantity_kg - expected_kg) > tolerance:
         raise ValueError(
             "resolved_quantity_kg is inconsistent with denominator-aligned mass activity"
@@ -269,10 +270,13 @@ def expected_total_emissions(candidate: Candidate) -> float | None:
         raise ValueError(
             "resolved_quantity_kg compatibility fallback requires a mass factor"
         )
-    return (
+    total = (
         convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
         * candidate.resolved_quantity_kg
     )
+    if not isfinite(total):
+        raise ValueError("resolved factor application total must be finite")
+    return total
 
 
 def to_derived(candidate: Candidate) -> DerivedFactorCandidate:

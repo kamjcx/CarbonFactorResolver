@@ -380,6 +380,47 @@ async def test_lock_rejects_kg_field_inconsistent_with_mass_activity() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("quantity", "quantity_unit", "wrong_kg", "dimension"),
+    (
+        (1e-9, "g", 1e-9, "MASS"),
+        (1, "t", 1, None),
+    ),
+)
+async def test_lock_rejects_relative_kg_errors_and_missing_dimension_bypass(
+    quantity: float,
+    quantity_unit: str,
+    wrong_kg: float,
+    dimension: str | None,
+) -> None:
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository((_source("kgCO2e/kg", 2),))
+    )
+    result = await engine.resolve(ResolutionRequest(
+        request_id=f"kg-bypass-{quantity_unit}",
+        material_name="unit field material",
+        quantity=quantity,
+        quantity_unit=quantity_unit,
+        geography="CN",
+        year=2025,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+    candidate = replace(
+        result.candidates[0],
+        activity_dimension=dimension,
+        resolved_quantity_kg=wrong_kg,
+    )
+    engine.store.recommendations[result.request_id] = replace(
+        result,
+        candidates=(candidate,),
+    )
+    await engine.approve(result.request_id, candidate.candidate_id, "reviewer")
+
+    with pytest.raises(ValueError, match="inconsistent"):
+        await engine.lock(result.request_id, candidate.candidate_id, "reviewer")
+
+
+@pytest.mark.asyncio
 async def test_lock_rejects_non_finite_recomputed_total_after_float_overflow() -> None:
     engine = A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository((_source("kgCO2e/kg", 2),))
@@ -396,6 +437,38 @@ async def test_lock_rejects_non_finite_recomputed_total_after_float_overflow() -
     candidate = replace(
         result.candidates[0],
         resolved_activity_value=1e308,
+        resolved_quantity_kg=1e308,
+        total_emissions_kgco2e=0,
+    )
+    engine.store.recommendations[result.request_id] = replace(
+        result,
+        candidates=(candidate,),
+    )
+    await engine.approve(result.request_id, candidate.candidate_id, "reviewer")
+
+    with pytest.raises(ValueError, match="must be finite"):
+        await engine.lock(result.request_id, candidate.candidate_id, "reviewer")
+
+
+@pytest.mark.asyncio
+async def test_lock_rejects_non_finite_legacy_kg_fallback_total() -> None:
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository((_source("kgCO2e/kg", 2),))
+    )
+    result = await engine.resolve(ResolutionRequest(
+        request_id="legacy-overflow-lock",
+        material_name="unit field material",
+        quantity=1,
+        quantity_unit="kg",
+        geography="CN",
+        year=2025,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+    candidate = replace(
+        result.candidates[0],
+        resolved_activity_value=None,
+        resolved_activity_unit=None,
+        activity_dimension=None,
         resolved_quantity_kg=1e308,
         total_emissions_kgco2e=0,
     )

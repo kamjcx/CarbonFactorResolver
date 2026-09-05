@@ -55,7 +55,9 @@ At lock time, a resolved activity unit that differs from the factor denominator 
 The stored preview must equal the result recomputed from the aligned activity and normalized impact
 numerator. For mass activity, the auxiliary kilograms must also equal the aligned activity converted
 to kilograms. Non-finite recomputed totals fail closed. A legacy kilogram fallback is rejected for
-non-mass factors.
+non-mass factors and applies the same finite-total requirement. Kilogram consistency uses a strict
+relative tolerance so very small masses cannot hide proportionally large errors; a missing legacy
+`activity_dimension` does not bypass validation when the factor denominator is a mass unit.
 
 ## API boundary
 
