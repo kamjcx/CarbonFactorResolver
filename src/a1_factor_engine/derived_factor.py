@@ -39,6 +39,33 @@ SOURCE_QUALITY = {
 }
 
 
+def application_total_kgco2e(
+    factor_value: float,
+    factor_unit: str,
+    resolved_activity_value: float,
+    resolved_activity_unit: str,
+) -> float:
+    """Apply a factor to denominator-aligned activity and return kgCO2e.
+
+    ``resolved_activity_value`` is authoritative for factor application. The
+    compatibility field ``resolved_quantity_kg`` must never be multiplied by a
+    per-tonne or per-gram factor directly.
+    """
+
+    parsed = parse_factor_unit(factor_unit)
+    denominator = parsed.activity_unit.canonical_unit
+    if resolved_activity_unit != denominator:
+        raise ValueError(
+            "resolved activity must be denominator-aligned with the factor unit"
+        )
+    factor_kgco2e = convert_factor(
+        factor_value,
+        factor_unit,
+        f"kgCO2e/{denominator}",
+    )
+    return factor_kgco2e * resolved_activity_value
+
+
 def source_quality(candidate: Candidate) -> float:
     """Deterministic quality signal based on evidence, never source label alone."""
 
@@ -159,7 +186,14 @@ def derive_candidate(
     if total_emissions_kgco2e is not None:
         effective_total = total_emissions_kgco2e
     elif effective_activity is not None:
-        effective_total = effective_factor * effective_activity
+        if effective_activity_unit is None:
+            raise ValueError("resolved activity unit is required for factor application")
+        effective_total = application_total_kgco2e(
+            effective_factor,
+            base.factor_unit,
+            effective_activity,
+            effective_activity_unit,
+        )
     elif effective_quantity is not None:
         effective_total = (
             convert_factor(effective_factor, base.factor_unit, "kgCO2e/kg")
@@ -192,12 +226,20 @@ def expected_total_emissions(candidate: Candidate) -> float | None:
     """Return the total implied by a candidate's normalized factor and quantity."""
 
     if candidate.resolved_activity_value is not None:
-        denominator = parse_factor_unit(candidate.factor_unit).activity_unit.canonical_unit
-        if candidate.resolved_activity_unit != denominator:
-            return None
-        return candidate.factor_value * candidate.resolved_activity_value
+        if candidate.resolved_activity_unit is None:
+            raise ValueError("resolved activity unit is required for factor application")
+        return application_total_kgco2e(
+            candidate.factor_value,
+            candidate.factor_unit,
+            candidate.resolved_activity_value,
+            candidate.resolved_activity_unit,
+        )
     if candidate.resolved_quantity_kg is None:
         return None
+    if parse_factor_unit(candidate.factor_unit).activity_unit.dimension.value != "MASS":
+        raise ValueError(
+            "resolved_quantity_kg compatibility fallback requires a mass factor"
+        )
     return (
         convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
         * candidate.resolved_quantity_kg

@@ -1837,6 +1837,12 @@ class Candidate:
             not isfinite(self.resolved_quantity_kg) or self.resolved_quantity_kg <= 0
         ):
             raise ValueError("resolved quantity must be finite and positive")
+        if (
+            self.resolved_quantity_kg is not None
+            and self.activity_dimension is not None
+            and self.activity_dimension != "MASS"
+        ):
+            raise ValueError("resolved_quantity_kg is valid only for mass activity")
         if self.resolved_activity_value is not None and (
             not isfinite(self.resolved_activity_value) or self.resolved_activity_value <= 0
         ):
@@ -1928,6 +1934,26 @@ class DerivedFactorCandidate:
             raise ValueError("derived factor must be finite and non-negative")
         if not 0 <= self.evidence_coverage <= 1 or not 0 <= self.resolution_strength <= 1:
             raise ValueError("derived coverage and strength must be between 0 and 1")
+        if self.resolved_quantity_kg is not None and (
+            not isfinite(self.resolved_quantity_kg) or self.resolved_quantity_kg <= 0
+        ):
+            raise ValueError("resolved quantity must be finite and positive")
+        if (
+            self.resolved_quantity_kg is not None
+            and self.activity_dimension is not None
+            and self.activity_dimension != "MASS"
+        ):
+            raise ValueError("resolved_quantity_kg is valid only for mass activity")
+        if self.resolved_activity_value is not None and (
+            not isfinite(self.resolved_activity_value) or self.resolved_activity_value <= 0
+        ):
+            raise ValueError("resolved activity value must be finite and positive")
+        if self.resolved_activity_value is not None and not self.resolved_activity_unit:
+            raise ValueError("resolved activity unit is required with a resolved activity value")
+        if self.total_emissions_kgco2e is not None and (
+            not isfinite(self.total_emissions_kgco2e) or self.total_emissions_kgco2e < 0
+        ):
+            raise ValueError("total emissions must be finite and non-negative")
 
 
 @dataclass(frozen=True, slots=True)

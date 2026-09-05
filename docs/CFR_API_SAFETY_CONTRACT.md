@@ -49,6 +49,12 @@ diagnostic candidates, internal qualification/conversion metadata, runtime times
 revisions, catalog/registry/policy anchors, accounting assignments and transformation internals.
 The admin debug endpoint deliberately retains the full diagnostic response as a separate contract.
 
+Application internals (`resolved_activity_value`, `resolved_activity_unit`, `activity_dimension`,
+`resolved_quantity_kg` and `total_emissions_kgco2e`) remain excluded from this public allowlist.
+Their semantics and lock-time integrity rules are defined by
+[`cfr-unit-fields/v1`](CFR_UNIT_FIELD_CONTRACT_V1.md); the explicit admin/debug surface retains them
+for controlled diagnosis only.
+
 ## Error contract
 
 Every handled validation/HTTP failure and every unhandled failure returns a stable JSON envelope.

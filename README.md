@@ -198,6 +198,10 @@ evaluation-governance hardening stack without an incompatible public API change.
 [v0.14.3 Release Readiness](docs/RELEASE_READINESS_V0.14.3.md), and the
 [v0.14.3 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.3).
 
+The prospective [Unit Field Contract v1](docs/CFR_UNIT_FIELD_CONTRACT_V1.md) distinguishes the
+factor-denominator-aligned application quantity from the kilograms-only compatibility field and
+keeps both fields outside the production response allowlist.
+
 ## Design guarantees
 
 - No language model or fallback code may originate an emission-factor value.
