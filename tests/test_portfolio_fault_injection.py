@@ -331,7 +331,9 @@ def test_resolve_validation_error_does_not_reflect_internal_exception_text():
             raise ValueError(f"token={INJECTED_SECRET} internal.py:42")
 
     with TestClient(create_app(engine=InvalidResolver())) as client:
-        response = client.post("/api/v1/resolve", json={"material_name": "steel"})
+        response = client.post(
+            "/api/v1/resolve", json={"material_name": "steel", "quantity": 1}
+        )
 
     assert response.status_code == 400
     assert response.json()["detail"]["reason_code"] == "INVALID_RESOLUTION_REQUEST"

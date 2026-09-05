@@ -23,6 +23,7 @@ from .operability import (
     API_VERSION_HEADER,
     CORRELATION_ID_HEADER,
     INTERNAL_SERVER_ERROR,
+    REQUEST_ID_HEADER,
     REQUEST_VALIDATION_FAILED,
     RESOURCE_NOT_FOUND,
     SERVICE_NOT_READY,
@@ -48,14 +49,40 @@ MAX_BENCHMARK_CACHE_BYTES = 8_000_000
 LOGGER = logging.getLogger("a1_factor_engine.api")
 
 
-def _documented_error(description: str, reason: str, message: str) -> dict[str, Any]:
+def _error_payload(correlation_id: str, reason: str, message: str) -> dict[str, Any]:
+    detail = error_detail(reason, message)
     return {
+        "api_version": API_CONTRACT_VERSION,
+        "request_id": correlation_id,
+        "correlation_id": correlation_id,
+        "error": detail,
+        # API v1 compatibility alias.
+        "detail": detail,
+    }
+
+
+def _documented_error(
+    description: str,
+    reason: str,
+    message: str,
+    *,
+    model: Any = None,
+) -> dict[str, Any]:
+    response: dict[str, Any] = {
         "description": description,
         "content": {"application/json": {"example": {
-            "detail": error_detail(reason, message),
+            **_error_payload("018f-example-correlation-id", reason, message),
             "request_id": "018f-example-correlation-id",
         }}},
+        "headers": {
+            API_VERSION_HEADER: {"schema": {"type": "string"}},
+            REQUEST_ID_HEADER: {"schema": {"type": "string"}},
+            CORRELATION_ID_HEADER: {"schema": {"type": "string"}},
+        },
     }
+    if model is not None:
+        response["model"] = model
+    return response
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,7 +184,7 @@ def _install_http_contract(app: Any) -> None:
         correlation_id = getattr(request.state, "correlation_id", safe_request_id())
         return JSONResponse(
             status_code=status_code,
-            content={"detail": error_detail(reason, message), "request_id": correlation_id},
+            content=_error_payload(correlation_id, reason, message),
         )
 
     @app.middleware("http")
@@ -175,8 +202,18 @@ def _install_http_contract(app: Any) -> None:
                 request, 415, UNSUPPORTED_MEDIA_TYPE, "application/json is required"
             )
         else:
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except Exception:
+                LOGGER.error(
+                    "unhandled API failure",
+                    extra={"correlation_id": request.state.correlation_id},
+                )
+                response = envelope(
+                    request, 500, INTERNAL_SERVER_ERROR, "internal server error"
+                )
         response.headers[API_VERSION_HEADER] = API_CONTRACT_VERSION
+        response.headers[REQUEST_ID_HEADER] = request.state.correlation_id
         response.headers[CORRELATION_ID_HEADER] = request.state.correlation_id
         LOGGER.info(
             "http request completed",
@@ -191,11 +228,12 @@ def _install_http_contract(app: Any) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException):
         if isinstance(exc.detail, Mapping) and exc.detail.get("reason_code"):
-            response = JSONResponse(
-                status_code=exc.status_code,
-                content={"detail": dict(exc.detail), "request_id": request.state.correlation_id},
+            return envelope(
+                request,
+                exc.status_code,
+                str(exc.detail["reason_code"]),
+                str(exc.detail.get("message", "request could not be completed")),
             )
-            return response
         reason = RESOURCE_NOT_FOUND if exc.status_code == 404 else REQUEST_VALIDATION_FAILED
         message = "resource not found" if exc.status_code == 404 else "request could not be completed"
         return envelope(request, exc.status_code, reason, message)
@@ -275,10 +313,20 @@ def _register_public_routes(
     required_readiness: Mapping[str, Any] | None = None,
     optional_readiness: Mapping[str, Any] | None = None,
 ) -> None:
-    from fastapi import Body, HTTPException, Request
+    from fastapi import HTTPException, Request
     from fastapi.responses import JSONResponse
 
+    from .api_contracts import (
+        PublicErrorEnvelopeDTO,
+        PublicReadinessErrorEnvelopeDTO,
+        PublicRecommendationDTO,
+        ResolutionRequestDTO,
+        public_recommendation_dto,
+    )
+
     globals()["Request"] = Request
+    globals()["ResolutionRequestDTO"] = ResolutionRequestDTO
+    globals()["PublicRecommendationDTO"] = PublicRecommendationDTO
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -287,7 +335,10 @@ def _register_public_routes(
     @app.get(
         "/readyz",
         responses={503: _documented_error(
-            "Required dependency unavailable", SERVICE_NOT_READY, "required dependency is unavailable"
+            "Required dependency unavailable",
+            SERVICE_NOT_READY,
+            "required dependency is unavailable",
+            model=PublicReadinessErrorEnvelopeDTO,
         )},
     )
     async def readyz(request: Request):
@@ -297,11 +348,27 @@ def _register_public_routes(
             optional=optional_readiness or {},
         )
         if status_code != 200:
-            payload["request_id"] = request.state.correlation_id
+            detail = payload.get("detail", {})
+            reason = (
+                str(detail.get("reason_code", SERVICE_NOT_READY))
+                if isinstance(detail, Mapping) else SERVICE_NOT_READY
+            )
+            message = (
+                str(detail.get("message", "required dependency is unavailable"))
+                if isinstance(detail, Mapping) else "required dependency is unavailable"
+            )
+            payload = {
+                **_error_payload(request.state.correlation_id, reason, message),
+                "required_total": payload.get("required_total", 0),
+                "required_unavailable": payload.get("required_unavailable", 0),
+                "optional_unavailable": payload.get("optional_unavailable", 0),
+            }
         return JSONResponse(status_code=status_code, content=payload)
 
     @app.post(
         "/api/v1/resolve",
+        response_model=PublicRecommendationDTO,
+        response_model_exclude_none=True,
         openapi_extra={"x-cfr-reason-codes": [
             INVALID_RESOLUTION_REQUEST,
             RESOLUTION_SCOPE_CONFLICT,
@@ -315,45 +382,53 @@ def _register_public_routes(
                 "Invalid structured resolution request",
                 INVALID_RESOLUTION_REQUEST,
                 "resolution request is invalid",
+                model=PublicErrorEnvelopeDTO,
             ),
             409: _documented_error(
                 "Request ID scope conflict",
                 RESOLUTION_SCOPE_CONFLICT,
                 "resolution request id is already scoped",
+                model=PublicErrorEnvelopeDTO,
             ),
             415: _documented_error(
-                "JSON media type required", UNSUPPORTED_MEDIA_TYPE, "application/json is required"
+                "JSON media type required", UNSUPPORTED_MEDIA_TYPE, "application/json is required",
+                model=PublicErrorEnvelopeDTO,
             ),
             422: _documented_error(
                 "JSON request validation failed",
                 REQUEST_VALIDATION_FAILED,
                 "request validation failed",
+                model=PublicErrorEnvelopeDTO,
             ),
             500: _documented_error(
-                "Stable internal failure", INTERNAL_SERVER_ERROR, "internal server error"
+                "Stable internal failure", INTERNAL_SERVER_ERROR, "internal server error",
+                model=PublicErrorEnvelopeDTO,
             ),
         },
     )
-    async def resolve(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    async def resolve(
+        request: Request,
+        payload: ResolutionRequestDTO,
+    ) -> dict[str, Any]:
         content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
         if content_type != "application/json" and not content_type.endswith("+json"):
             raise HTTPException(
                 status_code=415,
                 detail=error_detail(UNSUPPORTED_MEDIA_TYPE, "application/json is required"),
             )
-        payload = dict(payload)
-        payload["request_id"] = safe_request_id(
-            payload.get("request_id") or request.headers.get("x-request-id")
+        payload_mapping = payload.to_domain_mapping()
+        payload_mapping["request_id"] = safe_request_id(
+            payload_mapping.get("request_id") or request.headers.get(REQUEST_ID_HEADER)
             or request.headers.get(CORRELATION_ID_HEADER)
         )
-        request.state.correlation_id = payload["request_id"]
+        request.state.correlation_id = payload_mapping["request_id"]
         context = (
             await resolution_authorizer(request, "resolve:execute")
             if resolution_authorizer is not None
             else None
         )
         try:
-            parsed_request = ResolutionRequest.from_mapping(payload)
+            parsed_request = ResolutionRequest.from_mapping(payload_mapping)
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail={
                 "reason_code": INVALID_RESOLUTION_REQUEST,
@@ -400,12 +475,13 @@ def _register_public_routes(
                         "reason_code": RESOLUTION_PAYLOAD_CONFLICT,
                         "message": "stored resolution lacks an idempotency binding",
                     })
-                serialized_existing = serialize_recommendation(existing)
-                serialized_existing["request_id"] = parsed_request.request_id
-                return serialized_existing
+                return public_recommendation_dto(
+                    existing,
+                    request_id=parsed_request.request_id,
+                ).model_dump(mode="json", exclude_none=True)
             fingerprints[key] = fingerprint
             try:
-                result = await resolver.resolve(payload)
+                result = await resolver.resolve(payload_mapping)
             except (TypeError, ValueError) as exc:
                 fingerprints.pop(key, None)
                 if reserved_new and resolution_owners is not None:
@@ -419,14 +495,21 @@ def _register_public_routes(
                 if reserved_new and resolution_owners is not None:
                     resolution_owners.pop(parsed_request.request_id, None)
                 raise
-            serialized = serialize_recommendation(result)
+            serialized = public_recommendation_dto(
+                result,
+                request_id=parsed_request.request_id,
+            ).model_dump(mode="json", exclude_none=True)
             serialized["request_id"] = safe_request_id(
                 serialized.get("request_id") or parsed_request.request_id
             )
             request.state.correlation_id = serialized["request_id"]
             return serialized
 
-    @app.get("/api/v1/resolutions/{request_id}")
+    @app.get(
+        "/api/v1/resolutions/{request_id}",
+        response_model=PublicRecommendationDTO,
+        response_model_exclude_none=True,
+    )
     async def get_resolution(request: Request, request_id: str) -> dict[str, Any]:
         if resolution_authorizer is not None:
             context = await resolution_authorizer(request, "resolution:read")
@@ -438,7 +521,9 @@ def _register_public_routes(
         result = await resolver.state(request_id)
         if result is None:
             raise HTTPException(status_code=404, detail="resolution not found")
-        return serialize_recommendation(result)
+        return public_recommendation_dto(result, request_id=request_id).model_dump(
+            mode="json", exclude_none=True
+        )
 
     @app.get("/api/v1/connectors/health")
     async def connectors_health() -> dict[str, str]:
