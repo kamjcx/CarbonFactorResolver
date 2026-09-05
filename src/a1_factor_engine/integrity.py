@@ -32,6 +32,14 @@ class PersistenceIntegrityError(ValueError):
     """A persisted approval, lock or audit object failed a binding check."""
 
 
+class ReviewStateConflictError(ValueError):
+    """A human-review operation conflicts with an already committed state."""
+
+
+class StaleReviewRevisionError(ReviewStateConflictError):
+    """A human-review compare-and-set used an obsolete trace revision."""
+
+
 # Full input schema consumed by HttpCatalogFactorRepository. Unknown fields are
 # rejected under cfr.catalog/v2 so a result-driving field cannot silently sit
 # outside the digest contract. Legacy payloads remain readable only through the

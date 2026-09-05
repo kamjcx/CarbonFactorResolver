@@ -16,6 +16,11 @@ from .adapters import (
 )
 from .derived_factor import expected_total_emissions
 from .graph import GraphState, Router, Stage, candidate_hard_rejection_reasons
+from .integrity import (
+    PersistenceIntegrityError,
+    ReviewStateConflictError,
+    StaleReviewRevisionError,
+)
 from .material_registry import (
     DEFAULT_MATERIAL_REGISTRY,
     MaterialRuleSuggestionPort,
@@ -513,6 +518,7 @@ class A1FactorResolutionEngine:
     async def approve(
         self, request_id: str, candidate_id: str, reviewer: str, note: str = "",
         mode: ApprovalMode | str = ApprovalMode.STANDARD,
+        *, expected_trace_revision: int | None = None,
     ) -> ApprovalRecord:
         recommendation = await self.store.get_recommendation(request_id)
         if recommendation is None:
@@ -564,30 +570,25 @@ class A1FactorResolutionEngine:
                 raise ValueError("REFERENCE_ONLY candidates require reference_override mode and a non-empty reason")
         elif candidate.result_tier == ResultTier.USABLE_WITH_ASSUMPTIONS and mode == ApprovalMode.STANDARD:
             raise ValueError("USABLE_WITH_ASSUMPTIONS candidates require assumption_acceptance mode")
-        existing_approval = await self.store.get_approval(request_id, candidate_id)
-        if existing_approval is not None and existing_approval.status == ApprovalStatus.REJECTED:
-            raise ValueError("rejected candidate cannot be approved in the same resolution run")
-        trace = await self.store.get_trace(request_id)
-        if trace is None:
-            raise KeyError(f"trace not found: {request_id}")
-        expected_trace_revision = trace.revision
-        updated_trace = trace.clone()
-        updated_trace.append("human_approval", "candidate approved", {
-            "candidate_id": candidate_id, "reviewer": reviewer, "note": note, "approval_mode": mode.value,
-        })
-        approval = self._bound_approval(
-            recommendation, candidate, updated_trace, reviewer, ApprovalStatus.APPROVED,
-            note=note, mode=mode,
-        )
-        await self.store.save_approval(
-            approval,
-            updated_trace,
-            expected_recommendation_sha256=recommendation.content_sha256,
+        return await self._commit_decision(
+            recommendation,
+            candidate,
+            reviewer,
+            ApprovalStatus.APPROVED,
+            note=note,
+            mode=mode,
             expected_trace_revision=expected_trace_revision,
         )
-        return approval
 
-    async def reject(self, request_id: str, candidate_id: str, reviewer: str, note: str = "") -> ApprovalRecord:
+    async def reject(
+        self,
+        request_id: str,
+        candidate_id: str,
+        reviewer: str,
+        note: str = "",
+        *,
+        expected_trace_revision: int | None = None,
+    ) -> ApprovalRecord:
         recommendation = await self.store.get_recommendation(request_id)
         if recommendation is None:
             raise KeyError(f"unknown request: {request_id}")
@@ -599,35 +600,38 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
-        trace = await self.store.get_trace(request_id)
-        if trace is None:
-            raise KeyError(f"trace not found: {request_id}")
-        expected_trace_revision = trace.revision
-        updated_trace = trace.clone()
-        updated_trace.append("human_approval", "candidate rejected", {
-            "candidate_id": candidate_id, "reviewer": reviewer, "note": note,
-        })
-        approval = self._bound_approval(
-            recommendation, candidate, updated_trace, reviewer, ApprovalStatus.REJECTED,
+        return await self._commit_decision(
+            recommendation,
+            candidate,
+            reviewer,
+            ApprovalStatus.REJECTED,
             note=note,
-        )
-        await self.store.save_approval(
-            approval,
-            updated_trace,
-            expected_recommendation_sha256=recommendation.content_sha256,
+            mode=ApprovalMode.STANDARD,
             expected_trace_revision=expected_trace_revision,
         )
-        return approval
 
-    async def lock(self, request_id: str, candidate_id: str, reviewer: str) -> LockedResolution:
+    async def lock(
+        self,
+        request_id: str,
+        candidate_id: str,
+        reviewer: str,
+        *,
+        expected_trace_revision: int | None = None,
+    ) -> LockedResolution:
+        if expected_trace_revision is not None:
+            current_trace = await self.store.get_trace(request_id)
+            if current_trace is None:
+                raise KeyError(f"trace not found: {request_id}")
+            if current_trace.revision != expected_trace_revision:
+                raise StaleReviewRevisionError("trace revision changed before lock")
         existing = await self.store.get_locked(request_id)
         if existing is not None:
-            if existing.candidate.candidate_id != candidate_id:
-                raise ValueError("resolution is already locked and immutable")
-            return existing
+            if existing.candidate.candidate_id == candidate_id:
+                return existing
+            raise ReviewStateConflictError("resolution is already locked and immutable")
         approval = await self.store.get_approval(request_id, candidate_id)
         if approval is None or approval.status != ApprovalStatus.APPROVED:
-            raise ValueError("candidate must be approved before locking")
+            raise ReviewStateConflictError("candidate must be approved before locking")
         recommendation = await self.store.get_recommendation(request_id)
         if recommendation is None:
             raise KeyError(f"unknown request: {request_id}")
@@ -639,9 +643,6 @@ class A1FactorResolutionEngine:
         ), None)
         if candidate is None:
             raise KeyError(f"candidate not found: {candidate_id}")
-        trace = await self.store.get_trace(request_id)
-        if trace is None:
-            raise KeyError(f"trace not found: {request_id}")
         incomplete = tuple(
             item for item in candidate.limitations
             if item.startswith("formal_admission_incomplete:")
@@ -678,8 +679,6 @@ class A1FactorResolutionEngine:
             recommendation.database_anchor_sha256,
             recommendation.registry_anchor_sha256,
             recommendation.policy_anchor_sha256,
-            trace.revision,
-            trace.chain_sha256,
         )
         observed_bindings = (
             approval.candidate_content_sha256,
@@ -688,47 +687,69 @@ class A1FactorResolutionEngine:
             approval.database_anchor_sha256,
             approval.registry_anchor_sha256,
             approval.policy_anchor_sha256,
-            approval.trace_revision,
-            approval.trace_chain_sha256,
         )
         if observed_bindings != expected_bindings:
-            raise ValueError("approval binding no longer matches candidate, recommendation, anchors or trace")
-        expected_trace_revision = trace.revision
-        updated_trace = trace.clone()
-        updated_trace.append("lock", "approved factor result locked", {
-            "candidate_id": candidate_id,
-            "reviewer": reviewer,
-            "locked_result_is_immutable": True,
-            "trace_remains_appendable": True,
-            "result_tier": candidate.result_tier.value,
-            "approval_mode": approval.mode.value,
-            "accepted_assumptions": candidate.assumptions,
-            "override_reason": approval.note if approval.mode == ApprovalMode.REFERENCE_OVERRIDE else None,
-            "unresolved_warnings": candidate.warnings,
-        })
-        snapshot = LockedResolutionEvidenceSnapshot.from_trace(
-            updated_trace,
-            registry_anchor_sha256=recommendation.registry_anchor_sha256 or "",
-            policy_anchor_sha256=recommendation.policy_anchor_sha256 or "",
-        )
-        locked_approval = replace(approval, status=ApprovalStatus.LOCKED)
-        locked = LockedResolution(
-            request_id=request_id,
-            candidate=candidate,
-            reviewer=reviewer,
-            approval=locked_approval,
-            evidence_snapshot=snapshot,
-            candidate_content_sha256=candidate.content_sha256,
-            recommendation_content_sha256=recommendation.content_sha256,
-            approval_content_sha256=approval.content_sha256,
-        )
-        await self.store.save_locked(
-            locked,
-            updated_trace,
-            expected_recommendation_sha256=recommendation.content_sha256,
-            expected_trace_revision=expected_trace_revision,
-        )
-        return locked
+            raise PersistenceIntegrityError(
+                "approval binding no longer matches candidate, recommendation or anchors"
+            )
+        for attempt in range(8):
+            trace = await self.store.get_trace(request_id)
+            if trace is None:
+                raise KeyError(f"trace not found: {request_id}")
+            if (
+                expected_trace_revision is not None
+                and trace.revision != expected_trace_revision
+            ):
+                raise StaleReviewRevisionError("trace revision changed before lock")
+            if (
+                approval.trace_revision is None
+                or approval.trace_revision < 1
+                or approval.trace_revision > trace.revision
+                or approval.trace_chain_sha256
+                != trace.chain_sha256_at_revision(approval.trace_revision)
+            ):
+                raise PersistenceIntegrityError(
+                    "approval trace binding is not an immutable prefix of the current trace"
+                )
+            commit_revision = trace.revision
+            updated_trace = trace.clone()
+            updated_trace.append("lock", "approved factor result locked", {
+                "candidate_id": candidate_id,
+                "reviewer": reviewer,
+                "locked_result_is_immutable": True,
+                "trace_remains_appendable": True,
+                "result_tier": candidate.result_tier.value,
+                "approval_mode": approval.mode.value,
+                "accepted_assumptions": candidate.assumptions,
+                "override_reason": approval.note if approval.mode == ApprovalMode.REFERENCE_OVERRIDE else None,
+                "unresolved_warnings": candidate.warnings,
+            })
+            snapshot = LockedResolutionEvidenceSnapshot.from_trace(
+                updated_trace,
+                registry_anchor_sha256=recommendation.registry_anchor_sha256 or "",
+                policy_anchor_sha256=recommendation.policy_anchor_sha256 or "",
+            )
+            locked = LockedResolution(
+                request_id=request_id,
+                candidate=candidate,
+                reviewer=reviewer,
+                approval=replace(approval, status=ApprovalStatus.LOCKED),
+                evidence_snapshot=snapshot,
+                candidate_content_sha256=candidate.content_sha256,
+                recommendation_content_sha256=recommendation.content_sha256,
+                approval_content_sha256=approval.content_sha256,
+            )
+            try:
+                return await self.store.save_locked(
+                    locked,
+                    updated_trace,
+                    expected_recommendation_sha256=recommendation.content_sha256,
+                    expected_trace_revision=commit_revision,
+                )
+            except StaleReviewRevisionError:
+                if expected_trace_revision is not None or attempt == 7:
+                    raise
+        raise StaleReviewRevisionError("lock could not commit after concurrent updates")
 
     async def locked(self, request_id: str) -> LockedResolution | None:
         return await self.store.get_locked(request_id)
@@ -810,6 +831,82 @@ class A1FactorResolutionEngine:
             registry_anchor_sha256=self.graph.material_registry.sha256,
             policy_anchor_sha256=(policy or self.graph.deployment_policy).anchor_sha256,
         )
+
+    async def _commit_decision(
+        self,
+        recommendation: Recommendation,
+        candidate: Candidate,
+        reviewer: str,
+        status: ApprovalStatus,
+        *,
+        note: str,
+        mode: ApprovalMode,
+        expected_trace_revision: int | None,
+    ) -> ApprovalRecord:
+        if expected_trace_revision is not None:
+            current_trace = await self.store.get_trace(recommendation.request_id)
+            if current_trace is None:
+                raise KeyError(f"trace not found: {recommendation.request_id}")
+            if current_trace.revision != expected_trace_revision:
+                raise StaleReviewRevisionError("trace revision changed before decision")
+        existing = await self.store.get_approval(
+            recommendation.request_id, candidate.candidate_id
+        )
+        if existing is not None:
+            if existing.matches_decision(
+                status=status, reviewer=reviewer, note=note, mode=mode
+            ):
+                return existing
+            if (
+                existing.status == ApprovalStatus.REJECTED
+                and status == ApprovalStatus.APPROVED
+            ):
+                raise ReviewStateConflictError(
+                    "rejected candidate cannot be approved in the same resolution run"
+                )
+            raise ReviewStateConflictError(
+                "candidate already has a different terminal human decision"
+            )
+        for attempt in range(8):
+            trace = await self.store.get_trace(recommendation.request_id)
+            if trace is None:
+                raise KeyError(f"trace not found: {recommendation.request_id}")
+            if (
+                expected_trace_revision is not None
+                and trace.revision != expected_trace_revision
+            ):
+                raise StaleReviewRevisionError("trace revision changed before decision")
+            commit_revision = trace.revision
+            updated_trace = trace.clone()
+            message = "candidate approved" if status == ApprovalStatus.APPROVED else "candidate rejected"
+            details: dict[str, object] = {
+                "candidate_id": candidate.candidate_id,
+                "reviewer": reviewer,
+                "note": note,
+            }
+            if status == ApprovalStatus.APPROVED:
+                details["approval_mode"] = mode.value
+            updated_trace.append("human_approval", message, details)
+            approval = self._bound_approval(
+                recommendation,
+                candidate,
+                updated_trace,
+                reviewer,
+                status,
+                note=note,
+                mode=mode,
+            )
+            try:
+                return await self.store.save_approval(
+                    approval,
+                    updated_trace,
+                    expected_recommendation_sha256=recommendation.content_sha256,
+                    expected_trace_revision=commit_revision,
+                )
+            except StaleReviewRevisionError:
+                if expected_trace_revision is not None or attempt == 7:
+                    raise
+        raise StaleReviewRevisionError("decision could not commit after concurrent updates")
 
     @staticmethod
     def _bound_approval(

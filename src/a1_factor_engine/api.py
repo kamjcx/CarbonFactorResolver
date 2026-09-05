@@ -17,6 +17,11 @@ from typing import Any
 from uuid import uuid4
 
 from .engine import A1FactorResolutionEngine
+from .integrity import (
+    PersistenceIntegrityError,
+    ReviewStateConflictError,
+    StaleReviewRevisionError,
+)
 from .models import ResolutionRequest, resolution_request_fingerprint
 from .operability import (
     API_CONTRACT_VERSION,
@@ -43,6 +48,9 @@ ADMIN_AUTHORIZATION_REQUIRED = "ADMIN_AUTHORIZATION_REQUIRED"
 BENCHMARK_DATASET_REJECTED = "BENCHMARK_DATASET_REJECTED"
 RESOLUTION_SCOPE_CONFLICT = "RESOLUTION_SCOPE_CONFLICT"
 RESOLUTION_PAYLOAD_CONFLICT = "RESOLUTION_PAYLOAD_CONFLICT"
+REVIEW_STATE_CONFLICT = "REVIEW_STATE_CONFLICT"
+REVIEW_INTEGRITY_CONFLICT = "REVIEW_INTEGRITY_CONFLICT"
+STALE_REVIEW_REVISION = "STALE_REVIEW_REVISION"
 MAX_BENCHMARK_BYTES = 2_000_000
 MAX_BENCHMARK_RUNS = 64
 MAX_BENCHMARK_CACHE_BYTES = 8_000_000
@@ -172,7 +180,7 @@ def _engine_is_configured(engine: Any, *, explicitly_supplied: bool) -> bool:
     return not isinstance(graph.local_retrieval, NullFactorRepository) or bool(graph.external_connectors)
 
 
-def _install_http_contract(app: Any) -> None:
+def _install_http_contract(app: Any, *, admin_review_routes: bool = False) -> None:
     from fastapi import Request
     from fastapi.exceptions import RequestValidationError
     from fastapi.responses import JSONResponse
@@ -192,9 +200,17 @@ def _install_http_contract(app: Any) -> None:
         supplied = request.headers.get("x-request-id") or request.headers.get(CORRELATION_ID_HEADER)
         request.state.correlation_id = safe_request_id(supplied)
         media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+        review_json_route = (
+            admin_review_routes
+            and request.url.path.startswith("/api/v1/resolutions/")
+            and request.url.path.rsplit("/", 1)[-1] in {"decisions", "locks"}
+        )
         if (
             request.method == "POST"
-            and request.url.path in {"/api/v1/resolve", "/api/v1/debug/resolve"}
+            and (
+                request.url.path in {"/api/v1/resolve", "/api/v1/debug/resolve"}
+                or review_json_route
+            )
             and media_type != "application/json"
             and not media_type.endswith("+json")
         ):
@@ -600,6 +616,20 @@ def create_admin_app(
     # Route annotations are postponed; expose the lazily imported type for
     # FastAPI/Pydantic resolution without making FastAPI a core dependency.
     globals()["Request"] = Request
+    from .api_contracts import (
+        PublicErrorEnvelopeDTO,
+        ReviewDecisionRequestDTO,
+        ReviewDecisionResponseDTO,
+        ReviewLockRequestDTO,
+        ReviewLockResponseDTO,
+        review_decision_dto,
+        review_lock_dto,
+    )
+
+    globals()["ReviewDecisionRequestDTO"] = ReviewDecisionRequestDTO
+    globals()["ReviewDecisionResponseDTO"] = ReviewDecisionResponseDTO
+    globals()["ReviewLockRequestDTO"] = ReviewLockRequestDTO
+    globals()["ReviewLockResponseDTO"] = ReviewLockResponseDTO
     resolver = engine or _unconfigured_engine()
     engine_configured = _engine_is_configured(resolver, explicitly_supplied=engine is not None)
     health = _connector_health_for(resolver, connector_health)
@@ -613,7 +643,7 @@ def create_admin_app(
     app.state.benchmark_runner = benchmark_runner
     app.state.benchmark_runs = runs
     app.state.resolution_fingerprints = resolution_fingerprints
-    _install_http_contract(app)
+    _install_http_contract(app, admin_review_routes=True)
 
     async def require(request: Request, permission: str) -> AuthorizationContext:
         try:
@@ -652,6 +682,115 @@ def create_admin_app(
     def require_resolution_owner(context: AuthorizationContext, request_id: str) -> None:
         if resolution_owners.get(request_id) != (context.tenant_id, context.project_id):
             raise HTTPException(status_code=404, detail="resolution not found")
+
+    review_conflict_responses: dict[int | str, dict[str, Any]] = {
+        409: _documented_error(
+            "Review state or revision conflict",
+            REVIEW_STATE_CONFLICT,
+            "review operation conflicts with committed state",
+            model=PublicErrorEnvelopeDTO,
+        ),
+        415: _documented_error(
+            "JSON media type required",
+            UNSUPPORTED_MEDIA_TYPE,
+            "application/json is required",
+            model=PublicErrorEnvelopeDTO,
+        ),
+        422: _documented_error(
+            "JSON request validation failed",
+            REQUEST_VALIDATION_FAILED,
+            "request validation failed",
+            model=PublicErrorEnvelopeDTO,
+        ),
+    }
+
+    def raise_review_error(exc: Exception) -> None:
+        if isinstance(exc, StaleReviewRevisionError):
+            reason = STALE_REVIEW_REVISION
+            message = "review trace revision is stale"
+        elif isinstance(exc, PersistenceIntegrityError):
+            reason = REVIEW_INTEGRITY_CONFLICT
+            message = "review integrity validation failed"
+        else:
+            reason = REVIEW_STATE_CONFLICT
+            message = "review operation conflicts with committed state"
+        raise HTTPException(
+            status_code=409,
+            detail={"reason_code": reason, "message": message},
+        ) from exc
+
+    @app.post(
+        "/api/v1/resolutions/{request_id}/decisions",
+        response_model=ReviewDecisionResponseDTO,
+        responses=review_conflict_responses,
+        openapi_extra={"x-cfr-reason-codes": [
+            REVIEW_STATE_CONFLICT,
+            REVIEW_INTEGRITY_CONFLICT,
+            STALE_REVIEW_REVISION,
+            ADMIN_AUTHORIZATION_REQUIRED,
+        ]},
+    )
+    async def create_review_decision(
+        request: Request,
+        request_id: str,
+        payload: ReviewDecisionRequestDTO,
+    ) -> dict[str, Any]:
+        context = await require(request, "review:write")
+        require_resolution_owner(context, request_id)
+        try:
+            if payload.decision == "approve":
+                decision = await resolver.approve(
+                    request_id,
+                    payload.candidate_id,
+                    context.actor_id,
+                    payload.note,
+                    payload.mode,
+                    expected_trace_revision=payload.expected_trace_revision,
+                )
+            else:
+                decision = await resolver.reject(
+                    request_id,
+                    payload.candidate_id,
+                    context.actor_id,
+                    payload.note,
+                    expected_trace_revision=payload.expected_trace_revision,
+                )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="review target not found") from exc
+        except (PersistenceIntegrityError, ReviewStateConflictError, ValueError) as exc:
+            raise_review_error(exc)
+        return review_decision_dto(decision).model_dump(mode="json")
+
+    @app.post(
+        "/api/v1/resolutions/{request_id}/locks",
+        response_model=ReviewLockResponseDTO,
+        responses=review_conflict_responses,
+        openapi_extra={"x-cfr-reason-codes": [
+            REVIEW_STATE_CONFLICT,
+            REVIEW_INTEGRITY_CONFLICT,
+            STALE_REVIEW_REVISION,
+            ADMIN_AUTHORIZATION_REQUIRED,
+        ]},
+    )
+    async def lock_reviewed_resolution(
+        request: Request,
+        request_id: str,
+        payload: ReviewLockRequestDTO,
+    ) -> dict[str, Any]:
+        context = await require(request, "review:lock")
+        require_resolution_owner(context, request_id)
+        try:
+            locked = await resolver.lock(
+                request_id,
+                payload.candidate_id,
+                context.actor_id,
+                expected_trace_revision=payload.expected_trace_revision,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="review target not found") from exc
+        except (PersistenceIntegrityError, ReviewStateConflictError, ValueError) as exc:
+            raise_review_error(exc)
+        return review_lock_dto(locked).model_dump(mode="json")
 
     @app.post("/api/v1/debug/resolve")
     async def resolve_debug(request: Request, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
@@ -824,6 +963,9 @@ __all__ = [
     "INVALID_RESOLUTION_REQUEST",
     "RESOLUTION_PAYLOAD_CONFLICT",
     "RESOLUTION_SCOPE_CONFLICT",
+    "REVIEW_INTEGRITY_CONFLICT",
+    "REVIEW_STATE_CONFLICT",
+    "STALE_REVIEW_REVISION",
     "create_admin_app",
     "create_app",
 ]

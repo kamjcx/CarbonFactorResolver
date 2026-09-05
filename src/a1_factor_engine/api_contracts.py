@@ -9,12 +9,14 @@ reaching that boundary.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from .models import (
+    ApprovalMode,
+    ApprovalStatus,
     CandidateOrigin,
     FactorKind,
     FactorSourceType,
@@ -37,6 +39,7 @@ PositiveFiniteFloat = Annotated[
 ]
 StrictYear = Annotated[int, Field(strict=True, gt=0, lt=3000)]
 StrictTopK = Annotated[int, Field(strict=True, ge=1, le=50)]
+StrictRevision = Annotated[int, Field(strict=True, ge=0)]
 OptionalNonEmptyText = NonEmptyText | SkipJsonSchema[None]
 OptionalStrictYear = StrictYear | SkipJsonSchema[None]
 
@@ -87,6 +90,55 @@ class ResolutionRequestDTO(_StrictRequestModel):
         """Return the explicitly admitted fields for independent domain validation."""
 
         return self.model_dump(mode="python", exclude_none=True)
+
+
+class ReviewDecisionRequestDTO(_StrictRequestModel):
+    """Admin-only decision command; reviewer identity is never caller supplied."""
+
+    candidate_id: NonEmptyText
+    decision: Literal["approve", "reject"]
+    note: Annotated[str, StringConstraints(strict=True)] = ""
+    mode: ApprovalMode = ApprovalMode.STANDARD
+    expected_trace_revision: StrictRevision | SkipJsonSchema[None] = None
+
+    @model_validator(mode="after")
+    def reject_mode_must_be_standard(self) -> ReviewDecisionRequestDTO:
+        if self.decision == "reject" and self.mode != ApprovalMode.STANDARD:
+            raise ValueError("reject decisions only support standard mode")
+        return self
+
+
+class ReviewLockRequestDTO(_StrictRequestModel):
+    """Admin-only immutable lock command."""
+
+    candidate_id: NonEmptyText
+    expected_trace_revision: StrictRevision | SkipJsonSchema[None] = None
+
+
+class ReviewDecisionResponseDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_id: str
+    candidate_id: str
+    status: ApprovalStatus
+    reviewer_identity: str
+    note: str
+    mode: ApprovalMode
+    trace_revision: int
+    trace_chain_sha256: str
+    content_sha256: str
+
+
+class ReviewLockResponseDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_id: str
+    candidate_id: str
+    status: ApprovalStatus
+    reviewer_identity: str
+    trace_revision: int
+    trace_chain_sha256: str
+    content_sha256: str
 
 
 class PublicErrorDetailDTO(BaseModel):
@@ -308,11 +360,45 @@ def public_recommendation_dto(
     )
 
 
+def review_decision_dto(decision: Any) -> ReviewDecisionResponseDTO:
+    return ReviewDecisionResponseDTO(
+        request_id=_text(_field(decision, "request_id")),
+        candidate_id=_text(_field(decision, "candidate_id")),
+        status=_field(decision, "status"),
+        reviewer_identity=_text(_field(decision, "reviewer_identity")),
+        note=_text(_field(decision, "note", "")),
+        mode=_field(decision, "mode"),
+        trace_revision=_field(decision, "trace_revision"),
+        trace_chain_sha256=_text(_field(decision, "trace_chain_sha256")),
+        content_sha256=_text(_field(decision, "content_sha256")),
+    )
+
+
+def review_lock_dto(locked: Any) -> ReviewLockResponseDTO:
+    snapshot = _field(locked, "evidence_snapshot")
+    approval = _field(locked, "approval")
+    return ReviewLockResponseDTO(
+        request_id=_text(_field(locked, "request_id")),
+        candidate_id=_text(_field(_field(locked, "candidate"), "candidate_id")),
+        status=_field(approval, "status"),
+        reviewer_identity=_text(_field(locked, "reviewer")),
+        trace_revision=_field(snapshot, "trace_revision"),
+        trace_chain_sha256=_text(_field(snapshot, "trace_chain_sha256")),
+        content_sha256=_text(_field(locked, "content_sha256")),
+    )
+
+
 __all__ = [
     "PublicErrorEnvelopeDTO",
     "PublicReadinessErrorEnvelopeDTO",
     "PublicRecommendationDTO",
+    "ReviewDecisionRequestDTO",
+    "ReviewDecisionResponseDTO",
+    "ReviewLockRequestDTO",
+    "ReviewLockResponseDTO",
     "ResolutionRequestDTO",
     "UnitConversionEvidenceDTO",
     "public_recommendation_dto",
+    "review_decision_dto",
+    "review_lock_dto",
 ]

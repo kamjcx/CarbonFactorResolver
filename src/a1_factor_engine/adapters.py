@@ -21,6 +21,9 @@ from .catalog_policy import (
 from .integrity import (
     CATALOG_SCHEMA_VERSION,
     CatalogIntegrityError,
+    PersistenceIntegrityError,
+    ReviewStateConflictError,
+    StaleReviewRevisionError,
     catalog_content_sha256,
     stable_sha256,
     verify_digest,
@@ -28,6 +31,7 @@ from .integrity import (
 from .matching import normalize_text
 from .material_registry import DEFAULT_MATERIAL_REGISTRY, MaterialSemanticRegistryPort
 from .models import (
+    ApprovalMode,
     ApprovalRecord,
     ApprovalStatus,
     DatabaseVersionAnchor,
@@ -38,6 +42,7 @@ from .models import (
     LinkOutcome,
     LinkStrategy,
     LockedResolution,
+    LockedResolutionEvidenceSnapshot,
     MaterialCategory,
     MaterialClass,
     MaterialInterpretation,
@@ -871,6 +876,24 @@ class InMemoryResolutionStore:
             raise ValueError("trace updates require an existing atomic resolution run")
         trace.verify_hash_chain()
         current = self.traces[trace.request_id]
+        trace_envelope = (
+            trace.trace_id,
+            trace.request_id,
+            trace.request_fingerprint,
+            trace.raw_request_fingerprint,
+            trace.normalized_business_fingerprint,
+            trace.database_anchor,
+        )
+        current_envelope = (
+            current.trace_id,
+            current.request_id,
+            current.request_fingerprint,
+            current.raw_request_fingerprint,
+            current.normalized_business_fingerprint,
+            current.database_anchor,
+        )
+        if trace_envelope != current_envelope:
+            raise PersistenceIntegrityError("trace envelope is immutable")
         if trace.revision < current.revision:
             raise ValueError("trace revision cannot move backwards")
         current_hashes = tuple(item.entry_hash for item in current.entries)
@@ -895,42 +918,160 @@ class InMemoryResolutionStore:
         *,
         expected_recommendation_sha256: str,
         expected_trace_revision: int,
-    ) -> None:
+    ) -> ApprovalRecord:
         key = (approval.request_id, approval.candidate_id)
         async with self._approval_lock:
-            if approval.request_id in self.locked:
-                raise ValueError("locked resolution cannot be changed")
             recommendation = self.recommendations.get(approval.request_id)
             current_trace = self.traces.get(approval.request_id)
             if recommendation is None or current_trace is None:
-                raise ValueError("approval requires an existing resolution run")
-            if recommendation.content_sha256 != expected_recommendation_sha256:
-                raise ValueError("recommendation changed before approval commit")
+                raise ReviewStateConflictError("approval requires an existing resolution run")
             if current_trace.revision != expected_trace_revision:
-                raise ValueError("trace revision changed before approval commit")
+                raise StaleReviewRevisionError("trace revision changed before approval commit")
+            existing = self.approvals.get(key)
+            if existing is not None:
+                if existing.matches_decision(
+                    status=approval.status,
+                    reviewer=approval.reviewer,
+                    note=approval.note,
+                    mode=approval.mode,
+                ):
+                    stable_existing_bindings = (
+                        existing.candidate_content_sha256,
+                        existing.recommendation_content_sha256,
+                        existing.recommendation_revision,
+                        existing.database_anchor_sha256,
+                        existing.registry_anchor_sha256,
+                        existing.policy_anchor_sha256,
+                    )
+                    stable_incoming_bindings = (
+                        approval.candidate_content_sha256,
+                        approval.recommendation_content_sha256,
+                        approval.recommendation_revision,
+                        approval.database_anchor_sha256,
+                        approval.registry_anchor_sha256,
+                        approval.policy_anchor_sha256,
+                    )
+                    if stable_existing_bindings == stable_incoming_bindings:
+                        return existing
+                    raise PersistenceIntegrityError(
+                        "replayed decision bindings do not match committed state"
+                    )
+                raise ReviewStateConflictError(
+                    "candidate already has a different terminal human decision"
+                )
+            if approval.request_id in self.locked:
+                raise ReviewStateConflictError("locked resolution cannot be changed")
+            if recommendation.content_sha256 != expected_recommendation_sha256:
+                raise ReviewStateConflictError("recommendation changed before approval commit")
             trace.verify_hash_chain()
+            trace_envelope = (
+                trace.trace_id,
+                trace.request_id,
+                trace.request_fingerprint,
+                trace.raw_request_fingerprint,
+                trace.normalized_business_fingerprint,
+                trace.database_anchor,
+            )
+            current_envelope = (
+                current_trace.trace_id,
+                current_trace.request_id,
+                current_trace.request_fingerprint,
+                current_trace.raw_request_fingerprint,
+                current_trace.normalized_business_fingerprint,
+                current_trace.database_anchor,
+            )
+            if trace_envelope != current_envelope:
+                raise PersistenceIntegrityError("approval trace envelope cannot be replaced")
             if trace.revision != expected_trace_revision + 1:
-                raise ValueError("approval commit must append exactly one trace event")
+                raise PersistenceIntegrityError(
+                    "approval commit must append exactly one trace event"
+                )
             if tuple(item.entry_hash for item in trace.entries[:-1]) != tuple(
                 item.entry_hash for item in current_trace.entries
             ):
-                raise ValueError("approval trace does not extend the stored trace")
-            if key in self.approvals:
-                raise ValueError("candidate already has a terminal human decision")
+                raise PersistenceIntegrityError(
+                    "approval trace does not extend the stored trace"
+                )
+            if approval.status not in {ApprovalStatus.APPROVED, ApprovalStatus.REJECTED}:
+                raise ReviewStateConflictError(
+                    "only approved or rejected terminal decisions can be persisted"
+                )
+            if (
+                approval.status == ApprovalStatus.REJECTED
+                and approval.mode != ApprovalMode.STANDARD
+            ):
+                raise ReviewStateConflictError(
+                    "rejected decisions require standard approval mode"
+                )
             if approval.status == ApprovalStatus.APPROVED and any(
                 item.request_id == approval.request_id
                 and item.status == ApprovalStatus.APPROVED
                 for item in self.approvals.values()
             ):
-                raise ValueError("request already has an approved candidate")
+                raise ReviewStateConflictError("request already has an approved candidate")
             if not approval.is_integrity_bound:
-                raise ValueError("legacy approval without integrity digests cannot be persisted")
+                raise PersistenceIntegrityError(
+                    "legacy approval without integrity digests cannot be persisted"
+                )
+            expected_message = (
+                "candidate approved"
+                if approval.status == ApprovalStatus.APPROVED
+                else "candidate rejected"
+            )
+            expected_details: dict[str, object] = {
+                "candidate_id": approval.candidate_id,
+                "reviewer": approval.reviewer,
+                "note": approval.note,
+            }
+            if approval.status == ApprovalStatus.APPROVED:
+                expected_details["approval_mode"] = approval.mode.value
+            event = trace.entries[-1]
+            if (
+                event.stage != "human_approval"
+                or event.message != expected_message
+                or dict(event.details) != expected_details
+                or approval.reviewer_identity != approval.reviewer
+            ):
+                raise PersistenceIntegrityError(
+                    "approval decision does not match its trace event or verified reviewer"
+                )
+            candidate = next((
+                item for item in (
+                    *recommendation.candidates, *recommendation.reviewable_candidates
+                )
+                if item.candidate_id == approval.candidate_id
+            ), None)
+            expected_bindings = (
+                candidate.content_sha256 if candidate is not None else None,
+                recommendation.content_sha256,
+                recommendation.revision,
+                recommendation.database_anchor_sha256,
+                recommendation.registry_anchor_sha256,
+                recommendation.policy_anchor_sha256,
+                trace.revision,
+                trace.chain_sha256,
+            )
+            observed_bindings = (
+                approval.candidate_content_sha256,
+                approval.recommendation_content_sha256,
+                approval.recommendation_revision,
+                approval.database_anchor_sha256,
+                approval.registry_anchor_sha256,
+                approval.policy_anchor_sha256,
+                approval.trace_revision,
+                approval.trace_chain_sha256,
+            )
+            if candidate is None or observed_bindings != expected_bindings:
+                raise PersistenceIntegrityError(
+                    "approval bindings do not match the committed candidate, recommendation, anchors or trace"
+                )
             self.approvals[key] = approval
             stored_trace = trace.clone()
             self.traces[trace.request_id] = stored_trace
             self.recommendations[trace.request_id] = replace(
                 recommendation, trace=stored_trace
             )
+            return approval
 
     async def get_approval(self, request_id: str, candidate_id: str) -> ApprovalRecord | None:
         return self.approvals.get((request_id, candidate_id))
@@ -942,34 +1083,104 @@ class InMemoryResolutionStore:
         *,
         expected_recommendation_sha256: str,
         expected_trace_revision: int,
-    ) -> None:
+    ) -> LockedResolution:
         async with self._approval_lock:
-            if locked.request_id in self.locked:
-                raise ValueError("resolution is already locked and immutable")
             recommendation = self.recommendations.get(locked.request_id)
             current_trace = self.traces.get(locked.request_id)
             if recommendation is None or current_trace is None:
-                raise ValueError("lock requires an existing resolution run")
-            if recommendation.content_sha256 != expected_recommendation_sha256:
-                raise ValueError("recommendation changed before lock commit")
+                raise ReviewStateConflictError("lock requires an existing resolution run")
             if current_trace.revision != expected_trace_revision:
-                raise ValueError("trace revision changed before lock commit")
+                raise StaleReviewRevisionError("trace revision changed before lock commit")
+            existing = self.locked.get(locked.request_id)
+            if existing is not None:
+                if existing.candidate.candidate_id == locked.candidate.candidate_id:
+                    return existing
+                raise ReviewStateConflictError("resolution is already locked and immutable")
+            if recommendation.content_sha256 != expected_recommendation_sha256:
+                raise ReviewStateConflictError("recommendation changed before lock commit")
             trace.verify_hash_chain()
+            trace_envelope = (
+                trace.trace_id,
+                trace.request_id,
+                trace.request_fingerprint,
+                trace.raw_request_fingerprint,
+                trace.normalized_business_fingerprint,
+                trace.database_anchor,
+            )
+            current_envelope = (
+                current_trace.trace_id,
+                current_trace.request_id,
+                current_trace.request_fingerprint,
+                current_trace.raw_request_fingerprint,
+                current_trace.normalized_business_fingerprint,
+                current_trace.database_anchor,
+            )
+            if trace_envelope != current_envelope:
+                raise PersistenceIntegrityError("lock trace envelope cannot be replaced")
             if trace.revision != expected_trace_revision + 1:
-                raise ValueError("lock commit must append exactly one trace event")
+                raise PersistenceIntegrityError("lock commit must append exactly one trace event")
             if tuple(item.entry_hash for item in trace.entries[:-1]) != tuple(
                 item.entry_hash for item in current_trace.entries
             ):
-                raise ValueError("lock trace does not extend the stored trace")
+                raise PersistenceIntegrityError("lock trace does not extend the stored trace")
             approval = self.approvals.get((locked.request_id, locked.candidate.candidate_id))
             if approval is None or approval.content_sha256 != locked.approval_content_sha256:
-                raise ValueError("approval changed before lock commit")
+                raise PersistenceIntegrityError("approval changed before lock commit")
+            if locked.approval != replace(approval, status=ApprovalStatus.LOCKED):
+                raise PersistenceIntegrityError(
+                    "lock embeds an approval different from the canonical stored approval"
+                )
+            canonical_candidate = next((
+                item for item in (
+                    *recommendation.candidates, *recommendation.reviewable_candidates
+                )
+                if item.candidate_id == locked.candidate.candidate_id
+            ), None)
+            if (
+                canonical_candidate is None
+                or locked.candidate != canonical_candidate
+                or locked.candidate.content_sha256 != approval.candidate_content_sha256
+            ):
+                raise PersistenceIntegrityError(
+                    "lock candidate differs from the approved recommendation candidate"
+                )
+            expected_snapshot = LockedResolutionEvidenceSnapshot.from_trace(
+                trace,
+                registry_anchor_sha256=recommendation.registry_anchor_sha256 or "",
+                policy_anchor_sha256=recommendation.policy_anchor_sha256 or "",
+            )
+            expected_lock_details = {
+                "candidate_id": locked.candidate.candidate_id,
+                "reviewer": locked.reviewer,
+                "locked_result_is_immutable": True,
+                "trace_remains_appendable": True,
+                "result_tier": locked.candidate.result_tier.value,
+                "approval_mode": approval.mode.value,
+                "accepted_assumptions": locked.candidate.assumptions,
+                "override_reason": (
+                    approval.note
+                    if approval.mode == ApprovalMode.REFERENCE_OVERRIDE
+                    else None
+                ),
+                "unresolved_warnings": locked.candidate.warnings,
+            }
+            lock_event = trace.entries[-1]
+            if (
+                locked.candidate_content_sha256 != locked.candidate.content_sha256
+                or locked.recommendation_content_sha256 != recommendation.content_sha256
+                or locked.evidence_snapshot != expected_snapshot
+                or lock_event.stage != "lock"
+                or lock_event.message != "approved factor result locked"
+                or dict(lock_event.details) != expected_lock_details
+            ):
+                raise PersistenceIntegrityError("lock bindings do not match committed state")
             self.locked[locked.request_id] = locked
             stored_trace = trace.clone()
             self.traces[trace.request_id] = stored_trace
             self.recommendations[trace.request_id] = replace(
                 recommendation, trace=stored_trace
             )
+            return locked
 
     async def get_locked(self, request_id: str) -> LockedResolution | None:
         return self.locked.get(request_id)

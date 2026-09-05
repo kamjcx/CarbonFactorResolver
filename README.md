@@ -223,6 +223,7 @@ keeps both fields outside the production response allowlist.
 - [Contributing](CONTRIBUTING.md)
 - [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
 - [Catalog-to-lock integrity contract](docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md)
+- [Human-review workflow state machine](docs/CFR_REVIEW_WORKFLOW_STATE_MACHINE_V1.md)
 - [Public API safety contract](docs/CFR_API_SAFETY_CONTRACT.md)
 - [Release notes](docs/RELEASE_NOTES_V0.14.3.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)

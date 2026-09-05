@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Freeze the `cfr-review-state/v1` human-review state machine. Independent
+  approve/reject decisions now compose in either order, approvals bind to their
+  immutable audit-trace prefix, exact retries are idempotent, and concurrent
+  mutations use fail-closed revision compare-and-set semantics. Admin-only JSON
+  review endpoints derive reviewer identity from the verified authorization
+  context; the public resolve surface and all retrieval behavior remain unchanged.
+
 - Freeze the prospective `cfr-unit-fields/v1` contract: application quantities remain aligned to
   the factor denominator, while `resolved_quantity_kg` now means kilograms only and remains null
   for non-mass activity. Preview totals normalize `gCO2e`/`tCO2e` numerators to `kgCO2e`, and lock
