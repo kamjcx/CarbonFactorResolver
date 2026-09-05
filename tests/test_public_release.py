@@ -38,6 +38,22 @@ def test_v0143_release_documents_preserve_raw_and_effective_metric_scope() -> No
         assert "not a real-world accuracy" in document
 
 
+def test_v0144_release_documents_define_alignment_scope_and_limits() -> None:
+    notes = (ROOT / "docs" / "RELEASE_NOTES_V0.14.4.md").read_text(encoding="utf-8")
+    readiness = (ROOT / "docs" / "RELEASE_READINESS_V0.14.4.md").read_text(encoding="utf-8")
+    for document in (notes, readiness):
+        assert "API safety" in document
+        assert "unit field" in document.casefold()
+        assert "review state" in document.casefold()
+        assert "in-memory" in document.casefold()
+        assert "three structured electricity records" in document.casefold()
+        assert "formal admission" in document.casefold()
+        assert "public-synthetic" in document
+        assert "not a real-world accuracy" in document
+        assert "v0.14.3" in document
+        assert "v0.14.4" in document
+
+
 def test_runtime_dependency_groups_exclude_file_parsers() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     parser_packages = {"pdfplumber", "python-docx", "openpyxl"}
