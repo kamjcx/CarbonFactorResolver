@@ -26,7 +26,8 @@ After human review, the selected factor is locked as an immutable accounting inp
 |---|---|
 | What problem does it solve? | Similar names can hide incompatible materials, processes, units, lifecycle boundaries and factor subjects. |
 | What was built? | The structured API, entity resolution, hybrid retrieval, deterministic qualification, Gap Analysis, evidence-backed derivation, explanation, review state machine, immutable locking and evaluation gates. |
-| What does the demo show? | Interpreted entities, the retrieval funnel, accepted and rejected candidates, exclusion reasons, process adjustments, `MORE_INPUT`, source evidence and locked results. |
+| What does the quickstart demo show? | Pipeline progress, terminal state, qualified candidate evidence, score, result tier, decision reasons, `MORE_INPUT` and safe refusal. |
+| What does the repository additionally cover? | Full Trace and exclusion diagnostics, evidence-backed process adjustment, human-review state transitions and immutable locking through code and regression tests. |
 | Where does it fit? | Between upstream document/activity-data extraction and downstream footprint calculation and report generation. |
 
 ## Where it fits
@@ -71,17 +72,19 @@ enforced separately by the qualification and admission gates. Only a closed, sou
 deterministic transformation can produce a derived factor. An unresolved gap becomes a precise
 question, a reference-only result or a safe refusal rather than an invented value.
 
-## What the demo shows
+## What the quickstart demo shows
 
 | Request | Resolver decision | Engineering behavior |
 |---|---|---|
 | `primary aluminium ingot` + primary-production route | direct qualified candidate | exact entity, route and evidence qualification |
 | `metallic aluminium feedstock` without a route | `MORE_INPUT_NEEDED` | does not silently choose primary or secondary production |
-| electrofused spinel with a sintered reference factor | evidence-backed process derivation or `PROCESS_MODEL_REQUIRED` | subtracts documented reference-process components and adds documented target-process components only when the evidence bundle closes |
 | unknown material or cross-dimension unit | safe refusal with reason codes | never invents a numeric factor |
 
-The Dashboard exposes the interpreted entity, retrieval funnel, terminal state, candidate evidence,
-result tier and decision reasons instead of presenting an unexplained search result.
+The default Dashboard exposes pipeline progress, terminal state, qualified candidate evidence,
+score, result tier and decision reasons instead of presenting an unexplained search result.
+It does not expose full Trace, rejected-candidate diagnostics, process-transformation steps or the
+admin review/lock surface. Those are repository and regression-test capabilities, not claims about
+the default Quickstart UI.
 
 ![Candidate evidence and deterministic qualification trace](docs/assets/dashboard-evidence.png)
 
