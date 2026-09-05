@@ -78,6 +78,13 @@ def _walk_keys(value: object) -> set[str]:
         {"material_name": "steel", "quantity": 1, "subject_type": "material"},
         {"material_name": "steel", "quantity": 1, "unknown": "field"},
         {"material_name": "steel", "quantity": 1, "unit_conversion_evidence": None},
+        {"material_name": "steel", "quantity": 1, "geography": None},
+        {"material_name": "steel", "quantity": 1, "year": None},
+        {"material_name": "steel", "quantity": 1, "product_form": None},
+        {"material_name": "steel", "quantity": 1, "composition": None},
+        {"material_name": "steel", "quantity": 1, "production_process": None},
+        {"material_name": "steel", "quantity": 1, "target_factor_unit": None},
+        {"material_name": "steel", "quantity": 1, "request_id": None},
         {"material_name": "steel", "quantity": 1, "unit_conversion_evidence": {}},
         {
             "material_name": "steel",
@@ -186,6 +193,17 @@ def test_production_openapi_uses_closed_json_request_and_public_response_schemas
     assert request_component["additionalProperties"] is False
     assert set(request_component["required"]) == {"material_name", "quantity"}
     assert "min_score" not in request_component["properties"]
+    for field in (
+        "geography",
+        "year",
+        "product_form",
+        "composition",
+        "production_process",
+        "target_factor_unit",
+        "unit_conversion_evidence",
+        "request_id",
+    ):
+        assert "null" not in json.dumps(request_component["properties"][field])
     encoded = json.dumps(schema).casefold()
     assert "uploadfile" not in encoded
     assert "multipart/form-data" not in encoded
@@ -384,10 +402,20 @@ def test_readiness_error_and_scope_documentation_preserve_the_public_contract() 
 
     with TestClient(create_app()) as client:
         readiness = client.get("/readyz")
+        schema = client.get("/openapi.json").json()
 
     assert readiness.status_code == 503
     _assert_error_contract(readiness, SERVICE_NOT_READY)
     assert readiness.json()["required_unavailable"] == 1
+    readiness_schema = schema["paths"]["/readyz"]["get"]["responses"]["503"][
+        "content"
+    ]["application/json"]["schema"]
+    assert readiness_schema["$ref"].endswith("/PublicReadinessErrorEnvelopeDTO")
+    readiness_component = schema["components"]["schemas"][
+        "PublicReadinessErrorEnvelopeDTO"
+    ]
+    assert readiness_component["additionalProperties"] is False
+    assert set(readiness.json()) == set(readiness_component["required"])
 
     root = Path(__file__).resolve().parents[1]
     readme = (root / "README.md").read_text(encoding="utf-8")

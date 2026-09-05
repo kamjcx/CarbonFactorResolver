@@ -318,6 +318,7 @@ def _register_public_routes(
 
     from .api_contracts import (
         PublicErrorEnvelopeDTO,
+        PublicReadinessErrorEnvelopeDTO,
         PublicRecommendationDTO,
         ResolutionRequestDTO,
         public_recommendation_dto,
@@ -334,7 +335,10 @@ def _register_public_routes(
     @app.get(
         "/readyz",
         responses={503: _documented_error(
-            "Required dependency unavailable", SERVICE_NOT_READY, "required dependency is unavailable"
+            "Required dependency unavailable",
+            SERVICE_NOT_READY,
+            "required dependency is unavailable",
+            model=PublicReadinessErrorEnvelopeDTO,
         )},
     )
     async def readyz(request: Request):

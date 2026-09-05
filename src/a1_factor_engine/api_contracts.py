@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from .models import (
     CandidateOrigin,
@@ -36,6 +37,8 @@ PositiveFiniteFloat = Annotated[
 ]
 StrictYear = Annotated[int, Field(strict=True, gt=0, lt=3000)]
 StrictTopK = Annotated[int, Field(strict=True, ge=1, le=50)]
+OptionalNonEmptyText = NonEmptyText | SkipJsonSchema[None]
+OptionalStrictYear = StrictYear | SkipJsonSchema[None]
 
 
 class _StrictRequestModel(BaseModel):
@@ -56,26 +59,28 @@ class ResolutionRequestDTO(_StrictRequestModel):
     material_name: NonEmptyText
     quantity: PositiveFiniteFloat
     quantity_unit: NonEmptyText = "kg"
-    geography: NonEmptyText | None = None
-    year: StrictYear | None = None
-    product_form: NonEmptyText | None = None
-    composition: NonEmptyText | None = None
-    production_process: NonEmptyText | None = None
+    geography: OptionalNonEmptyText = None
+    year: OptionalStrictYear = None
+    product_form: OptionalNonEmptyText = None
+    composition: OptionalNonEmptyText = None
+    production_process: OptionalNonEmptyText = None
     subject_type: FactorSubjectType = FactorSubjectType.UNKNOWN
     boundary: NonEmptyText = "cradle-to-gate"
-    target_factor_unit: NonEmptyText | None = None
-    unit_conversion_evidence: UnitConversionEvidenceDTO | None = None
+    target_factor_unit: OptionalNonEmptyText = None
+    unit_conversion_evidence: UnitConversionEvidenceDTO | SkipJsonSchema[None] = None
     top_k: StrictTopK = 3
-    request_id: NonEmptyText | None = None
+    request_id: OptionalNonEmptyText = None
 
     @model_validator(mode="before")
     @classmethod
-    def reject_explicit_null_evidence(cls, value: Any) -> Any:
-        if isinstance(value, Mapping) and (
-            "unit_conversion_evidence" in value
-            and value["unit_conversion_evidence"] is None
-        ):
-            raise ValueError("unit_conversion_evidence must be omitted or complete")
+    def reject_explicit_null_fields(cls, value: Any) -> Any:
+        if isinstance(value, Mapping):
+            null_fields = sorted(str(key) for key, item in value.items() if item is None)
+            if null_fields:
+                raise ValueError(
+                    "explicit null is not allowed; omit optional fields instead: "
+                    + ", ".join(null_fields)
+                )
         return value
 
     def to_domain_mapping(self) -> dict[str, object]:
@@ -100,6 +105,14 @@ class PublicErrorEnvelopeDTO(BaseModel):
     error: PublicErrorDetailDTO
     # Compatibility alias retained for API v1 clients.
     detail: PublicErrorDetailDTO
+
+
+class PublicReadinessErrorEnvelopeDTO(PublicErrorEnvelopeDTO):
+    """Closed 503 contract with the bounded readiness counters returned at runtime."""
+
+    required_total: int
+    required_unavailable: int
+    optional_unavailable: int
 
 
 class PublicSourceEvidenceDTO(BaseModel):
@@ -297,6 +310,7 @@ def public_recommendation_dto(
 
 __all__ = [
     "PublicErrorEnvelopeDTO",
+    "PublicReadinessErrorEnvelopeDTO",
     "PublicRecommendationDTO",
     "ResolutionRequestDTO",
     "UnitConversionEvidenceDTO",

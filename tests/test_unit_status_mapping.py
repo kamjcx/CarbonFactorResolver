@@ -339,7 +339,6 @@ def test_unit_reason_fields_are_serialized_by_all_resolution_api_surfaces() -> N
         "material_name": "steel coil",
         "quantity": 1,
         "quantity_unit": "kWh",
-        "target_factor_unit": None,
         "geography": "CN",
         "year": 2024,
         "product_form": "coil",

@@ -16,7 +16,8 @@ traces and diagnostics are available only through this explicit surface.
 
 ## Request contract
 
-`POST /api/v1/resolve` accepts one closed JSON `ResolutionRequestDTO`. Unknown fields are rejected;
+`POST /api/v1/resolve` accepts one closed JSON `ResolutionRequestDTO`. Unknown fields and explicit
+JSON `null` values are rejected;
 `material_name` and `quantity` are required. Strict validation rejects:
 
 - booleans or strings used as numeric quantity, year or `top_k` values;
@@ -50,7 +51,11 @@ The admin debug endpoint deliberately retains the full diagnostic response as a 
 
 ## Error contract
 
-Every handled validation/HTTP failure and every unhandled failure returns a stable JSON envelope:
+Every handled validation/HTTP failure and every unhandled failure returns a stable JSON envelope.
+The readiness 503 variant adds only three documented integer counters: `required_total`,
+`required_unavailable` and `optional_unavailable`.
+
+The shared envelope is:
 
 ```json
 {
