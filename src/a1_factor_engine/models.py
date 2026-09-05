@@ -2052,6 +2052,10 @@ class ApprovalRecord:
     def __post_init__(self) -> None:
         if not self.request_id.strip() or not self.candidate_id.strip() or not self.reviewer.strip():
             raise ValueError("approval requires request_id, candidate_id and reviewer")
+        if self.reviewer_identity is not None and self.reviewer_identity != self.reviewer:
+            raise PersistenceIntegrityError(
+                "approval reviewer identity must match the verified reviewer"
+            )
         if not isinstance(self.mode, ApprovalMode):
             try:
                 object.__setattr__(self, "mode", ApprovalMode(str(self.mode)))

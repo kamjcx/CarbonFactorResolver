@@ -180,7 +180,7 @@ def _engine_is_configured(engine: Any, *, explicitly_supplied: bool) -> bool:
     return not isinstance(graph.local_retrieval, NullFactorRepository) or bool(graph.external_connectors)
 
 
-def _install_http_contract(app: Any) -> None:
+def _install_http_contract(app: Any, *, admin_review_routes: bool = False) -> None:
     from fastapi import Request
     from fastapi.exceptions import RequestValidationError
     from fastapi.responses import JSONResponse
@@ -201,7 +201,8 @@ def _install_http_contract(app: Any) -> None:
         request.state.correlation_id = safe_request_id(supplied)
         media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
         review_json_route = (
-            request.url.path.startswith("/api/v1/resolutions/")
+            admin_review_routes
+            and request.url.path.startswith("/api/v1/resolutions/")
             and request.url.path.rsplit("/", 1)[-1] in {"decisions", "locks"}
         )
         if (
@@ -642,7 +643,7 @@ def create_admin_app(
     app.state.benchmark_runner = benchmark_runner
     app.state.benchmark_runs = runs
     app.state.resolution_fingerprints = resolution_fingerprints
-    _install_http_contract(app)
+    _install_http_contract(app, admin_review_routes=True)
 
     async def require(request: Request, permission: str) -> AuthorizationContext:
         try:

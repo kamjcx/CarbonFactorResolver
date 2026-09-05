@@ -381,7 +381,7 @@ def review_lock_dto(locked: Any) -> ReviewLockResponseDTO:
         request_id=_text(_field(locked, "request_id")),
         candidate_id=_text(_field(_field(locked, "candidate"), "candidate_id")),
         status=_field(approval, "status"),
-        reviewer_identity=_text(_field(approval, "reviewer_identity")),
+        reviewer_identity=_text(_field(locked, "reviewer")),
         trace_revision=_field(snapshot, "trace_revision"),
         trace_chain_sha256=_text(_field(snapshot, "trace_chain_sha256")),
         content_sha256=_text(_field(locked, "content_sha256")),

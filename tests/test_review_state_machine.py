@@ -13,6 +13,8 @@ from a1_factor_engine import (
     FactorKind,
     FactorSourceType,
     FactorSubjectType,
+    LockedResolution,
+    LockedResolutionEvidenceSnapshot,
     ResolutionRequest,
     ReviewStateConflictError,
     SourceRecord,
@@ -154,6 +156,24 @@ async def test_explicit_stale_revision_fails_without_trace_mutation() -> None:
         )
     assert (await engine.trace(result.request_id)).revision == committed
 
+    with pytest.raises(StaleReviewRevisionError):
+        await engine.approve(
+            result.request_id,
+            candidate_a.candidate_id,
+            "reviewer",
+            expected_trace_revision=stale,
+        )
+
+    locked = await engine.lock(result.request_id, candidate_a.candidate_id, "reviewer")
+    with pytest.raises(StaleReviewRevisionError):
+        await engine.lock(
+            result.request_id,
+            candidate_a.candidate_id,
+            "reviewer",
+            expected_trace_revision=committed,
+        )
+    assert await engine.locked(result.request_id) is locked
+
 
 @pytest.mark.asyncio
 async def test_engine_reconstruction_over_same_store_recovers_review_state() -> None:
@@ -277,7 +297,83 @@ async def test_store_rejects_nonterminal_and_forged_replayed_decisions() -> None
             forged,
             decision_trace,
             expected_recommendation_sha256=result.content_sha256,
-            expected_trace_revision=commit_revision,
+            expected_trace_revision=decision_trace.revision,
+        )
+
+    with pytest.raises(PersistenceIntegrityError, match="verified reviewer"):
+        replace(stored, reviewer_identity="forged-reviewer")
+
+
+@pytest.mark.asyncio
+async def test_store_rejects_trace_envelope_and_nested_lock_approval_forgery() -> None:
+    engine = _engine()
+    result, candidate_a, _ = await _recommend(engine, "review-store-lock-integrity")
+    trace = await engine.trace(result.request_id)
+    assert trace is not None
+    forged_envelope = trace.clone()
+    forged_envelope.trace_id = "forged-trace-id"
+    forged_envelope.append("human_approval", "candidate approved", {
+        "candidate_id": candidate_a.candidate_id,
+        "reviewer": "reviewer",
+        "note": "",
+        "approval_mode": ApprovalMode.STANDARD.value,
+    })
+    forged_decision = engine._bound_approval(
+        result,
+        candidate_a,
+        forged_envelope,
+        "reviewer",
+        ApprovalStatus.APPROVED,
+    )
+    with pytest.raises(PersistenceIntegrityError, match="trace envelope"):
+        await engine.store.save_approval(
+            forged_decision,
+            forged_envelope,
+            expected_recommendation_sha256=result.content_sha256,
+            expected_trace_revision=trace.revision,
+        )
+
+    approval = await engine.approve(result.request_id, candidate_a.candidate_id, "reviewer")
+    current = await engine.trace(result.request_id)
+    assert current is not None
+    lock_trace = current.clone()
+    lock_trace.append("lock", "approved factor result locked", {
+        "candidate_id": candidate_a.candidate_id,
+        "reviewer": "locker",
+        "locked_result_is_immutable": True,
+        "trace_remains_appendable": True,
+        "result_tier": candidate_a.result_tier.value,
+        "approval_mode": approval.mode.value,
+        "accepted_assumptions": candidate_a.assumptions,
+        "override_reason": None,
+        "unresolved_warnings": candidate_a.warnings,
+    })
+    snapshot = LockedResolutionEvidenceSnapshot.from_trace(
+        lock_trace,
+        registry_anchor_sha256=result.registry_anchor_sha256 or "",
+        policy_anchor_sha256=result.policy_anchor_sha256 or "",
+    )
+    forged_nested = replace(
+        approval,
+        status=ApprovalStatus.LOCKED,
+        candidate_content_sha256="0" * 64,
+    )
+    forged_lock = LockedResolution(
+        request_id=result.request_id,
+        candidate=candidate_a,
+        reviewer="locker",
+        approval=forged_nested,
+        evidence_snapshot=snapshot,
+        candidate_content_sha256=candidate_a.content_sha256,
+        recommendation_content_sha256=result.content_sha256,
+        approval_content_sha256=approval.content_sha256,
+    )
+    with pytest.raises(PersistenceIntegrityError, match="canonical stored approval"):
+        await engine.store.save_locked(
+            forged_lock,
+            lock_trace,
+            expected_recommendation_sha256=result.content_sha256,
+            expected_trace_revision=current.revision,
         )
 
 
@@ -315,9 +411,11 @@ def test_admin_review_api_uses_verified_actor_and_stable_conflicts() -> None:
 
     engine = _engine()
 
+    actor = {"value": "verified-reviewer"}
+
     async def allow(_headers, _permission):
         return AuthorizationContext(
-            "verified-reviewer", "tenant", "project",
+            actor["value"], "tenant", "project",
             ("resolve:execute", "review:write", "review:lock"),
         )
 
@@ -357,6 +455,8 @@ def test_admin_review_api_uses_verified_actor_and_stable_conflicts() -> None:
         assert approved.status_code == 200
         assert approved.json()["reviewer_identity"] == "verified-reviewer"
 
+        actor["value"] = "verified-locker"
+
         stale = client.post("/api/v1/resolutions/review-api/locks", json={
             "candidate_id": candidate_id,
             "expected_trace_revision": revision,
@@ -369,7 +469,7 @@ def test_admin_review_api_uses_verified_actor_and_stable_conflicts() -> None:
             "expected_trace_revision": revision + 1,
         })
         assert locked.status_code == 200
-        assert locked.json()["reviewer_identity"] == "verified-reviewer"
+        assert locked.json()["reviewer_identity"] == "verified-locker"
 
         schema = client.get("/openapi.json").json()
         decision_schema = schema["components"]["schemas"]["ReviewDecisionRequestDTO"]
@@ -379,5 +479,12 @@ def test_admin_review_api_uses_verified_actor_and_stable_conflicts() -> None:
             "requestBody"
         ]["content"].keys() == {"application/json"}
 
-    public_paths = create_app(engine=_engine()).openapi()["paths"]
+    public_app = create_app(engine=_engine())
+    public_paths = public_app.openapi()["paths"]
     assert not any(path.endswith(("/decisions", "/locks")) for path in public_paths)
+    with TestClient(public_app) as client:
+        missing = client.post(
+            "/api/v1/resolutions/absent/decisions",
+            data={"candidate_id": "x", "decision": "approve"},
+        )
+        assert missing.status_code == 404

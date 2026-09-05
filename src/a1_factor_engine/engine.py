@@ -618,6 +618,12 @@ class A1FactorResolutionEngine:
         *,
         expected_trace_revision: int | None = None,
     ) -> LockedResolution:
+        if expected_trace_revision is not None:
+            current_trace = await self.store.get_trace(request_id)
+            if current_trace is None:
+                raise KeyError(f"trace not found: {request_id}")
+            if current_trace.revision != expected_trace_revision:
+                raise StaleReviewRevisionError("trace revision changed before lock")
         existing = await self.store.get_locked(request_id)
         if existing is not None:
             if existing.candidate.candidate_id == candidate_id:
@@ -837,6 +843,12 @@ class A1FactorResolutionEngine:
         mode: ApprovalMode,
         expected_trace_revision: int | None,
     ) -> ApprovalRecord:
+        if expected_trace_revision is not None:
+            current_trace = await self.store.get_trace(recommendation.request_id)
+            if current_trace is None:
+                raise KeyError(f"trace not found: {recommendation.request_id}")
+            if current_trace.revision != expected_trace_revision:
+                raise StaleReviewRevisionError("trace revision changed before decision")
         existing = await self.store.get_approval(
             recommendation.request_id, candidate.candidate_id
         )
