@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from math import isfinite
 
 from .models import (
     Candidate,
@@ -13,7 +14,7 @@ from .models import (
     ResultTier,
     TransformationStep,
 )
-from .units import convert_factor, parse_factor_unit
+from .units import convert_activity_decimal, convert_factor, parse_factor_unit
 
 TYPE_PRIORITY = {
     ResolutionType.DIRECT_EXACT: 0,
@@ -63,7 +64,34 @@ def application_total_kgco2e(
         factor_unit,
         f"kgCO2e/{denominator}",
     )
-    return factor_kgco2e * resolved_activity_value
+    total = factor_kgco2e * resolved_activity_value
+    if not isfinite(total):
+        raise ValueError("resolved factor application total must be finite")
+    return total
+
+
+def validate_mass_quantity_kg(candidate: Candidate) -> None:
+    """Validate the auxiliary kg field against authoritative mass activity."""
+
+    if (
+        candidate.activity_dimension != "MASS"
+        or candidate.resolved_quantity_kg is None
+        or candidate.resolved_activity_value is None
+        or candidate.resolved_activity_unit is None
+    ):
+        return
+    expected_kg = float(convert_activity_decimal(
+        candidate.resolved_activity_value,
+        candidate.resolved_activity_unit,
+        "kg",
+    ))
+    if not isfinite(expected_kg):
+        raise ValueError("resolved mass in kilograms must be finite")
+    tolerance = max(1e-9, abs(expected_kg) * 1e-9)
+    if abs(candidate.resolved_quantity_kg - expected_kg) > tolerance:
+        raise ValueError(
+            "resolved_quantity_kg is inconsistent with denominator-aligned mass activity"
+        )
 
 
 def source_quality(candidate: Candidate) -> float:
@@ -225,6 +253,7 @@ def derive_candidate(
 def expected_total_emissions(candidate: Candidate) -> float | None:
     """Return the total implied by a candidate's normalized factor and quantity."""
 
+    validate_mass_quantity_kg(candidate)
     if candidate.resolved_activity_value is not None:
         if candidate.resolved_activity_unit is None:
             raise ValueError("resolved activity unit is required for factor application")

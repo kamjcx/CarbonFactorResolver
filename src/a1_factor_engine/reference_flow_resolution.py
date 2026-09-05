@@ -12,7 +12,12 @@ from .models import (
     RouterType,
     TransformationStep,
 )
-from .units import convert_factor, parse_activity_unit
+from .units import (
+    convert_activity_decimal,
+    convert_factor,
+    parse_activity_unit,
+    parse_factor_unit,
+)
 
 
 def _record_is_compatible(
@@ -69,6 +74,14 @@ def resolve_reference_flow(
         if not _record_is_compatible(activity, candidate, record):
             continue
         mass_kg = activity.original_quantity * record.mass_per_unit_kg
+        factor_denominator = parse_factor_unit(
+            candidate.factor_unit
+        ).activity_unit.canonical_unit
+        aligned_mass = float(convert_activity_decimal(
+            mass_kg,
+            "kg",
+            factor_denominator,
+        ))
         factor_kg = convert_factor(candidate.factor_value, candidate.factor_unit, "kgCO2e/kg")
         emissions = mass_kg * factor_kg
         step = TransformationStep(
@@ -94,8 +107,8 @@ def resolve_reference_flow(
             parameter_ids=(record.evidence.parameter_id,),
             reasons=(f"converted {activity.original_quantity:g} {activity.original_quantity_unit} using {record.mass_per_unit_kg:g} kg/unit",),
             limitations=((record.evidence.quality_note,) if record.evidence.quality_note else ()),
-            resolved_activity_value=mass_kg,
-            resolved_activity_unit="kg",
+            resolved_activity_value=aligned_mass,
+            resolved_activity_unit=factor_denominator,
             activity_dimension="MASS",
             resolved_quantity_kg=mass_kg,
             total_emissions_kgco2e=emissions,

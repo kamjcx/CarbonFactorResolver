@@ -1,7 +1,7 @@
 # CFR Unit Field Contract v1
 
-Status: **FROZEN for PR-B review**  
-Contract ID: `cfr-unit-fields/v1`  
+Status: **FROZEN for PR-B review**
+Contract ID: `cfr-unit-fields/v1`
 Parent baseline: `2f6b52c9effda67a73862b9dca1d3d88487cd8a7`
 
 ## Purpose
@@ -31,7 +31,8 @@ one meaning only: actual normalized mass in kilograms. Request quantities expres
 kilograms or tonnes therefore produce the same `resolved_quantity_kg` for the same physical mass.
 It is null for energy, transport work, volume, area and count. An evidence-backed reference-flow
 conversion may populate it only after that non-mass activity has been deterministically converted
-to mass and `activity_dimension` becomes `MASS`.
+to mass and `activity_dimension` becomes `MASS`. The resulting activity value is then converted
+from kilograms to the retained factor denominator before approval and locking.
 
 `resolved_quantity_kg` is auxiliary. It must never be multiplied directly by a factor whose
 denominator is not kilograms. The legacy fallback that lacks resolved activity fields is supported
@@ -52,7 +53,9 @@ exports are immutable and are not migrated, recomputed or rewritten by this chan
 
 At lock time, a resolved activity unit that differs from the factor denominator fails closed.
 The stored preview must equal the result recomputed from the aligned activity and normalized impact
-numerator. A legacy kilogram fallback is rejected for non-mass factors.
+numerator. For mass activity, the auxiliary kilograms must also equal the aligned activity converted
+to kilograms. Non-finite recomputed totals fail closed. A legacy kilogram fallback is rejected for
+non-mass factors.
 
 ## API boundary
 

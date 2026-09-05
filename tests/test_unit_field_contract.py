@@ -6,15 +6,27 @@ import pytest
 
 from a1_factor_engine import (
     A1FactorResolutionEngine,
+    ApprovalMode,
     FactorKind,
     FactorSourceType,
     FactorSubjectType,
     ResolutionRequest,
     SourceRecord,
 )
-from a1_factor_engine.adapters import InMemoryFactorRepository
+from a1_factor_engine.adapters import (
+    InMemoryFactorRepository,
+    InMemoryReferenceFlowRepository,
+)
 from a1_factor_engine.derived_factor import derive_candidate, expected_total_emissions
-from a1_factor_engine.models import Candidate, CandidateOrigin, NormalizedActivity, ResolutionType
+from a1_factor_engine.models import (
+    Candidate,
+    CandidateOrigin,
+    NormalizedActivity,
+    ParameterEvidence,
+    ParameterSourceType,
+    ReferenceFlowRecord,
+    ResolutionType,
+)
 from a1_factor_engine.nodes import _candidate
 from a1_factor_engine.units import ActivityDimension, convert_activity_decimal
 
@@ -342,6 +354,62 @@ async def test_lock_rejects_misaligned_application_unit_even_when_hashes_match()
 
 
 @pytest.mark.asyncio
+async def test_lock_rejects_kg_field_inconsistent_with_mass_activity() -> None:
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository((_source("kgCO2e/t", 2_000),))
+    )
+    result = await engine.resolve(ResolutionRequest(
+        request_id="wrong-kg-lock",
+        material_name="unit field material",
+        quantity=1,
+        quantity_unit="t",
+        target_factor_unit="kgCO2e/t",
+        geography="CN",
+        year=2025,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+    candidate = replace(result.candidates[0], resolved_quantity_kg=1)
+    engine.store.recommendations[result.request_id] = replace(
+        result,
+        candidates=(candidate,),
+    )
+    await engine.approve(result.request_id, candidate.candidate_id, "reviewer")
+
+    with pytest.raises(ValueError, match="inconsistent"):
+        await engine.lock(result.request_id, candidate.candidate_id, "reviewer")
+
+
+@pytest.mark.asyncio
+async def test_lock_rejects_non_finite_recomputed_total_after_float_overflow() -> None:
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository((_source("kgCO2e/kg", 2),))
+    )
+    result = await engine.resolve(ResolutionRequest(
+        request_id="overflow-lock",
+        material_name="unit field material",
+        quantity=1,
+        quantity_unit="kg",
+        geography="CN",
+        year=2025,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+    candidate = replace(
+        result.candidates[0],
+        resolved_activity_value=1e308,
+        resolved_quantity_kg=1e308,
+        total_emissions_kgco2e=0,
+    )
+    engine.store.recommendations[result.request_id] = replace(
+        result,
+        candidates=(candidate,),
+    )
+    await engine.approve(result.request_id, candidate.candidate_id, "reviewer")
+
+    with pytest.raises(ValueError, match="must be finite"):
+        await engine.lock(result.request_id, candidate.candidate_id, "reviewer")
+
+
+@pytest.mark.asyncio
 async def test_new_lock_preserves_both_application_fields_and_frozen_snapshot() -> None:
     engine = A1FactorResolutionEngine(
         local_retrieval=InMemoryFactorRepository((_source("kgCO2e/t", 2_000),))
@@ -383,6 +451,63 @@ async def test_new_lock_preserves_both_application_fields_and_frozen_snapshot() 
         stored.evidence_snapshot.snapshot_sha256 if stored.evidence_snapshot else None,
         stored.evidence_snapshot.canonical_bytes if stored.evidence_snapshot else None,
     ) == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("factor_unit", "factor_value", "expected_activity"),
+    (("kgCO2e/g", 0.002, 1_000), ("kgCO2e/t", 2_000, 0.001)),
+)
+async def test_reference_flow_aligns_mass_to_factor_denominator_before_lock(
+    factor_unit: str,
+    factor_value: float,
+    expected_activity: float,
+) -> None:
+    source = replace(_source(factor_unit, factor_value), product_form="piece")
+    flow = ReferenceFlowRecord(
+        "unit-field-flow",
+        "unit field material",
+        "piece",
+        1,
+        ParameterEvidence(
+            "unit-field-mass",
+            "mass_per_piece",
+            1,
+            "kg/piece",
+            ParameterSourceType.FORMAL_STANDARD,
+            "PUBLIC_SYNTHETIC",
+            "evidence://unit-field-mass",
+        ),
+        product_form="piece",
+    )
+    engine = A1FactorResolutionEngine(
+        local_retrieval=InMemoryFactorRepository((source,)),
+        reference_flows=InMemoryReferenceFlowRepository((flow,)),
+    )
+    result = await engine.resolve(ResolutionRequest(
+        request_id=f"reference-flow-{factor_unit}",
+        material_name="unit field material",
+        quantity=1,
+        quantity_unit="piece",
+        product_form="piece",
+        geography="CN",
+        year=2025,
+        subject_type=FactorSubjectType.RAW_MATERIAL,
+    ))
+    candidate = result.candidates[0]
+
+    assert candidate.resolved_activity_value == pytest.approx(expected_activity)
+    assert candidate.resolved_activity_unit == factor_unit.rsplit("/", 1)[1]
+    assert candidate.resolved_quantity_kg == pytest.approx(1)
+    assert candidate.total_emissions_kgco2e == pytest.approx(2)
+    await engine.approve(
+        result.request_id,
+        candidate.candidate_id,
+        "reviewer",
+        mode=ApprovalMode.ASSUMPTION_ACCEPTANCE,
+    )
+    locked = await engine.lock(result.request_id, candidate.candidate_id, "reviewer")
+    assert locked.candidate.content_sha256 == candidate.content_sha256
 
 
 def test_public_api_omits_unit_application_internals_while_admin_debug_retains_them() -> None:
