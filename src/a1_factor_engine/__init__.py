@@ -20,7 +20,12 @@ from .energy_database import (
     interpret_process_emission_observation,
 )
 from .engine import A1FactorResolutionEngine
-from .integrity import CatalogIntegrityError, PersistenceIntegrityError
+from .integrity import (
+    CatalogIntegrityError,
+    PersistenceIntegrityError,
+    ReviewStateConflictError,
+    StaleReviewRevisionError,
+)
 from .material_registry import (
     DEFAULT_MATERIAL_REGISTRY,
     FormRule,
@@ -180,6 +185,8 @@ __all__ = [
     "LockedResolutionEvidenceSnapshot",
     "CatalogIntegrityError",
     "PersistenceIntegrityError",
+    "ReviewStateConflictError",
+    "StaleReviewRevisionError",
     "LinkAttempt",
     "LinkOutcome",
     "LinkStrategy",

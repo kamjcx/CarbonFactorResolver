@@ -1257,7 +1257,14 @@ class ResolutionTrace:
 
     @property
     def chain_sha256(self) -> str:
+        return self.chain_sha256_at_revision(self.revision)
+
+    def chain_sha256_at_revision(self, revision: int) -> str:
+        """Hash an immutable prefix using the same contract as the live trace head."""
+
         self.verify_hash_chain()
+        if revision < 0 or revision > self.revision:
+            raise PersistenceIntegrityError("trace prefix revision is outside the stored chain")
         return stable_sha256({
             "schema_version": TRACE_SCHEMA_VERSION,
             "trace_id": self.trace_id,
@@ -1268,8 +1275,10 @@ class ResolutionTrace:
             "database_anchor_sha256": (
                 self.database_anchor.anchor_sha256 if self.database_anchor else None
             ),
-            "revision": self.revision,
-            "entry_hashes": tuple(entry.entry_hash for entry in self.entries),
+            "revision": revision,
+            "entry_hashes": tuple(
+                entry.entry_hash for entry in self.entries[:revision]
+            ),
         })
 
     def set_database_anchor(self, anchor: DatabaseVersionAnchor) -> None:
@@ -2083,6 +2092,24 @@ class ApprovalRecord:
             "trace_revision": self.trace_revision,
             "trace_chain_sha256": self.trace_chain_sha256,
         })
+
+    def matches_decision(
+        self,
+        *,
+        status: ApprovalStatus,
+        reviewer: str,
+        note: str,
+        mode: ApprovalMode,
+    ) -> bool:
+        """Compare the user-visible command fields, excluding commit-time bindings."""
+
+        return (
+            self.status == status
+            and self.reviewer == reviewer
+            and self.reviewer_identity == reviewer
+            and self.note == note
+            and self.mode == mode
+        )
 
 
 @dataclass(frozen=True, slots=True)
