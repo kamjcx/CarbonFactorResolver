@@ -10,7 +10,12 @@ from .accounting import (
     resolve_accounting_assignment,
     resolve_process_accounting_assignments,
 )
-from .derived_factor import TYPE_PRIORITY, finalize_candidate, to_derived
+from .derived_factor import (
+    TYPE_PRIORITY,
+    application_total_kgco2e,
+    finalize_candidate,
+    to_derived,
+)
 from .gap_analysis import analyze_candidate_gaps
 from .grade_resolution import resolve_grade
 from .graph import (
@@ -390,10 +395,19 @@ def _candidate(
         ),
         activity_dimension=activity.activity_dimension,
         resolved_quantity_kg=(
-            resolved_quantity if activity.activity_dimension == ActivityDimension.MASS.value else None
+            activity.quantity_kg
+            if activity.activity_dimension == ActivityDimension.MASS.value
+            else None
         ),
         total_emissions_kgco2e=(
-            resolved_quantity * value if resolved_quantity is not None else None
+            application_total_kgco2e(
+                value,
+                candidate_factor_unit,
+                resolved_quantity,
+                parse_factor_unit(candidate_factor_unit).activity_unit.canonical_unit,
+            )
+            if resolved_quantity is not None
+            else None
         ),
     )
     return finalize_candidate(candidate), None

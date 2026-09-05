@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Freeze the prospective `cfr-unit-fields/v1` contract: application quantities remain aligned to
+  the factor denominator, while `resolved_quantity_kg` now means kilograms only and remains null
+  for non-mass activity. Preview totals normalize `gCO2e`/`tCO2e` numerators to `kgCO2e`, and lock
+  validation fails closed on denominator misalignment. Existing locked snapshots remain immutable;
+  evidence-backed reference-flow masses are aligned to the retained factor denominator before
+  locking, and the production API allowlist is unchanged.
+
 ## 0.14.3 - 2026-09-05
 
 - Add Autonomous Contract V3 with a 418-case SHA freeze and 103 per-case adjudications that retain
