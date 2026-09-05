@@ -11,7 +11,9 @@ candidate, a precise `MORE_INPUT` question, or a safe refusal. Numeric values al
 from traceable source records; deterministic gates enforce unit, lifecycle-boundary,
 subject, and provenance compatibility before human review and immutable locking.
 
-The default HTTP application is a production-safe, fail-closed data plane: it does not load demo
+The default `create_app` HTTP application is a fail-closed data plane for a **trusted single
+scope or an enforcing gateway-backed deployment**. It does not implement tenant authentication or
+authorization and must not be exposed as a multi-tenant service by itself. It does not load demo
 fixtures or claim readiness without an explicitly injected engine/catalog. Benchmark execution, debug
 resolution, full traces, and full diagnostics are absent. Deployments that need those operations
 must bind the explicit admin/dev application to a separate protected port and inject their own
@@ -217,6 +219,7 @@ evaluation-governance hardening stack without an incompatible public API change.
 - [Contributing](CONTRIBUTING.md)
 - [Bring Your Own Catalog](docs/BRING_YOUR_OWN_CATALOG.md)
 - [Catalog-to-lock integrity contract](docs/CFR_CATALOG_LOCK_INTEGRITY_V3.md)
+- [Public API safety contract](docs/CFR_API_SAFETY_CONTRACT.md)
 - [Release notes](docs/RELEASE_NOTES_V0.14.3.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 

@@ -328,7 +328,8 @@ def test_formal_http_contract_rejects_min_score_and_debug_route_is_opt_in() -> N
     payload = {"material_name": "synthetic alumina", "quantity": 1, "min_score": 0}
     with TestClient(create_app()) as client:
         response = client.post("/api/v1/resolve", json=payload)
-        assert response.status_code == 400
+        assert response.status_code == 422
+        assert response.json()["detail"]["reason_code"] == "REQUEST_VALIDATION_FAILED"
         assert client.post("/api/v1/debug/resolve", json=payload).status_code == 404
 
     async def allow(_headers, _permission):

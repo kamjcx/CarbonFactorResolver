@@ -215,7 +215,9 @@ def test_public_reason_code_contract_is_in_openapi_and_runtime_errors_are_redact
     ] == INVALID_RESOLUTION_REQUEST
 
     with TestClient(app) as client:
-        resolved = client.post("/api/v1/resolve", json={"material_name": "steel"})
+        resolved = client.post(
+            "/api/v1/resolve", json={"material_name": "steel", "quantity": 1}
+        )
         benchmark = client.post("/api/v1/benchmarks/runs", json={"path": str(dataset)})
 
     assert resolved.json()["detail"]["reason_code"] == INVALID_RESOLUTION_REQUEST
