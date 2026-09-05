@@ -2,19 +2,25 @@
 
 ## Unreleased
 
+## 0.14.4 - 2026-09-05
+
+- Freeze the JSON-only public API safety contract: strict request DTOs, allowlisted public
+  responses, redacted stable errors and an explicitly separate protected administration surface.
+- Freeze the `cfr-unit-fields/v1` application contract. Activity values remain aligned to the
+  factor denominator, kilogram compatibility is mass-only, preview impact numerators normalize to
+  `kgCO2e`, and inconsistent or non-finite values fail closed before immutable locking.
 - Freeze the `cfr-review-state/v1` human-review state machine. Independent
   approve/reject decisions now compose in either order, approvals bind to their
   immutable audit-trace prefix, exact retries are idempotent, and concurrent
   mutations use fail-closed revision compare-and-set semantics. Admin-only JSON
   review endpoints derive reviewer identity from the verified authorization
   context; the public resolve surface and all retrieval behavior remain unchanged.
-
-- Freeze the prospective `cfr-unit-fields/v1` contract: application quantities remain aligned to
-  the factor denominator, while `resolved_quantity_kg` now means kilograms only and remains null
-  for non-mass activity. Preview totals normalize `gCO2e`/`tCO2e` numerators to `kgCO2e`, and lock
-  validation fails closed on denominator misalignment. Existing locked snapshots remain immutable;
-  evidence-backed reference-flow masses are aligned to the retained factor denominator before
-  locking, and the production API allowlist is unchanged.
+- Reorder the README for recruiter-first review and explicitly distinguish the default synthetic
+  Quickstart Dashboard from deeper repository and test coverage. The README change does not add
+  runtime diagnostics, review controls, factor records or benchmark expectations.
+- Preserve the deployment boundary: the reference review store remains in-memory, so durable
+  cross-process recovery requires a deployment adapter. Three structured electricity records
+  remain blocked from formal admission pending complete source and approval evidence.
 
 ## 0.14.3 - 2026-09-05
 

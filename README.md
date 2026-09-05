@@ -267,8 +267,8 @@ safety properties and scale measurements are not presented as one universal accu
 [Evaluation](EVALUATION.md), the
 [autonomous evaluation specification](docs/CFR_AUTONOMOUS_EVALUATION_V1.md), the
 [V3 quality-gate contract](docs/CFR_AUTONOMOUS_QUALITY_GATE_V3.md), the
-[v0.14.3 release readiness report](docs/RELEASE_READINESS_V0.14.3.md) and the
-[v0.14.3 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.3).
+[v0.14.4 release readiness report](docs/RELEASE_READINESS_V0.14.4.md) and the
+[v0.14.4 release](https://github.com/kamjcx/CarbonFactorResolver/releases/tag/v0.14.4).
 
 ## Documentation
 
@@ -284,7 +284,7 @@ safety properties and scale measurements are not presented as one universal accu
 - [Public API safety contract](docs/CFR_API_SAFETY_CONTRACT.md)
 - [Unit field contract](docs/CFR_UNIT_FIELD_CONTRACT_V1.md)
 - [Versioned API and operability contract](docs/CFR_VERSIONED_API_OPERABILITY_V5.md)
-- [Release notes](docs/RELEASE_NOTES_V0.14.3.md)
+- [Release notes](docs/RELEASE_NOTES_V0.14.4.md)
 - [Technical implementation reference](docs/CFR_TECHNICAL_DOCUMENT.md)
 
 ## Data and license
