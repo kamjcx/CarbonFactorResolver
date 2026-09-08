@@ -801,19 +801,30 @@ def create_admin_app(
             or request.headers.get(CORRELATION_ID_HEADER)
         )
         request.state.correlation_id = payload["request_id"]
-        try:
-            result = serialize_recommendation(await resolver.resolve_debug(payload))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail={
-                "reason_code": INVALID_RESOLUTION_REQUEST,
-                "message": "debug resolution request is invalid",
-            }) from exc
-        request_id = safe_request_id(result.get("request_id") or payload["request_id"])
-        result["request_id"] = request_id
-        request.state.correlation_id = request_id
-        if request_id:
-            resolution_owners[request_id] = (context.tenant_id, context.project_id)
-        return result
+        request_id = payload["request_id"]
+        scope = (context.tenant_id, context.project_id)
+        key = (*scope, request_id)
+        lock = resolution_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            if request_id in resolution_owners:
+                raise HTTPException(status_code=409, detail={
+                    "reason_code": RESOLUTION_SCOPE_CONFLICT,
+                    "message": "resolution request id is already scoped",
+                })
+            resolution_owners[request_id] = scope
+            try:
+                result = serialize_recommendation(await resolver.resolve_debug(payload))
+            except (TypeError, ValueError) as exc:
+                resolution_owners.pop(request_id, None)
+                raise HTTPException(status_code=400, detail={
+                    "reason_code": INVALID_RESOLUTION_REQUEST,
+                    "message": "debug resolution request is invalid",
+                }) from exc
+            except Exception:
+                resolution_owners.pop(request_id, None)
+                raise
+            result["request_id"] = request_id
+            return result
 
     @app.get("/api/v1/traces/{request_id}")
     async def get_trace(request: Request, request_id: str) -> dict[str, Any]:

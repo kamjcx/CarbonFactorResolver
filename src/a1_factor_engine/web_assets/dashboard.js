@@ -5,15 +5,9 @@ const showError = (id, error) => { $(id).textContent = error ? String(error.mess
 async function api(url, options = {}) {
   const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || `Request failed (${response.status})`);
+  if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : payload.detail?.message || payload.message || `Request failed (${response.status})`);
   return payload;
 }
-
-document.querySelectorAll(".tab").forEach((button) => button.addEventListener("click", () => {
-  document.querySelectorAll(".tab,.panel").forEach((item) => item.classList.remove("active"));
-  button.classList.add("active");
-  $(`#${button.dataset.tab}`).classList.add("active");
-}));
 
 function cell(row, value, className = "") {
   const td = document.createElement("td"); td.textContent = value ?? "—"; td.className = className; row.appendChild(td);
@@ -21,7 +15,8 @@ function cell(row, value, className = "") {
 
 function renderCandidates(result) {
   const tbody = $("#candidate-rows"); tbody.replaceChildren();
-  const candidates = [...(result.candidates || []), ...(result.reviewable_candidates || []), ...(result.diagnostic_candidates || [])];
+  const candidates = [...(result.candidates || []), ...(result.reviewable_candidates || [])];
+  if (!candidates.length) { const row = document.createElement("tr"); cell(row, "No candidate returned. See the decision above."); row.firstChild.colSpan = 5; tbody.appendChild(row); }
   candidates.forEach((candidate) => {
     const row = document.createElement("tr");
     cell(row, candidate.source?.source_id || candidate.candidate_id);
@@ -30,6 +25,11 @@ function renderCandidates(result) {
     cell(row, candidate.result_tier);
     cell(row, (candidate.reasons || []).join("; "));
     tbody.appendChild(row);
+    const evidenceRow = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 5;
+    const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = "Source evidence and applicability"; details.appendChild(summary);
+    const source = candidate.source || {};
+    [source.citation, `Boundary: ${(source.boundary_modules || []).join(" / ") || source.boundary || "unspecified"}`, `Subject: ${source.subject_type || "unspecified"} · Geography: ${source.geography || "unspecified"} · Year: ${source.year || "unspecified"}`, `Evidence hash: ${source.content_sha256 || "unavailable"}`, ...(candidate.limitations || []), ...(candidate.warnings || [])].filter(Boolean).forEach((line) => { const p = document.createElement("p"); p.textContent = line; details.appendChild(p); });
+    td.appendChild(details); evidenceRow.appendChild(td); tbody.appendChild(evidenceRow);
   });
 }
 
@@ -37,58 +37,31 @@ $("#query-form").addEventListener("submit", async (event) => {
   event.preventDefault(); showError("#query-error", null);
   const data = Object.fromEntries(new FormData(event.currentTarget)); data.quantity = Number(data.quantity);
   if (!data.production_process) delete data.production_process;
+  const button = event.currentTarget.querySelector("button[type=submit]");
+  button.disabled = true; button.textContent = "Resolving…";
+  $("#candidate-rows").replaceChildren(); $("#request-id").textContent = "Request in progress";
+  document.querySelectorAll(".pipeline p").forEach((p) => { p.textContent = "—"; });
+  $("#decision-title").textContent = "Resolving your query…"; $("#decision-message").textContent = "";
+  $("#decision-questions").replaceChildren(); $("#decision-reasons").textContent = "";
   try {
     const result = await api("/api/v1/resolve", { method: "POST", body: JSON.stringify(data) });
-    const trace = result.trace || {};
-    const explanation = trace.entries ? await api(`/api/v1/traces/${encodeURIComponent(result.request_id)}`) : trace;
-    const localHits = explanation.raw_related_hits || explanation.local_retrieval?.records || [];
-    const externalHits = (explanation.entries || [])
-      .filter((entry) => entry.stage === "external_discovery")
-      .flatMap((entry) => entry.details?.source_ids || []);
-    const discovered = new Set([
-      ...localHits.map((item) => item.source_id || item.record_id || String(item)),
-      ...externalHits,
-    ]);
     $("#request-id").textContent = result.request_id;
-    $("#pipe-identity").textContent = explanation.identity_resolution?.outcome || explanation.material_identity?.canonical_name || data.material_name;
-    $("#pipe-hits").textContent = `${discovered.size} discovered`;
-    $("#pipe-drops").textContent = `${count(explanation.excluded_candidates)} excluded`;
-    $("#pipe-qualification").textContent = `${count(explanation.record_qualifications)} records checked`;
+    $("#pipe-identity").textContent = data.material_name;
+    $("#decision-title").textContent = result.status.replaceAll("_", " ");
+    $("#decision-message").textContent = result.message || "Review candidate evidence before selecting a factor.";
+    (result.questions || []).forEach((question) => { const li = document.createElement("li"); li.textContent = question; $("#decision-questions").appendChild(li); });
+    $("#decision-reasons").textContent = (result.reason_codes || []).join(" · ");
     $("#pipe-candidates").textContent = `${count(result.candidates) + count(result.reviewable_candidates)} surfaced`;
     $("#pipe-terminal").textContent = result.status;
     renderCandidates(result);
-  } catch (error) { showError("#query-error", error); }
+  } catch (error) {
+    showError("#query-error", error); $("#decision-title").textContent = "Request could not be completed"; $("#request-id").textContent = "No result";
+  } finally { button.disabled = false; button.textContent = "Resolve factor"; }
 });
-
-function flattenMetrics(payload) {
-  const metrics = payload.aggregates || payload.metrics || payload.aggregate_metrics || {};
-  return Object.entries(metrics).filter(([, value]) => ["number", "string", "boolean"].includes(typeof value));
-}
-
-$("#benchmark-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); showError("#benchmark-error", null);
-  const data = Object.fromEntries(new FormData(event.currentTarget));
-  try {
-    const result = await api("/api/v1/benchmarks/runs", { method: "POST", body: JSON.stringify(data) });
-    $("#benchmark-run-id").textContent = result.run_id || "completed";
-    const rows = $("#metric-rows"); const cards = $("#metric-grid"); rows.replaceChildren(); cards.replaceChildren();
-    flattenMetrics(result).forEach(([name, value], index) => {
-      const row = document.createElement("tr"); cell(row, name); cell(row, value); rows.appendChild(row);
-      if (index < 4) { const card = document.createElement("article"); card.className = "metric"; const label = document.createElement("span"); label.textContent = name; const strong = document.createElement("strong"); strong.textContent = value; card.append(label, strong); cards.appendChild(card); }
-    });
-  } catch (error) { showError("#benchmark-error", error); }
-});
-
-$("#compare-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); showError("#compare-error", null);
-  const data = Object.fromEntries(new FormData(event.currentTarget));
-  try {
-    const result = await api(`/api/v1/benchmarks/compare?base=${encodeURIComponent(data.base)}&candidate=${encodeURIComponent(data.candidate)}`);
-    const rows = $("#regression-rows"); rows.replaceChildren();
-    Object.entries(result.deltas || result).filter(([, value]) => typeof value === "number").forEach(([name, value]) => {
-      const row = document.createElement("tr"); cell(row, name); cell(row, value.toFixed(4)); cell(row, value < 0 ? "regression" : value > 0 ? "improvement" : "unchanged", value < 0 ? "bad" : "good"); rows.appendChild(row);
-    });
-  } catch (error) { showError("#compare-error", error); }
-});
-
+const examples = { exact: ["primary aluminium ingot", "primary aluminium production"], ambiguous: ["metallic aluminium feedstock", ""], refusal: ["unknown portfolio material xyz", ""] };
+document.querySelectorAll("[data-example]").forEach((button) => button.addEventListener("click", () => {
+  const [material, process] = examples[button.dataset.example]; const form = $("#query-form");
+  form.elements.material_name.value = material; form.elements.production_process.value = process;
+  form.elements.quantity.value = "1"; form.elements.quantity_unit.value = "t"; form.elements.material_name.focus();
+}));
 api("/healthz").then(() => { $("#service-status").textContent = "service online"; }).catch(() => { $("#service-status").textContent = "service unavailable"; });

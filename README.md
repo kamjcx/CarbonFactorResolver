@@ -80,15 +80,17 @@ question, a reference-only result or a safe refusal rather than an invented valu
 | `metallic aluminium feedstock` without a route | `MORE_INPUT_NEEDED` | does not silently choose primary or secondary production |
 | unknown material or cross-dimension unit | safe refusal with reason codes | never invents a numeric factor |
 
-The default Dashboard exposes pipeline progress, terminal state, qualified candidate evidence,
-score, result tier and decision reasons instead of presenting an unexplained search result.
+The default Dashboard offers three copyable query examples and displays the input, terminal
+state, surfaced candidates, decision message, score, result tier and source evidence. Expand a
+candidate to inspect its citation, lifecycle boundary, evidence hash and applicability limits.
 It does not expose full Trace, rejected-candidate diagnostics, process-transformation steps or the
 admin review/lock surface. Those are repository and regression-test capabilities, not claims about
 the default Quickstart UI.
 
 ![Candidate evidence and deterministic qualification trace](docs/assets/dashboard-evidence.png)
 
-See the [90-second demo script](docs/DEMO_SCRIPT_90S.md) for an interview walkthrough.
+See the [90-second demo script](docs/DEMO_SCRIPT_90S.md) for an interview walkthrough and the
+[portfolio audit](docs/PORTFOLIO_AUDIT_2026-09-09.md) for the latest local verification.
 
 ## Why this exists
 
